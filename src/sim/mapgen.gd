@@ -22,25 +22,15 @@ static func generate(p_seed: int) -> World:
 			if rng.randi_range(0, 99) < Constants.ROCK_PERCENT:
 				world.set_terrain(x, y, Types.TileTerrain.ROCK)
 
+	_place_player_camp(world)
+	_place_enemy_camp(world)
 	_carve_corridor(world)
+	_place_deposits(world, rng)
 
 	var connected := validate_connectivity(world)
 	if not connected:
 		push_error("mapgen connectivity failed seed=%d" % p_seed)
 	assert(connected, "mapgen connectivity failed seed=%d" % p_seed)
-
-	var player := Unit.new()
-	player.id = world.alloc_id()
-	player.kind = Types.UnitKind.PLAYER
-	player.faction = Types.Faction.PLAYER
-	player.pos = world.tile_center(Constants.PLAYER_SPAWN_TILE.x, Constants.PLAYER_SPAWN_TILE.y)
-	player.hp = Constants.PLAYER_HP
-	player.hp_max = Constants.PLAYER_HP
-	player.radius = Constants.PLAYER_RADIUS
-	player.aim = Vector2.RIGHT
-	player.alive = true
-	player.inventory = Unit.inventory_for(Types.UnitKind.PLAYER)
-	world.units[player.id] = player
 
 	print("seed=%d" % p_seed)
 	return world
@@ -108,6 +98,196 @@ static func _depot_footprint_tiles() -> Array[Vector2i]:
 	for d in _FOOTPRINT_DIRS_2X2:
 		tiles.append(Constants.ENEMY_DEPOT_TILE + d)
 	return tiles
+
+
+static func _place_player_camp(world: World) -> void:
+	_spawn_building(
+		world,
+		Types.BuildingKind.HABITAT,
+		Types.Faction.PLAYER,
+		Constants.PLAYER_HABITAT_TILE,
+		Constants.HABITAT_HP
+	)
+	var depot := _spawn_building(
+		world,
+		Types.BuildingKind.DEPOT,
+		Types.Faction.PLAYER,
+		Constants.PLAYER_DEPOT_TILE,
+		Constants.DEPOT_HP
+	)
+	depot.inventory.add(Types.ResourceKind.SCRAP, Constants.START_PLAYER_SCRAP)
+	depot.inventory.add(Types.ResourceKind.ICE, Constants.START_PLAYER_ICE)
+	_spawn_unit(
+		world,
+		Types.UnitKind.PLAYER,
+		Types.Faction.PLAYER,
+		Constants.PLAYER_SPAWN_TILE,
+		Constants.PLAYER_HP,
+		Constants.PLAYER_RADIUS
+	)
+
+
+static func _place_enemy_camp(world: World) -> void:
+	_spawn_building(
+		world,
+		Types.BuildingKind.HABITAT,
+		Types.Faction.ENEMY,
+		Constants.ENEMY_HABITAT_TILE,
+		Constants.HABITAT_HP
+	)
+	var depot := _spawn_building(
+		world,
+		Types.BuildingKind.DEPOT,
+		Types.Faction.ENEMY,
+		Constants.ENEMY_DEPOT_TILE,
+		Constants.DEPOT_HP
+	)
+	depot.inventory.add(Types.ResourceKind.SCRAP, Constants.START_ENEMY_SCRAP)
+	depot.inventory.add(Types.ResourceKind.ICE, Constants.START_ENEMY_ICE)
+	_spawn_building(
+		world,
+		Types.BuildingKind.TURRET,
+		Types.Faction.ENEMY,
+		Constants.ENEMY_TURRET_TILE,
+		Constants.TURRET_HP
+	)
+	_spawn_unit(
+		world,
+		Types.UnitKind.GUARD,
+		Types.Faction.ENEMY,
+		Constants.ENEMY_GUARD_TILE,
+		Constants.GUARD_HP,
+		Constants.GUARD_RADIUS
+	)
+
+
+static func _spawn_building(
+	world: World, kind: int, faction: int, origin: Vector2i, hp: int
+) -> Building:
+	var building := Building.new()
+	building.id = world.alloc_id()
+	building.kind = kind
+	building.faction = faction
+	building.origin_tile = origin
+	building.hp = hp
+	building.hp_max = hp
+	building.aim = Vector2(1, 0)
+	if kind == Types.BuildingKind.DEPOT:
+		building.inventory = Inventory.new(Constants.DEPOT_CAP_SCRAP, Constants.DEPOT_CAP_ICE)
+	world.buildings[building.id] = building
+	world.occupy(building)
+	return building
+
+
+static func _spawn_unit(
+	world: World, kind: int, faction: int, tile: Vector2i, hp: int, radius: float
+) -> Unit:
+	var unit := Unit.new()
+	unit.id = world.alloc_id()
+	unit.kind = kind
+	unit.faction = faction
+	unit.pos = world.tile_center(tile.x, tile.y)
+	unit.hp = hp
+	unit.hp_max = hp
+	unit.radius = radius
+	unit.aim = Vector2.RIGHT
+	unit.alive = true
+	unit.inventory = Unit.inventory_for(kind)
+	world.units[unit.id] = unit
+	return unit
+
+
+static func _place_deposits(world: World, rng: RandomNumberGenerator) -> void:
+	var scrap_n := _place_deposits_of_kind(
+		world, rng, Types.ResourceKind.SCRAP, Constants.SCRAP_DEPOSIT_COUNT, Constants.SCRAP_DEPOSIT_AMOUNT
+	)
+	var ice_n := _place_deposits_of_kind(
+		world, rng, Types.ResourceKind.ICE, Constants.ICE_DEPOSIT_COUNT, Constants.ICE_DEPOSIT_AMOUNT
+	)
+	if scrap_n >= Constants.MIN_SCRAP_DEPOSITS and ice_n >= Constants.MIN_ICE_DEPOSITS:
+		return
+	_clear_random_non_reserved_rocks(world, rng)
+	if scrap_n < Constants.MIN_SCRAP_DEPOSITS:
+		scrap_n += _place_deposits_of_kind(
+			world,
+			rng,
+			Types.ResourceKind.SCRAP,
+			Constants.SCRAP_DEPOSIT_COUNT - scrap_n,
+			Constants.SCRAP_DEPOSIT_AMOUNT
+		)
+	if ice_n < Constants.MIN_ICE_DEPOSITS:
+		ice_n += _place_deposits_of_kind(
+			world,
+			rng,
+			Types.ResourceKind.ICE,
+			Constants.ICE_DEPOSIT_COUNT - ice_n,
+			Constants.ICE_DEPOSIT_AMOUNT
+		)
+	var ok := scrap_n >= Constants.MIN_SCRAP_DEPOSITS and ice_n >= Constants.MIN_ICE_DEPOSITS
+	if not ok:
+		push_error("mapgen deposit minima failed seed=%d scrap=%d ice=%d" % [world.seed, scrap_n, ice_n])
+	assert(ok, "mapgen deposit minima failed seed=%d scrap=%d ice=%d" % [world.seed, scrap_n, ice_n])
+
+
+static func _place_deposits_of_kind(
+	world: World, rng: RandomNumberGenerator, kind: int, count: int, amount: int
+) -> int:
+	var placed := 0
+	for _i in count:
+		if not _try_place_deposit(world, rng, kind, amount):
+			break
+		placed += 1
+	return placed
+
+
+static func _try_place_deposit(
+	world: World, rng: RandomNumberGenerator, kind: int, amount: int
+) -> bool:
+	for _attempt in Constants.DEPOSIT_PLACE_ATTEMPTS:
+		var x := rng.randi_range(0, Constants.MAP_W - 1)
+		var y := rng.randi_range(0, Constants.MAP_H - 1)
+		if not _can_place_deposit(world, x, y):
+			continue
+		var deposit := Deposit.new()
+		deposit.id = world.alloc_id()
+		deposit.kind = kind
+		deposit.tile = Vector2i(x, y)
+		deposit.remaining = amount
+		world.deposits[deposit.id] = deposit
+		return true
+	return false
+
+
+static func _can_place_deposit(world: World, x: int, y: int) -> bool:
+	if not world.is_walkable(x, y):
+		return false
+	if _in_reserved_rect(x, y):
+		return false
+	if x == Constants.CORRIDOR_CENTER_X or y == Constants.CORRIDOR_CENTER_Y:
+		return false
+	var tile := Vector2i(x, y)
+	for other in world.deposits.values():
+		var d: Vector2i = other.tile
+		if maxi(absi(d.x - tile.x), absi(d.y - tile.y)) < Constants.DEPOSIT_MIN_SEP:
+			return false
+	return true
+
+
+static func _clear_random_non_reserved_rocks(world: World, rng: RandomNumberGenerator) -> void:
+	var rocks: Array[Vector2i] = []
+	for y in Constants.MAP_H:
+		for x in Constants.MAP_W:
+			if _in_reserved_rect(x, y):
+				continue
+			if world.get_terrain(x, y) == Types.TileTerrain.ROCK:
+				rocks.append(Vector2i(x, y))
+	for i in range(rocks.size() - 1, 0, -1):
+		var j := rng.randi_range(0, i)
+		var tmp: Vector2i = rocks[i]
+		rocks[i] = rocks[j]
+		rocks[j] = tmp
+	for tile in rocks:
+		world.set_terrain(tile.x, tile.y, Types.TileTerrain.EMPTY)
 
 
 static func _flood_fill(world: World, start: Vector2i) -> Dictionary:
