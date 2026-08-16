@@ -6,7 +6,7 @@
 | Author | [Author] |
 | Date | 2026-08-16 |
 | Status | Draft |
-| Version | 1.2 |
+| Version | 1.3 |
 | Audience | Engineers implementing the game from this document alone |
 
 This document is the exact requirements for v1. If a behavior is not specified here, it must not be implemented. New requirements must be added to this document before they are coded.
@@ -164,7 +164,7 @@ The Godot project root **is** the repository root. Application name in `project.
     audio/sfx/               # optional short WAV/OGG; silence is allowed
     theme/default.tres
   tests/
-    run.gd                   # headless runner, exit 0/1
+    run.gd                   # test runner, exit 0/1; only via tools/test.sh
     test_inventory.gd
     test_rules.gd
     test_mapgen.gd
@@ -173,6 +173,7 @@ The Godot project root **is** the repository root. Application name in `project.
     test_pathfind.gd
   tools/
     export.sh                # wraps Godot headless export for both OS targets
+    test.sh                  # official test entry: private Xvfb + run.gd
 ```
 
 `res://` mirrors this tree (`res://src/...`, `res://scenes/...`).
@@ -1097,7 +1098,7 @@ This is a local game, not a service. Observability is for developers and playtes
 | --- | --- |
 | FPS, tick, entity counts, outcome, depot stocks, next wave | F3 debug overlay (`ui/debug_overlay.gd`), drawn only when toggled |
 | Failed asserts in sim (negative inventory, occupancy mismatch) | `push_error` + in debug builds `assert` |
-| Headless tests | stdout `PASS` / `FAIL` lines; process exit code |
+| Automated tests | `./tools/test.sh` → stdout `PASS` / `FAIL` lines; process exit code |
 | Player-facing errors | None beyond “could not initialize renderer” from Godot |
 
 No metrics backend, no alerting, no crash dump pipeline in v1.
@@ -1114,7 +1115,7 @@ Not a SaaS flag rollout. v1 ships as a sequence of mergeable PRs (see **PR Plan*
 
 **Definition of done for v1:**
 
-1. `godot --headless --path . -s res://tests/run.gd` exits 0 on Linux.
+1. `./tools/test.sh` exits 0 on Linux (virtual X server; never the host display).
 2. Manual playtest checklist (below) passes on Linux and on a Windows export.
 3. Exports exist for `Linux/X11` and `Windows Desktop` via `tools/export.sh`.
 4. No feature that is not in this document is reachable in the build.
@@ -1127,13 +1128,28 @@ Not a SaaS flag rollout. v1 ships as a sequence of mergeable PRs (see **PR Plan*
 
 ## Test Strategy
 
-### Headless / unit (required)
+### Automated unit (required)
 
-Runner: `res://tests/run.gd`, invoked as:
+The **only** official test command is:
 
 ```
-godot --headless --path . -s res://tests/run.gd
+./tools/test.sh
 ```
+
+`tools/test.sh` starts a **private Xvfb** (virtual X server, default screen `1280x720x24`) on a display number that is **not** the session display (`:0` / `:0.0`), sets `DISPLAY` to that server, unsets `WAYLAND_DISPLAY`, and runs:
+
+```
+godot --display-driver x11 --audio-driver Dummy --path . -s res://tests/run.gd
+```
+
+Rules for agents and humans:
+
+- **Do not** invoke `godot --headless` for the test runner. Headless uses the dummy display driver and is not the test environment.
+- **Do not** run Godot tests against the host display manager (`DISPLAY=:0`, XWayland on the session, or an unset `DISPLAY` that falls back to the session).
+- **Do not** use Xephyr or any nested window on the visible session.
+- `res://tests/run.gd` **must refuse** to run unless `COLONY_TEST_XVFB=1` is set (the wrapper sets this) and `DISPLAY` is not the session X display. Direct `godot … -s res://tests/run.gd` must exit 1.
+- Xvfb is a required Linux test dependency (`xvfb` package, or a user-local `Xvfb` binary on `PATH`). Software GL (`LIBGL_ALWAYS_SOFTWARE=1`) is the default so tests do not touch the session GPU.
+- Automated tests are Linux-only in v1. Windows coverage is the manual playtest checklist, not this runner.
 
 No third-party addon (no GUT/GdUnit dependency in v1). `run.gd` instantiates each test script, calls `run() -> PackedStringArray` of failure messages, prints a summary, `quit(1)` if any failure.
 
@@ -1189,7 +1205,8 @@ Parking-lot questions for *later* documents (do not implement answers in v1):
 ## References
 
 - `CLAUDE.md` — project constraints (2D Mars survival, design.md is law, no product-title references, LAN/Steam as future, Windows + Linux).
-- Godot 4 documentation: project settings, Input Map, `Camera2D`, export presets, headless `--script`.
+- Godot 4 documentation: project settings, Input Map, `Camera2D`, export presets, `--script`.
+- Xvfb (`xvfb` / `xvfb-run`) — virtual X server for the official test runner.
 - Godot High-level multiplayer / ENet (future LAN; do not initialize in v1).
 
 ---

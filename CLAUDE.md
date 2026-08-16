@@ -11,3 +11,5 @@ This game should support LAN multiplayer co-op, and will eventually be compatibl
 The game should natively run on both Windows and linux.
 
 When you are finished with a change, create a branch in the format `feature/<name>`, and create a GitHub pull request for it.
+
+Automated tests must be run with `./tools/test.sh` only. That script starts a private Xvfb and never uses the host display. Do not run `godot --headless` for the test runner, and do not launch Godot against `DISPLAY=:0` or the session Wayland/X11 display while testing.
