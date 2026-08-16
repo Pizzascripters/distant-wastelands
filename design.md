@@ -1249,20 +1249,6 @@ Each task must merge independently, keep tests that already exist green, and not
 - **Depends on:** none.
 - **Description:** `class_name Inventory` with the exact API in Resources and inventories (`free_space`, `can_add`, `add` leftover, `remove` actual). Caps are constructor/fields, not globals. Tests: add/remove/clamp; leftover on overflow; empty remove returns 0. No world wiring. No HUD.
 
-### Task 4 — Deposit record
-
-- **Title:** `feat: Deposit record type`
-- **Files/components:** `src/sim/deposit.gd`.
-- **Depends on:** none.
-- **Description:** `class_name Deposit` with `id`, `kind` (`ResourceKind`), `tile`, `remaining`. No `World` dictionary, no mapgen spawn, no view.
-
-### Task 5 — Projectile record
-
-- **Title:** `feat: Projectile record type`
-- **Files/components:** `src/sim/projectile.gd`.
-- **Depends on:** none.
-- **Description:** `class_name Projectile` with `id`, `faction`, `pos`, `vel`, `damage`, `life`. No spawn, no integration, no view.
-
 ### Task 6 — Building record
 
 - **Title:** `feat: Building record type`
@@ -1281,7 +1267,7 @@ Each task must merge independently, keep tests that already exist green, and not
 
 - **Title:** `feat: combat damage, hit order, and death helpers`
 - **Files/components:** `src/sim/combat.gd`.
-- **Depends on:** Task 5, Task 6, Task 7.
+- **Depends on:** Task 6, Task 7.
 - **Description:** Pure helpers: projectile hit order (lowest `entity_id` among overlapping opposing units, else lowest solid tile index; rocks/friendly buildings eat the shot), friendly fire off, melee apply + cooldown, `hp <= 0` death, depot death spills one loot pile at center and does **not** touch `zero_ice_timer`. No `Sim.tick` wiring. Do not add `test_combat.gd` here.
 
 ### Task 9 — Building view
@@ -1428,7 +1414,7 @@ Each task must merge independently, keep tests that already exist green, and not
 
 - **Title:** `feat: World dictionaries and occupy/vacate`
 - **Files/components:** `src/sim/world.gd`.
-- **Depends on:** Task 4, Task 5, Task 6, Task 7.
+- **Depends on:** Task 6, Task 7.
 - **Description:** Add `buildings`, `deposits`, `loot`, `projectiles` dictionaries. Helpers: occupy/vacate a footprint, query building at tile, point-to-AABB, nearest living depot. Occupancy still makes tiles unwalkable. No mapgen placement.
 
 ### Task 30 — Snapshot entity and HUD fields
