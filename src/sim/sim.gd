@@ -62,17 +62,23 @@ func snapshot() -> SimSnapshot:
 	snap.outcome_reason = outcome_reason
 	snap.tiles = world.tiles.duplicate()
 	for unit in world.units.values():
-		snap.units.append({
-			"id": unit.id,
-			"kind": unit.kind,
-			"faction": unit.faction,
-			"pos": unit.pos,
-			"hp": unit.hp,
-			"hp_max": unit.hp_max,
-			"aim": unit.aim,
-			"alive": unit.alive,
-			"radius": unit.radius,
-		})
+		snap.units.append(_unit_record(unit))
+	for building in world.buildings.values():
+		snap.buildings.append(_building_record(building))
+	for deposit in world.deposits.values():
+		snap.deposits.append(_deposit_record(deposit))
+	for pile in world.loot.values():
+		snap.loot.append(_loot_record(pile))
+	for proj in world.projectiles.values():
+		snap.projectiles.append(_projectile_record(proj))
+	_copy_director(snap)
+	var player := get_player()
+	if player != null:
+		snap.player_respawn_timer = player.respawn_timer
+	snap.player_zero_ice_timer = _faction_zero_ice(Types.Faction.PLAYER)
+	snap.enemy_zero_ice_timer = _faction_zero_ice(Types.Faction.ENEMY)
+	snap.player_living_depot_ice_empty = _living_depot_ice_empty(Types.Faction.PLAYER)
+	snap.enemy_living_depot_ice_empty = _living_depot_ice_empty(Types.Faction.ENEMY)
 	return snap
 
 
@@ -80,6 +86,108 @@ func get_player() -> Unit:
 	if world == null:
 		return null
 	return world.units.get(player_id) as Unit
+
+
+func _unit_record(unit: Unit) -> Dictionary:
+	return {
+		"id": unit.id,
+		"kind": unit.kind,
+		"faction": unit.faction,
+		"pos": unit.pos,
+		"hp": unit.hp,
+		"hp_max": unit.hp_max,
+		"aim": unit.aim,
+		"alive": unit.alive,
+		"radius": unit.radius,
+		"inventory": _inventory_record(unit.inventory),
+	}
+
+
+func _building_record(building: Building) -> Dictionary:
+	return {
+		"id": building.id,
+		"kind": building.kind,
+		"faction": building.faction,
+		"origin_tile": building.origin_tile,
+		"pos": world.footprint_aabb(building).position,
+		"hp": building.hp,
+		"hp_max": building.hp_max,
+		"aim": building.aim,
+		"inventory": _inventory_record(building.inventory),
+	}
+
+
+func _deposit_record(deposit: Deposit) -> Dictionary:
+	return {
+		"id": deposit.id,
+		"kind": deposit.kind,
+		"pos": world.tile_center(deposit.tile.x, deposit.tile.y),
+		"tile": deposit.tile,
+		"remaining": deposit.remaining,
+	}
+
+
+func _loot_record(pile: Loot) -> Dictionary:
+	return {
+		"id": pile.id,
+		"pos": pile.pos,
+		"inventory": _inventory_record(pile.inventory),
+	}
+
+
+func _projectile_record(proj: Projectile) -> Dictionary:
+	return {
+		"id": proj.id,
+		"faction": proj.faction,
+		"pos": proj.pos,
+	}
+
+
+func _inventory_record(inv: Inventory) -> Dictionary:
+	if inv == null:
+		return {"scrap": 0, "ice": 0, "cap_scrap": 0, "cap_ice": 0}
+	return {
+		"scrap": inv.scrap,
+		"ice": inv.ice,
+		"cap_scrap": inv.cap_scrap,
+		"cap_ice": inv.cap_ice,
+	}
+
+
+func _copy_director(snap: SimSnapshot) -> void:
+	if not "director" in self:
+		return
+	var director: Variant = get("director")
+	if director == null:
+		return
+	if "next_wave_at" in director:
+		snap.next_wave_at = float(director.next_wave_at)
+	if "wave_index" in director:
+		snap.wave_index = int(director.wave_index)
+	if "banner_timer" in director:
+		snap.banner_timer = float(director.banner_timer)
+
+
+func _faction_zero_ice(faction: int) -> float:
+	var lives: Variant = get("life")
+	if lives is Dictionary:
+		var rec: Variant = lives.get(faction)
+		if rec is Object and "zero_ice_timer" in rec:
+			return float(rec.zero_ice_timer)
+	return 0.0
+
+
+func _living_depot_ice_empty(faction: int) -> bool:
+	for building in world.buildings.values():
+		if building.kind != Types.BuildingKind.DEPOT:
+			continue
+		if building.faction != faction:
+			continue
+		if building.hp <= 0:
+			continue
+		var inv: Inventory = building.inventory
+		return inv != null and inv.ice == 0
+	return false
 
 
 func _apply_player_command(cmd: InputCommand) -> void:
