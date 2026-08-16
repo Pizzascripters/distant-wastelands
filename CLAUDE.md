@@ -10,6 +10,8 @@ This game should support LAN multiplayer co-op, and will eventually be compatibl
 
 The game should natively run on both Windows and linux.
 
+Before implementing a new change, always check out `main` and pull the latest changes.
+
 When you are finished with a change, invoke a reviewer agent to review it. Do not self-review in place of that agent. Address all of the reviewer's feedback, then invoke the reviewer agent again. Repeat this loop until the reviewer approves. Do not open a pull request until you have that approval. After approval, create a branch in the format `feature/<name>`, and create a GitHub pull request for it. Do not include a test plan in the pull request description unless it is relevant to the change.
 
 Automated tests must be run with `./tools/test.sh` only. That script starts a private Xvfb and never uses the host display. Do not run `godot --headless` for the test runner, and do not launch Godot against `DISPLAY=:0` or the session Wayland/X11 display while testing.
