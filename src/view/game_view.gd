@@ -57,6 +57,8 @@ func _read_command() -> InputCommand:
 	else:
 		cmd.aim = to_mouse.normalized()
 		_last_aim = cmd.aim
+	cmd.fire = Input.is_action_pressed("fire")
+	cmd.interact = Input.is_action_pressed("interact")
 	cmd.build_kind = -1
 	return cmd
 
@@ -90,6 +92,14 @@ func _ensure_actions() -> void:
 	_bind_keys("move_down", [KEY_S, KEY_DOWN])
 	_bind_mouse("zoom_in", MOUSE_BUTTON_WHEEL_UP)
 	_bind_mouse("zoom_out", MOUSE_BUTTON_WHEEL_DOWN)
+	_bind_mouse("fire", MOUSE_BUTTON_LEFT)
+	_bind_keys("interact", [KEY_E])
+	_bind_keys("build_wall", [KEY_1])
+	_bind_keys("build_turret", [KEY_2])
+	_bind_keys("cancel", [KEY_Q])
+	_bind_mouse("cancel", MOUSE_BUTTON_RIGHT)
+	_bind_keys("pause", [KEY_ESCAPE])
+	_bind_keys("debug_overlay", [KEY_F3])
 
 
 func _bind_keys(action: String, keys: Array[int]) -> void:
