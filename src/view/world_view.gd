@@ -38,6 +38,10 @@ func _load_tile(path: String) -> Texture2D:
 
 func rebuild(snap: SimSnapshot) -> void:
 	_tiles = snap.tiles
+	apply_deposits(snap)
+
+
+func apply_deposits(snap: SimSnapshot) -> void:
 	_deposits = snap.deposits.duplicate()
 	queue_redraw()
 

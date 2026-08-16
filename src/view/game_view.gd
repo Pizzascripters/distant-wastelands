@@ -155,6 +155,7 @@ func _session_world() -> World:
 
 
 func _sync_views(snap: SimSnapshot) -> void:
+	_world_view.apply_deposits(snap)
 	_sync_records(snap.buildings, _building_views, _buildings_root, BuildingView)
 	_sync_records(snap.loot, _loot_views, _loot_root, LootView)
 	_sync_records(snap.units, _unit_views, _units_root, UnitView)
