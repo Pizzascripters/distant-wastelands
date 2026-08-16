@@ -1253,18 +1253,11 @@ Each task must merge independently, keep tests that already exist green, and not
 - **Depends on:** none.
 - **Description:** `class_name Building` with `id`, `kind`, `faction`, `origin_tile`, `hp`, `hp_max`, `inventory` (Depot uses it; others cap 0), `fire_cooldown`, `aim` default `(1, 0)`. No occupancy, no mapgen, no view.
 
-### Task 7 — Loot record
-
-- **Title:** `feat: Loot record type`
-- **Files/components:** `src/sim/loot.gd`.
-- **Depends on:** none.
-- **Description:** `class_name Loot` with `id`, `pos`, `inventory` (caps 999/999). No world dictionary, no death spill, no view.
-
 ### Task 8 — Combat helpers
 
 - **Title:** `feat: combat damage, hit order, and death helpers`
 - **Files/components:** `src/sim/combat.gd`.
-- **Depends on:** Task 6, Task 7.
+- **Depends on:** Task 6.
 - **Description:** Pure helpers: projectile hit order (lowest `entity_id` among overlapping opposing units, else lowest solid tile index; rocks/friendly buildings eat the shot), friendly fire off, melee apply + cooldown, `hp <= 0` death, depot death spills one loot pile at center and does **not** touch `zero_ice_timer`. No `Sim.tick` wiring. Do not add `test_combat.gd` here.
 
 ### Task 12 — Unit view kinds and hit flash
@@ -1390,7 +1383,7 @@ Each task must merge independently, keep tests that already exist green, and not
 
 - **Title:** `feat: World dictionaries and occupy/vacate`
 - **Files/components:** `src/sim/world.gd`.
-- **Depends on:** Task 6, Task 7.
+- **Depends on:** Task 6.
 - **Description:** Add `buildings`, `deposits`, `loot`, `projectiles` dictionaries. Helpers: occupy/vacate a footprint, query building at tile, point-to-AABB, nearest living depot. Occupancy still makes tiles unwalkable. No mapgen placement.
 
 ### Task 30 — Snapshot entity and HUD fields
