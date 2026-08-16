@@ -1242,13 +1242,6 @@ Each task must merge independently, keep tests that already exist green, and not
 6. Same-file work is serialized on purpose: if two tasks would both edit `sim.gd`, `rules.gd`, `game_view.gd`, `mapgen.gd`, `world.gd`, or `hud.gd`, the later task lists the earlier one as a dependency.
 7. Do not insert a Steam, LAN, save/load, or reclaim task under this document.
 
-### Task 3 — Inventory type
-
-- **Title:** `feat: Inventory add/remove/clamp`
-- **Files/components:** `src/sim/inventory.gd`, `tests/test_inventory.gd`.
-- **Depends on:** none.
-- **Description:** `class_name Inventory` with the exact API in Resources and inventories (`free_space`, `can_add`, `add` leftover, `remove` actual). Caps are constructor/fields, not globals. Tests: add/remove/clamp; leftover on overflow; empty remove returns 0. No world wiring. No HUD.
-
 ### Task 4 — Deposit record
 
 - **Title:** `feat: Deposit record type`
@@ -1267,14 +1260,14 @@ Each task must merge independently, keep tests that already exist green, and not
 
 - **Title:** `feat: Building record type`
 - **Files/components:** `src/sim/building.gd`.
-- **Depends on:** Task 3.
+- **Depends on:** none.
 - **Description:** `class_name Building` with `id`, `kind`, `faction`, `origin_tile`, `hp`, `hp_max`, `inventory` (Depot uses it; others cap 0), `fire_cooldown`, `aim` default `(1, 0)`. No occupancy, no mapgen, no view.
 
 ### Task 7 — Loot record
 
 - **Title:** `feat: Loot record type`
 - **Files/components:** `src/sim/loot.gd`.
-- **Depends on:** Task 3.
+- **Depends on:** none.
 - **Description:** `class_name Loot` with `id`, `pos`, `inventory` (caps 999/999). No world dictionary, no death spill, no view.
 
 ### Task 8 — Combat helpers
@@ -1393,7 +1386,7 @@ Each task must merge independently, keep tests that already exist green, and not
 
 - **Title:** `feat: attach Inventory to units`
 - **Files/components:** `src/sim/unit.gd`, `src/sim/mapgen.gd` (player carry caps only).
-- **Depends on:** Task 3.
+- **Depends on:** none.
 - **Description:** Each unit gets an `Inventory` with the caps table (player 10/10, raider 5/3, guard 0/0). Mapgen’s player unit uses those caps. No gather. No HUD.
 
 ### Task 25 — AI director class
@@ -1449,7 +1442,7 @@ Each task must merge independently, keep tests that already exist green, and not
 
 - **Title:** `feat: can_place / try_place walls and turrets`
 - **Files/components:** `src/sim/rules.gd` (create), `tests/test_rules.gd` (create; placement cases only), `src/sim/sim.gd` (`_apply_player_command` build branch only).
-- **Depends on:** Task 3, Task 6, Task 29, Task 30.
+- **Depends on:** Task 6, Task 29, Task 30.
 - **Description:** `can_place` / `try_place` as specified (bounds, empty, no building/deposit, no unit overlap, not in `ENEMY_CAMP_RECT`, living player depot has scrap, `MAX_BUILDINGS`). Success deducts scrap and spawns a full-HP player building, `aim = (1, 0)`. `_apply_player_command` calls `try_place` once when `build_kind >= 0`. **No reclaim.** Turrets do not fire. No pause menu. Tests: reject rock, overlap, enemy rect, unaffordable, max buildings, missing depot; build deducts scrap.
 
 ### Task 33 — Combat unit tests
