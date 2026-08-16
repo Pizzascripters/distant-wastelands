@@ -5,6 +5,7 @@ func run() -> PackedStringArray:
 	_test_add_remove_clamp(fails)
 	_test_leftover_on_overflow(fails)
 	_test_empty_remove(fails)
+	_test_unit_carry_caps(fails)
 	return fails
 
 
@@ -73,3 +74,23 @@ func _test_empty_remove(fails: PackedStringArray) -> void:
 	taken = inv.remove(Types.ResourceKind.ICE, 4)
 	if taken != 0:
 		fails.append("empty ice remove returned %d, expected 0" % taken)
+
+
+func _test_unit_carry_caps(fails: PackedStringArray) -> void:
+	var player := Unit.inventory_for(Types.UnitKind.PLAYER)
+	if player.cap_scrap != Constants.PLAYER_CARRY_SCRAP or player.cap_ice != Constants.PLAYER_CARRY_ICE:
+		fails.append(
+			"player caps were %d/%d, expected %d/%d"
+			% [player.cap_scrap, player.cap_ice, Constants.PLAYER_CARRY_SCRAP, Constants.PLAYER_CARRY_ICE]
+		)
+	if player.scrap != 0 or player.ice != 0:
+		fails.append("player inventory started at %d/%d, expected 0/0" % [player.scrap, player.ice])
+	var raider := Unit.inventory_for(Types.UnitKind.RAIDER)
+	if raider.cap_scrap != Constants.RAIDER_CARRY_SCRAP or raider.cap_ice != Constants.RAIDER_CARRY_ICE:
+		fails.append(
+			"raider caps were %d/%d, expected %d/%d"
+			% [raider.cap_scrap, raider.cap_ice, Constants.RAIDER_CARRY_SCRAP, Constants.RAIDER_CARRY_ICE]
+		)
+	var guard := Unit.inventory_for(Types.UnitKind.GUARD)
+	if guard.cap_scrap != 0 or guard.cap_ice != 0:
+		fails.append("guard caps were %d/%d, expected 0/0" % [guard.cap_scrap, guard.cap_ice])

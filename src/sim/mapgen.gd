@@ -39,6 +39,7 @@ static func generate(p_seed: int) -> World:
 	player.radius = Constants.PLAYER_RADIUS
 	player.aim = Vector2.RIGHT
 	player.alive = true
+	player.inventory = Unit.inventory_for(Types.UnitKind.PLAYER)
 	world.units[player.id] = player
 
 	print("seed=%d" % p_seed)
