@@ -88,7 +88,7 @@ Do **not** implement any of the following in v1. They are listed so later work h
 | Ravage model | **Open road: loot-and-return.** Enter `SIEGE` only when A* to the current objective is empty or the raider has been stuck for `RAIDER_STUCK_TIME`. **Once in `SIEGE` and not hauling, they commit:** melee Wall/Turret, then Depot, then Habitat, even if a loot path later opens. Hauling raiders only break walls to go home (or `DeadDrop`). Chase does not preempt `SIEGE`. | Loot-and-return is the unblocked loop. Committing the smash after a seal makes habitat-HP lose a live path instead of a wall-break delay before more looting. |
 | Win/lose | **Habitat HP 0, or ice has been 0 for 30 s while that faction still has a living Depot.** Destroying a depot spills loot and does **not** start or continue the starve clock. Smash path is habitat HP. Starve path requires emptying a living depot (steal). | Two intended win paths. Shooting the enemy depot must not be a third “wait 30 s” win. |
 | AI | **One enemy camp. Wave raiders + one guard + one turret. No enemy economy.** | One opponent that ravages the base is the brief. An expanding AI is a second game. |
-| Art | **Colored primitives + 1px outlines, team stripe on buildings, damage flash on hit** | Playable and readable. Not an art bible. |
+| Art | **32×32 pixel-art PNGs for `EMPTY` ground and `ROCK`. Everything else: colored primitives + 1px outlines, team stripe on buildings, damage flash on hit** | Terrain is the only textured layer in v1. Units and buildings stay primitives so silhouettes stay parseable. |
 | Renderer | **`gl_compatibility`** | Broader Linux Mesa + older Windows GPU coverage for a desktop survival game. |
 | Persistence | **None in v1** | Not required for a 8–15 minute loop. |
 
@@ -159,7 +159,8 @@ The Godot project root **is** the repository root. Application name in `project.
     ui/pause_menu.tscn
     ui/end_screen.tscn
   assets/
-    sprites/placeholder/     # ColorRect-baked or 32×32 PNG primitives
+    sprites/placeholder/     # ColorRect-baked or 32×32 PNG primitives (units, buildings)
+    sprites/tiles/           # 32×32 terrain: ground.png, rock.png
     audio/sfx/               # optional short WAV/OGG; silence is allowed
     theme/default.tres
   tests/
@@ -729,8 +730,8 @@ Not a production art bible. The constraint is **parseability at a glance**.
 
 | Thing | Representation |
 | --- | --- |
-| Ground | Flat fill `#8A4B2A` with a faint `#7A4024` 32 px grid |
-| Rock | Dark brown `#3A241C` rounded rect, 1 px `#1A100C` outline, fills the tile |
+| Ground | 32×32 pixel-art dirt `res://assets/sprites/tiles/ground.png` (rust-orange near `#8A4B2A`), nearest-neighbor, plus a faint `#7A4024` 32 px grid |
+| Rock | 32×32 pixel-art boulder `res://assets/sprites/tiles/rock.png` with transparent corners and a dark outline, drawn over ground; fills most of the tile |
 | Scrap deposit | Orange `#C45C26` triangle pile, 20×16 px |
 | Ice deposit | Cyan `#A8D8EA` diamond, 18×18 px |
 | Loot | Yellow `#E2C044` small square |
