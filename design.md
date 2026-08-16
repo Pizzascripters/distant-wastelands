@@ -1246,13 +1246,6 @@ Each task must merge independently, keep tests that already exist green, and not
 6. Same-file work is serialized on purpose: if two tasks would both edit `sim.gd`, `rules.gd`, `game_view.gd`, `mapgen.gd`, `world.gd`, or `hud.gd`, the later task lists the earlier one as a dependency.
 7. Do not insert a Steam, LAN, save/load, or reclaim task under this document.
 
-### Task 8 — Combat helpers
-
-- **Title:** `feat: combat damage, hit order, and death helpers`
-- **Files/components:** `src/sim/combat.gd`.
-- **Depends on:** none.
-- **Description:** Pure helpers: projectile hit order (lowest `entity_id` among overlapping opposing units, else lowest solid tile index; rocks/friendly buildings eat the shot), friendly fire off, melee apply + cooldown, `hp <= 0` death, depot death spills one loot pile at center and does **not** touch `zero_ice_timer`. No `Sim.tick` wiring. Do not add `test_combat.gd` here.
-
 ### Task 23 — Remaining input actions and command fields
 
 - **Title:** `feat: bind fire, interact, build, pause, and debug actions`
@@ -1327,7 +1320,7 @@ Each task must merge independently, keep tests that already exist green, and not
 
 - **Title:** `test: projectile, melee, death, and depot spill cases`
 - **Files/components:** `tests/test_combat.gd`.
-- **Depends on:** Task 8, Task 29.
+- **Depends on:** Task 29.
 - **Description:** Construct `Sim` / `World` / entities in code (no `game.tscn`). Cases: projectile damages opposing unit; not same faction; two overlapping units → lowest `entity_id`; melee respects cooldown; death at 0; depot death spills remaining stock and does not set `LIFE_SUPPORT`.
 
 ### Task 34 — Interact resolver
@@ -1341,7 +1334,7 @@ Each task must merge independently, keep tests that already exist green, and not
 
 - **Title:** `feat: rifle, turret fire, projectiles, melee, death, respawn`
 - **Files/components:** `src/sim/sim.gd` (tick steps 2 building/projectile cooldowns, 4 fire apply, 7 turret fire, 9 projectiles, 10 melee, 12 deaths/respawn).
-- **Depends on:** Task 8, Task 31, Task 33, Task 34.
+- **Depends on:** Task 31, Task 33, Task 34.
 - **Description:** Player fire from held `fire` + `weapon_cooldown`. Turrets acquire nearest living opposing **unit** in range, write `aim`, spawn faction projectiles. Integrate projectiles via `combat.gd`. Resolve melee intents. Process deaths (player drops carry, `respawn_timer = PLAYER_RESPAWN`, ignore gameplay commands; enemy units drop carry and are removed). Respawn at 0 with the walkable-tile fallback. Do not attach `Director` or decrement `banner_timer` (that is the AI-wiring task). No outcome stub — win/lose is the life-support task. No debug spawn key.
 
 ### Task 36 — Life support and outcomes
