@@ -1253,20 +1253,6 @@ Each task must merge independently, keep tests that already exist green, and not
 - **Depends on:** none.
 - **Description:** Pure helpers: projectile hit order (lowest `entity_id` among overlapping opposing units, else lowest solid tile index; rocks/friendly buildings eat the shot), friendly fire off, melee apply + cooldown, `hp <= 0` death, depot death spills one loot pile at center and does **not** touch `zero_ice_timer`. No `Sim.tick` wiring. Do not add `test_combat.gd` here.
 
-### Task 19 — World and prop placeholder sprites
-
-- **Title:** `chore: placeholder sprites for ground, rock, deposits, loot`
-- **Files/components:** `assets/sprites/placeholder/` (ground/rock/scrap/ice/loot only).
-- **Depends on:** none.
-- **Description:** Optional 32×32 (or smaller) PNGs matching the color spec. Views may keep ColorRects; this task only adds files. No view rewiring.
-
-### Task 20 — Unit and building placeholder sprites
-
-- **Title:** `chore: placeholder sprites for units, buildings, projectiles`
-- **Files/components:** `assets/sprites/placeholder/` (units, habitat, depot, wall, turret, projectiles).
-- **Depends on:** none.
-- **Description:** Optional PNGs matching the color-and-stripe spec. No view rewiring.
-
 ### Task 23 — Remaining input actions and command fields
 
 - **Title:** `feat: bind fire, interact, build, pause, and debug actions`
@@ -1397,7 +1383,7 @@ Each task must merge independently, keep tests that already exist green, and not
 
 - **Title:** `chore: apply placeholders, leftover HUD colors, verify exports`
 - **Files/components:** views that still use programmer rects (`src/view/*`, `src/ui/hud.gd`), `tools/export.sh` invocation notes only if a filter is still wrong.
-- **Depends on:** Task 19, Task 20, Task 28, Task 37, Task 40.
-- **Description:** Replace leftover ColorRects with the color-and-stripe spec and any sprites from Tasks 19–20. Confirm raid-banner and low-ice colors. Confirm Linux and Windows exports boot to the menu. Manual checklist executed. No new rules. README is **not** required.
+- **Depends on:** Task 28, Task 37, Task 40.
+- **Description:** Replace leftover ColorRects with the color-and-stripe spec and any sprites in `assets/sprites/placeholder/`. Confirm raid-banner and low-ice colors. Confirm Linux and Windows exports boot to the menu. Manual checklist executed. No new rules. README is **not** required.
 
 These tasks are the only implementation sequence. Do not insert a Steam, LAN, save/load, or reclaim task under this document.
