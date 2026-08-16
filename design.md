@@ -1246,18 +1246,11 @@ Each task must merge independently, keep tests that already exist green, and not
 6. Same-file work is serialized on purpose: if two tasks would both edit `sim.gd`, `rules.gd`, `game_view.gd`, `mapgen.gd`, `world.gd`, or `hud.gd`, the later task lists the earlier one as a dependency.
 7. Do not insert a Steam, LAN, save/load, or reclaim task under this document.
 
-### Task 6 — Building record
-
-- **Title:** `feat: Building record type`
-- **Files/components:** `src/sim/building.gd`.
-- **Depends on:** none.
-- **Description:** `class_name Building` with `id`, `kind`, `faction`, `origin_tile`, `hp`, `hp_max`, `inventory` (Depot uses it; others cap 0), `fire_cooldown`, `aim` default `(1, 0)`. No occupancy, no mapgen, no view.
-
 ### Task 8 — Combat helpers
 
 - **Title:** `feat: combat damage, hit order, and death helpers`
 - **Files/components:** `src/sim/combat.gd`.
-- **Depends on:** Task 6.
+- **Depends on:** none.
 - **Description:** Pure helpers: projectile hit order (lowest `entity_id` among overlapping opposing units, else lowest solid tile index; rocks/friendly buildings eat the shot), friendly fire off, melee apply + cooldown, `hp <= 0` death, depot death spills one loot pile at center and does **not** touch `zero_ice_timer`. No `Sim.tick` wiring. Do not add `test_combat.gd` here.
 
 ### Task 13 — HUD scene skeleton
@@ -1369,7 +1362,7 @@ Each task must merge independently, keep tests that already exist green, and not
 
 - **Title:** `feat: World dictionaries and occupy/vacate`
 - **Files/components:** `src/sim/world.gd`.
-- **Depends on:** Task 6.
+- **Depends on:** none.
 - **Description:** Add `buildings`, `deposits`, `loot`, `projectiles` dictionaries. Helpers: occupy/vacate a footprint, query building at tile, point-to-AABB, nearest living depot. Occupancy still makes tiles unwalkable. No mapgen placement.
 
 ### Task 30 — Snapshot entity and HUD fields
@@ -1390,7 +1383,7 @@ Each task must merge independently, keep tests that already exist green, and not
 
 - **Title:** `feat: can_place / try_place walls and turrets`
 - **Files/components:** `src/sim/rules.gd` (create), `tests/test_rules.gd` (create; placement cases only), `src/sim/sim.gd` (`_apply_player_command` build branch only).
-- **Depends on:** Task 6, Task 29, Task 30.
+- **Depends on:** Task 29, Task 30.
 - **Description:** `can_place` / `try_place` as specified (bounds, empty, no building/deposit, no unit overlap, not in `ENEMY_CAMP_RECT`, living player depot has scrap, `MAX_BUILDINGS`). Success deducts scrap and spawns a full-HP player building, `aim = (1, 0)`. `_apply_player_command` calls `try_place` once when `build_kind >= 0`. **No reclaim.** Turrets do not fire. No pause menu. Tests: reject rock, overlap, enemy rect, unaffordable, max buildings, missing depot; build deducts scrap.
 
 ### Task 33 — Combat unit tests
