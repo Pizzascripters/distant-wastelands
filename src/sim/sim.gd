@@ -39,11 +39,7 @@ func tick() -> void:
 	tick_index += 1
 	time = float(tick_index) * Constants.SIM_DT
 
-	for unit in world.units.values():
-		unit.weapon_cooldown = maxf(0.0, unit.weapon_cooldown - Constants.SIM_DT)
-		unit.path_recalc_in = maxf(0.0, unit.path_recalc_in - Constants.SIM_DT)
-		if not unit.alive and unit.kind == Types.UnitKind.PLAYER:
-			unit.respawn_timer = maxf(0.0, unit.respawn_timer - Constants.SIM_DT)
+	_decrement_cooldowns()
 
 	var cmd: InputCommand = null
 	if not _queue.is_empty():
@@ -51,11 +47,16 @@ func tick() -> void:
 	_queue.clear()
 	_apply_player_command(cmd)
 
+	_fire_turrets()
+
 	for unit in world.units.values():
 		if unit.alive:
 			_integrate_unit(unit)
 
+	_integrate_projectiles()
+	_resolve_melee()
 	_interact_target_id = Rules.resolve_interact(world, get_player(), cmd, _interact_target_id)
+	_process_deaths_and_respawn()
 
 
 func snapshot() -> SimSnapshot:
@@ -209,6 +210,16 @@ func _apply_player_command(cmd: InputCommand) -> void:
 	player.vel = cmd.move * Constants.PLAYER_SPEED
 	if cmd.build_kind >= 0:
 		Rules.try_place(world, cmd.build_kind, cmd.build_tile)
+	elif cmd.fire and player.weapon_cooldown <= 0.0:
+		_spawn_projectile(
+			Types.Faction.PLAYER,
+			player.pos,
+			player.aim,
+			Constants.PLAYER_PROJ_DAMAGE,
+			Constants.PLAYER_PROJ_SPEED,
+			Constants.PLAYER_PROJ_LIFE
+		)
+		player.weapon_cooldown = Constants.PLAYER_FIRE_COOLDOWN
 
 
 func _integrate_unit(unit: Unit) -> void:
@@ -264,3 +275,235 @@ func _push_circle_out_of_aabb(center: Vector2, radius: float, aabb: Rect2) -> Ve
 		return Vector2(center.x, aabb.end.y + radius)
 	var dist := sqrt(dist_sq)
 	return closest + (delta / dist) * radius
+
+
+func _decrement_cooldowns() -> void:
+	for unit in world.units.values():
+		unit.weapon_cooldown = maxf(0.0, unit.weapon_cooldown - Constants.SIM_DT)
+		unit.path_recalc_in = maxf(0.0, unit.path_recalc_in - Constants.SIM_DT)
+		if not unit.alive and unit.kind == Types.UnitKind.PLAYER:
+			unit.respawn_timer = maxf(0.0, unit.respawn_timer - Constants.SIM_DT)
+	for building in world.buildings.values():
+		building.fire_cooldown = maxf(0.0, building.fire_cooldown - Constants.SIM_DT)
+	for proj in world.projectiles.values():
+		proj.life = maxf(0.0, proj.life - Constants.SIM_DT)
+
+
+func _fire_turrets() -> void:
+	var ids: Array = world.buildings.keys()
+	ids.sort()
+	for id in ids:
+		var building: Building = world.buildings.get(id)
+		if building == null or building.kind != Types.BuildingKind.TURRET:
+			continue
+		if building.hp <= 0:
+			continue
+		var center := world.footprint_aabb(building).get_center()
+		var target := _nearest_opposing_unit(center, building.faction, Constants.TURRET_RANGE)
+		if target == null:
+			continue
+		var delta := target.pos - center
+		if delta.length_squared() > 0.0001:
+			building.aim = delta.normalized()
+		if building.fire_cooldown > 0.0:
+			continue
+		_spawn_projectile(
+			building.faction,
+			center,
+			building.aim,
+			Constants.TURRET_DAMAGE,
+			Constants.TURRET_PROJ_SPEED,
+			Constants.TURRET_PROJ_LIFE
+		)
+		building.fire_cooldown = Constants.TURRET_COOLDOWN
+
+
+func _nearest_opposing_unit(origin: Vector2, faction: int, max_range: float) -> Unit:
+	var best: Unit = null
+	var best_dist := max_range
+	var best_id := 0x7fffffff
+	for unit in world.units.values():
+		if not unit.alive or unit.faction == faction:
+			continue
+		var dist := origin.distance_to(unit.pos)
+		if dist > max_range:
+			continue
+		if best != null and (dist > best_dist or (dist == best_dist and unit.id >= best_id)):
+			continue
+		best = unit
+		best_dist = dist
+		best_id = unit.id
+	return best
+
+
+func _spawn_projectile(
+	faction: int, origin: Vector2, aim: Vector2, damage: int, speed: float, life: float
+) -> void:
+	var dir := aim
+	if dir.length_squared() <= 0.0001:
+		dir = Vector2(1, 0)
+	else:
+		dir = dir.normalized()
+	var proj := Projectile.new()
+	proj.id = world.alloc_id()
+	proj.faction = faction
+	proj.pos = origin + dir * Constants.MUZZLE_OFFSET
+	proj.vel = dir * speed
+	proj.damage = damage
+	proj.life = life
+	world.projectiles[proj.id] = proj
+
+
+func _integrate_projectiles() -> void:
+	var ids: Array = world.projectiles.keys()
+	ids.sort()
+	var remove: Array[int] = []
+	for id in ids:
+		var proj: Projectile = world.projectiles.get(id)
+		if proj == null:
+			continue
+		if Combat.integrate_projectile(world, proj) or proj.life <= 0.0:
+			remove.append(int(id))
+	for id in remove:
+		world.projectiles.erase(id)
+
+
+func _resolve_melee() -> void:
+	var ids: Array = world.units.keys()
+	ids.sort()
+	for id in ids:
+		var unit: Unit = world.units.get(id)
+		if unit == null or not unit.alive or unit.weapon_cooldown > 0.0:
+			continue
+		var target := _melee_intent_target(unit)
+		if target != null:
+			Combat.apply_melee(unit, target)
+
+
+func _melee_intent_target(unit: Unit) -> Object:
+	if not unit.has_meta(AiRaider.MELEE_TARGET_META):
+		return null
+	var tid := int(unit.get_meta(AiRaider.MELEE_TARGET_META))
+	if tid <= 0:
+		return null
+	var other: Unit = world.units.get(tid) as Unit
+	if other != null:
+		return other
+	return world.buildings.get(tid)
+
+
+func _process_deaths_and_respawn() -> void:
+	for unit in world.units.values():
+		if unit.hp > 0 or not unit.alive:
+			continue
+		_drop_unit_carry(unit)
+		if unit.kind == Types.UnitKind.PLAYER:
+			unit.respawn_timer = Constants.PLAYER_RESPAWN
+	Combat.process_deaths(world)
+	_maybe_respawn_player()
+
+
+func _drop_unit_carry(unit: Unit) -> void:
+	var inv: Inventory = unit.inventory
+	if inv == null or (inv.scrap <= 0 and inv.ice <= 0):
+		return
+	var pile := Loot.new()
+	pile.id = world.alloc_id()
+	pile.pos = unit.pos
+	if inv.scrap > 0:
+		pile.inventory.add(Types.ResourceKind.SCRAP, inv.scrap)
+	if inv.ice > 0:
+		pile.inventory.add(Types.ResourceKind.ICE, inv.ice)
+	world.loot[pile.id] = pile
+	if inv.scrap > 0:
+		inv.remove(Types.ResourceKind.SCRAP, inv.scrap)
+	if inv.ice > 0:
+		inv.remove(Types.ResourceKind.ICE, inv.ice)
+
+
+func _maybe_respawn_player() -> void:
+	var player := get_player()
+	if player == null or player.alive or player.respawn_timer > 0.0:
+		return
+	if _player_habitat() == null:
+		return
+	var tile := _respawn_tile()
+	player.pos = world.tile_center(tile.x, tile.y)
+	player.hp = player.hp_max
+	player.alive = true
+	player.vel = Vector2.ZERO
+	player.weapon_cooldown = 0.0
+	player.interact_progress = 0.0
+	player.inventory = Unit.inventory_for(Types.UnitKind.PLAYER)
+	_interact_target_id = 0
+
+
+func _player_habitat() -> Building:
+	for building in world.buildings.values():
+		if building.kind != Types.BuildingKind.HABITAT:
+			continue
+		if building.faction != Types.Faction.PLAYER:
+			continue
+		if building.hp <= 0:
+			continue
+		return building
+	return null
+
+
+func _respawn_tile() -> Vector2i:
+	var spawn := Constants.PLAYER_SPAWN_TILE
+	if world.is_walkable(spawn.x, spawn.y):
+		return spawn
+	var nearby := _chebyshev_walkable(spawn, Constants.RESPAWN_SEARCH)
+	if nearby.x >= 0:
+		return nearby
+	return _flood_respawn_from_habitat()
+
+
+func _chebyshev_walkable(origin: Vector2i, radius: int) -> Vector2i:
+	var best := Vector2i(-1, -1)
+	var best_d := 0x7fffffff
+	var best_i := 0x7fffffff
+	for dy in range(-radius, radius + 1):
+		for dx in range(-radius, radius + 1):
+			var d := maxi(absi(dx), absi(dy))
+			if d == 0 or d > radius:
+				continue
+			var tile := Vector2i(origin.x + dx, origin.y + dy)
+			if not world.is_walkable(tile.x, tile.y):
+				continue
+			var index := tile.y * Constants.MAP_W + tile.x
+			if d < best_d or (d == best_d and index < best_i):
+				best = tile
+				best_d = d
+				best_i = index
+	return best
+
+
+func _flood_respawn_from_habitat() -> Vector2i:
+	var habitat := _player_habitat()
+	if habitat == null:
+		return Constants.PLAYER_SPAWN_TILE
+	var start := world.world_to_tile(world.footprint_aabb(habitat).get_center())
+	var seen := {}
+	var q: Array[Vector2i] = [start]
+	seen[start.y * Constants.MAP_W + start.x] = true
+	var dirs: Array[Vector2i] = [
+		Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)
+	]
+	var i := 0
+	while i < q.size():
+		var p: Vector2i = q[i]
+		i += 1
+		if world.is_walkable(p.x, p.y):
+			return p
+		for d in dirs:
+			var n: Vector2i = p + d
+			if not world.in_bounds(n.x, n.y):
+				continue
+			var key := n.y * Constants.MAP_W + n.x
+			if seen.has(key):
+				continue
+			seen[key] = true
+			q.append(n)
+	return Constants.PLAYER_SPAWN_TILE
