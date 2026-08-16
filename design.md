@@ -1253,13 +1253,6 @@ Each task must merge independently, keep tests that already exist green, and not
 - **Depends on:** none.
 - **Description:** Pure helpers: projectile hit order (lowest `entity_id` among overlapping opposing units, else lowest solid tile index; rocks/friendly buildings eat the shot), friendly fire off, melee apply + cooldown, `hp <= 0` death, depot death spills one loot pile at center and does **not** touch `zero_ice_timer`. No `Sim.tick` wiring. Do not add `test_combat.gd` here.
 
-### Task 17 — End screen scene
-
-- **Title:** `feat: end screen scene`
-- **Files/components:** `src/ui/end_screen.gd`, `scenes/ui/end_screen.tscn`.
-- **Depends on:** none.
-- **Description:** Title `Colony standing` / `Colony lost`, one-line reason from the mapping table, buttons `Play Again` and `Menu`. Takes `(Outcome, OutcomeReason)` and sets the two strings. Not mounted. No Play Again wiring.
-
 ### Task 19 — World and prop placeholder sprites
 
 - **Title:** `chore: placeholder sprites for ground, rock, deposits, loot`
@@ -1411,7 +1404,7 @@ Each task must merge independently, keep tests that already exist green, and not
 
 - **Title:** `feat: pause menu, end screen, Play Again, F3 overlay`
 - **Files/components:** `src/view/game_view.gd`, `src/ui/{pause_menu,end_screen,debug_overlay}.gd`, `src/autoload/app.gd` (Play Again / Menu routing if needed).
-- **Depends on:** Task 17, Task 36, Task 39.
+- **Depends on:** Task 36, Task 39.
 - **Description:** Escape toggles the pause menu and `set_paused` (ignored on the end screen). Resume / Quit to Menu. When `outcome != NONE`, show `end_screen.tscn` with the mapped reason (no centered stub string). Apply `assets/theme/default.tres` to pause and end screens. Play Again starts a new `Sim` at the same seed. Menu returns to the main menu. F3 toggles the debug overlay. Closed loop is now fully gated.
 
 ### Task 41 — Art pass and export verification
