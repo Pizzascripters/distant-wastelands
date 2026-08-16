@@ -4,7 +4,7 @@ Distant Wastelands is a post-apocalyptic 2d survival game that takes place on th
 
 Everything in design.md shall be taken as the exact requirements for the entire game. Any feature in the code that is not defined in the design doc should be removed. Any new requirements should always be added to the design doc.
 
-Maintain the Task Plan in `design.md` as part of every change, following the plan's own maintenance rules: delete each completed task's subsection when it merges to `main`, remove that task from remaining `Depends on` lists, and do not renumber surviving tasks.
+As a pre-merge step, update the Task Plan in `design.md` following the plan's own maintenance rules: delete each completed task's subsection, remove that task from remaining `Depends on` lists, and do not renumber surviving tasks.
 
 Don't include references to the name of the game, as it is subject to change.
 
