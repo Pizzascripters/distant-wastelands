@@ -1260,13 +1260,6 @@ Each task must merge independently, keep tests that already exist green, and not
 - **Depends on:** Task 6.
 - **Description:** Pure helpers: projectile hit order (lowest `entity_id` among overlapping opposing units, else lowest solid tile index; rocks/friendly buildings eat the shot), friendly fire off, melee apply + cooldown, `hp <= 0` death, depot death spills one loot pile at center and does **not** touch `zero_ice_timer`. No `Sim.tick` wiring. Do not add `test_combat.gd` here.
 
-### Task 13 — HUD scene skeleton
-
-- **Title:** `feat: HUD panel for carry, depot stocks, and HP`
-- **Files/components:** `src/ui/hud.gd`, `scenes/ui/hud.tscn`.
-- **Depends on:** none.
-- **Description:** Dark panel `Color(0,0,0,0.65)`, text `#F2EDE6`, 16 px. Widgets for player carry scrap/ice, depot scrap/ice (or `—`), Habitat HP, Depot HP, ice countdown slot, raid-banner slot. Reads whatever the snapshot already has; missing fields show 0 / hidden. Not mounted. No low-ice color logic required beyond the specified `#E24A3B` when the snapshot says depot ice ≤ 5 or `zero_ice_timer > 0`.
-
 ### Task 15 — Build bar
 
 - **Title:** `feat: build bar labels for wall and turret`
@@ -1439,7 +1432,7 @@ Each task must merge independently, keep tests that already exist green, and not
 
 - **Title:** `feat: mount HUD, buildings, loot, projectiles, and build mode`
 - **Files/components:** `src/view/game_view.gd`, `src/ui/hud.gd` (bind live snapshot), `scenes/game.tscn` if needed.
-- **Depends on:** Task 13, Task 15, Task 21, Task 23, Task 30, Task 31, Task 32, Task 38.
+- **Depends on:** Task 15, Task 21, Task 23, Task 30, Task 31, Task 32, Task 38.
 - **Description:** Sync building/loot/projectile views by id. Mount HUD and build bar. Apply `assets/theme/default.tres` to them. Bind HUD to snapshot carry (`units[].inventory`), depot stocks, HP, ice countdown, raid banner. Build mode: keys 1/2 select kind, ghost under cursor colored by `rules.can_place`, LMB sets the session build latch for that frame, RMB/Q cancel. Resources come from the player depot. **No reclaim.** Do not mount pause, end, or F3.
 
 ### Task 40 — Pause, end screen, and F3
