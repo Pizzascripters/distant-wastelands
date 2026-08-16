@@ -1267,13 +1267,6 @@ Each task must merge independently, keep tests that already exist green, and not
 - **Depends on:** Task 6, Task 7.
 - **Description:** Pure helpers: projectile hit order (lowest `entity_id` among overlapping opposing units, else lowest solid tile index; rocks/friendly buildings eat the shot), friendly fire off, melee apply + cooldown, `hp <= 0` death, depot death spills one loot pile at center and does **not** touch `zero_ice_timer`. No `Sim.tick` wiring. Do not add `test_combat.gd` here.
 
-### Task 11 — Projectile view
-
-- **Title:** `feat: ProjectileView faction-colored dots`
-- **Files/components:** `src/view/projectile_view.gd`.
-- **Depends on:** none.
-- **Description:** Node that draws a 4 px circle (player teal; turret uses faction color) from a projectile record. Not mounted.
-
 ### Task 12 — Unit view kinds and hit flash
 
 - **Title:** `feat: UnitView raider/guard colors and hit flash`
@@ -1467,7 +1460,7 @@ Each task must merge independently, keep tests that already exist green, and not
 
 - **Title:** `feat: mount HUD, buildings, loot, projectiles, and build mode`
 - **Files/components:** `src/view/game_view.gd`, `src/ui/hud.gd` (bind live snapshot), `scenes/game.tscn` if needed.
-- **Depends on:** Task 11, Task 12, Task 13, Task 14, Task 15, Task 21, Task 23, Task 30, Task 31, Task 32, Task 38.
+- **Depends on:** Task 12, Task 13, Task 14, Task 15, Task 21, Task 23, Task 30, Task 31, Task 32, Task 38.
 - **Description:** Sync building/loot/projectile views by id. Mount HUD and build bar. Apply `assets/theme/default.tres` to them. Bind HUD to snapshot carry (`units[].inventory`), depot stocks, HP, ice countdown, raid banner. Build mode: keys 1/2 select kind, ghost under cursor colored by `rules.can_place`, LMB sets the session build latch for that frame, RMB/Q cancel. Resources come from the player depot. **No reclaim.** Do not mount pause, end, or F3.
 
 ### Task 40 — Pause, end screen, and F3
