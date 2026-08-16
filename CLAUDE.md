@@ -4,7 +4,7 @@ Distant Wastelands is a post-apocalyptic 2d survival game that takes place on th
 
 Everything in design.md shall be taken as the exact requirements for the entire game. Any feature in the code that is not defined in the design doc should be removed. Any new requirements should always be added to the design doc.
 
-As a pre-merge step, update the Task Plan in `design.md` following the plan's own maintenance rules: delete each completed task's subsection, remove that task from remaining `Depends on` lists, and do not renumber surviving tasks.
+Work items live in GitHub Issues (`label:task`), not in `design.md`. Before starting, list open Todo issues (`is:issue is:open label:task -label:in-progress`), skip any issue that is already `in-progress` or whose blocked-by parents are still open, then claim by adding the `in-progress` label. Close the issue when it merges (`Fixes #<n>` in the PR). Do not encode status in `design.md`.
 
 Don't include references to the name of the game, as it is subject to change.
 
