@@ -3,8 +3,12 @@ extends RefCounted
 
 var seed: int = 0
 var tiles: PackedByteArray = PackedByteArray()
+var buildings: Dictionary = {}
 var occupancy: Array[int] = []
+var deposits: Dictionary = {}
+var loot: Dictionary = {}
 var units: Dictionary = {}
+var projectiles: Dictionary = {}
 var next_id: int = 1
 
 
@@ -56,6 +60,89 @@ func world_to_tile(pos: Vector2) -> Vector2i:
 
 func tile_aabb(x: int, y: int) -> Rect2:
 	return Rect2(x * Constants.TILE, y * Constants.TILE, Constants.TILE, Constants.TILE)
+
+
+func footprint_span(kind: int) -> int:
+	if kind == Types.BuildingKind.HABITAT or kind == Types.BuildingKind.DEPOT:
+		return 2
+	return 1
+
+
+func footprint_aabb(building: Building) -> Rect2:
+	var span := float(footprint_span(building.kind) * Constants.TILE)
+	return Rect2(
+		building.origin_tile.x * Constants.TILE,
+		building.origin_tile.y * Constants.TILE,
+		span,
+		span
+	)
+
+
+func occupy(building: Building) -> void:
+	if building == null:
+		return
+	var span := footprint_span(building.kind)
+	for dy in span:
+		for dx in span:
+			var x: int = building.origin_tile.x + dx
+			var y: int = building.origin_tile.y + dy
+			if not in_bounds(x, y):
+				continue
+			var i := index_of(x, y)
+			var current: int = occupancy[i]
+			if current != 0 and current != building.id:
+				push_error(
+					"occupancy mismatch occupy id=%d tile=(%d,%d) had=%d"
+					% [building.id, x, y, current]
+				)
+				assert(current == 0 or current == building.id)
+			occupancy[i] = building.id
+
+
+func vacate(building: Building) -> void:
+	if building == null:
+		return
+	var span := footprint_span(building.kind)
+	for dy in span:
+		for dx in span:
+			var x: int = building.origin_tile.x + dx
+			var y: int = building.origin_tile.y + dy
+			if not in_bounds(x, y):
+				continue
+			var i := index_of(x, y)
+			if occupancy[i] == building.id:
+				occupancy[i] = 0
+
+
+func building_at(x: int, y: int) -> Building:
+	if not in_bounds(x, y):
+		return null
+	var bid: int = occupancy[index_of(x, y)]
+	if bid <= 0:
+		return null
+	return buildings.get(bid) as Building
+
+
+func point_aabb_distance(point: Vector2, aabb: Rect2) -> float:
+	var closest := Vector2(
+		clampf(point.x, aabb.position.x, aabb.end.x),
+		clampf(point.y, aabb.position.y, aabb.end.y)
+	)
+	return point.distance_to(closest)
+
+
+func nearest_living_depot(pos: Vector2) -> Building:
+	var best: Building = null
+	var best_dist := INF
+	for building in buildings.values():
+		if building.kind != Types.BuildingKind.DEPOT or building.hp <= 0:
+			continue
+		var dist := point_aabb_distance(pos, footprint_aabb(building))
+		if best != null and (dist > best_dist or (dist == best_dist and building.id >= best.id)):
+			continue
+		best = building
+		best_dist = dist
+	return best
 
 
 func alloc_id() -> int:
