@@ -33,39 +33,25 @@ func tick() -> void:
 	if outcome != Types.Outcome.NONE:
 		return
 
-	# 1. Advance clock.
+	# Tick order is the design contract (Sim.tick steps 1–13).
 	tick_index += 1
 	time = float(tick_index) * Constants.SIM_DT
 
-	# 2. Decrement cooldowns (floored at 0).
 	for unit in world.units.values():
 		unit.weapon_cooldown = maxf(0.0, unit.weapon_cooldown - Constants.SIM_DT)
 		unit.path_recalc_in = maxf(0.0, unit.path_recalc_in - Constants.SIM_DT)
 		if not unit.alive and unit.kind == Types.UnitKind.PLAYER:
 			unit.respawn_timer = maxf(0.0, unit.respawn_timer - Constants.SIM_DT)
 
-	# 3. Ice consumption — later PR.
-	# 4. Apply and consume queued commands (v1: exactly one).
 	var cmd: InputCommand = null
 	if not _queue.is_empty():
 		cmd = _queue[0]
 	_queue.clear()
 	_apply_player_command(cmd)
 
-	# 5. AI director — later PR.
-	# 6. AI brains — later PR.
-	# 7. Turret fire — later PR.
-
-	# 8. Integrate unit movement with collision sliding.
 	for unit in world.units.values():
 		if unit.alive:
 			_integrate_unit(unit)
-
-	# 9. Projectiles — later PR.
-	# 10. Melee — later PR.
-	# 11. Interact channels — later PR.
-	# 12. Deaths / respawn — later PR.
-	# 13. Evaluate win/lose — later PR.
 
 
 func snapshot() -> SimSnapshot:
