@@ -9,3 +9,5 @@ Don't include references to the name of the game, as it is subject to change.
 This game should support LAN multiplayer co-op, and will eventually be compatible with Steam multiplayer.
 
 The game should natively run on both Windows and linux.
+
+When you are finished with a change, create a branch in the format `feature/<name>`, and create a GitHub pull request for it.
