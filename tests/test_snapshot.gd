@@ -7,6 +7,8 @@ func run() -> PackedStringArray:
 	_test_inventory_is_copied(fails)
 	_test_living_depot_ice_empty(fails)
 	_test_player_respawn_timer(fails)
+	_test_gather_channel_defaults(fails)
+	_test_gather_channel_while_mining(fails)
 	return fails
 
 
@@ -170,6 +172,52 @@ func _test_player_respawn_timer(fails: PackedStringArray) -> void:
 	var snap := sim.snapshot()
 	if not is_equal_approx(snap.player_respawn_timer, 2.5):
 		fails.append("player_respawn_timer is %s, expected 2.5" % str(snap.player_respawn_timer))
+
+
+func _test_gather_channel_defaults(fails: PackedStringArray) -> void:
+	var sim := Sim.new()
+	sim.setup(Constants.DEFAULT_SEED)
+	var snap := sim.snapshot()
+	if snap.gather_deposit_id != 0 or snap.gather_progress != 0.0:
+		fails.append(
+			"gather fields were %d/%s, expected 0/0"
+			% [snap.gather_deposit_id, str(snap.gather_progress)]
+		)
+
+
+func _test_gather_channel_while_mining(fails: PackedStringArray) -> void:
+	var sim := Sim.new()
+	sim.setup(Constants.DEFAULT_SEED)
+	var player := sim.get_player()
+	var deposit := Deposit.new()
+	deposit.id = sim.world.alloc_id()
+	deposit.kind = Types.ResourceKind.SCRAP
+	deposit.tile = sim.world.world_to_tile(player.pos)
+	deposit.remaining = 4
+	sim.world.deposits[deposit.id] = deposit
+	var ticks := 10
+	for _i in ticks:
+		var cmd := InputCommand.new()
+		cmd.interact = true
+		sim.enqueue(cmd)
+		sim.tick()
+	var snap := sim.snapshot()
+	var expected := float(ticks) * Constants.SIM_DT
+	if snap.gather_deposit_id != deposit.id:
+		fails.append("gather_deposit_id is %d, expected %d" % [snap.gather_deposit_id, deposit.id])
+	if not is_equal_approx(snap.gather_progress, expected):
+		fails.append("gather_progress is %s, expected %s" % [str(snap.gather_progress), str(expected)])
+	var walk := InputCommand.new()
+	walk.interact = true
+	walk.move = Vector2.RIGHT
+	sim.enqueue(walk)
+	sim.tick()
+	var cleared := sim.snapshot()
+	if cleared.gather_deposit_id != 0 or cleared.gather_progress != 0.0:
+		fails.append(
+			"walking should hide gather bar, got %d/%s"
+			% [cleared.gather_deposit_id, str(cleared.gather_progress)]
+		)
 
 
 func _player_rec(snap: SimSnapshot) -> Dictionary:

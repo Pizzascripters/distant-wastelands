@@ -19,3 +19,5 @@ var player_zero_ice_timer: float = 0.0
 var enemy_zero_ice_timer: float = 0.0
 var player_living_depot_ice_empty: bool = false
 var enemy_living_depot_ice_empty: bool = false
+var gather_deposit_id: int = 0
+var gather_progress: float = 0.0
