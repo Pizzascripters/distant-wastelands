@@ -1115,7 +1115,7 @@ No debug key sets depot ice to 0. Life-support lose is proven by unit test; the 
 
 ## Rollout Plan
 
-Not a SaaS flag rollout. v1 ships as a sequence of mergeable tasks (see **Task Plan**) that each leave `main` playable at the current layer (empty window → walkable map → full loop → packaged binaries).
+Not a SaaS flag rollout. v1 ships as a sequence of mergeable tasks (see **Work Tracking**) that each leave `main` playable at the current layer (empty window → walkable map → full loop → packaged binaries).
 
 **Definition of done for v1:**
 
@@ -1230,153 +1230,28 @@ Parking-lot questions for *later* documents (do not implement answers in v1):
 
 ---
 
-## Task Plan
+## Work Tracking
 
-Work items in this document are **tasks**, not PRs. A GitHub pull request may carry one or more tasks; the unit of scope, dependency, and completion is the task.
+Work items are **GitHub Issues** on this repository, not subsections of this document. This document is the spec. Issues do not add requirements.
 
-Each task must merge independently, keep tests that already exist green, and not add features owned by a later task. File lists are the expected new/changed set; incidental `project.godot` input-map edits ride with the task that first needs the action.
+A GitHub pull request may carry one or more tasks; the unit of scope, dependency, and completion is the issue. Each task must merge independently, keep tests that already exist green, and not add features owned by a later task. File lists on the issue are the expected new/changed set; incidental `project.godot` input-map edits ride with the task that first needs the action.
 
-### How to maintain this plan
+Board: [v1 issues labeled `task`](https://github.com/Pizzascripters/distant-wastelands/issues?q=is%3Aissue+label%3Atask). Stable task IDs (23, 24, …) stay in the issue title; gaps are expected. Do **not** cite those IDs in sections outside this one — use the feature name.
 
-1. When a task is completed (merged to `main`), **delete that task’s entire subsection** from this plan. Do not strike through it. Do not leave a “done” marker.
-2. After deleting a completed task, **remove that task from every remaining `Depends on` list**. If a remaining task’s list becomes empty, set it to `none`.
-3. Do **not** renumber surviving tasks. Numbers are stable identifiers; gaps are expected.
-4. Do **not** cite task numbers in sections outside this plan. Use the feature name so deletions do not leave dangling references.
-5. Tasks that share no files and whose remaining `Depends on` lists are empty (or already deleted) may be implemented in parallel.
-6. Same-file work is serialized on purpose: if two tasks would both edit `sim.gd`, `rules.gd`, `game_view.gd`, `mapgen.gd`, `world.gd`, or `hud.gd`, the later task lists the earlier one as a dependency.
-7. Do not insert a Steam, LAN, save/load, or reclaim task under this document.
+### Status
 
-### Task 23 — Remaining input actions and command fields
+| State | How it is stored | Agent query |
+| --- | --- | --- |
+| Todo | open issue, no `in-progress` label | `is:issue is:open label:task -label:in-progress` |
+| In progress | open issue, `in-progress` label | `is:issue is:open label:in-progress` |
+| Completed | closed issue (keep it; do not delete) | `is:issue is:closed label:task` |
 
-- **Title:** `feat: bind fire, interact, build, pause, and debug actions`
-- **Files/components:** `src/view/game_view.gd`, `project.godot` Input Map.
-- **Depends on:** none.
-- **Description:** Bind `fire` (LMB), `interact` (E), `build_wall` (1), `build_turret` (2), `cancel` (RMB, Q), `pause` (Escape), `debug_overlay` (F3). `_read_command` writes `fire` and `interact` as held state. Do **not** enter build mode, show a ghost, toggle pause, or toggle F3. `build_kind` stays `-1`. Sim already ignores unused fields.
+1. Before starting, list Todo issues and skip any that already have `in-progress`.
+2. **Claim** by adding `in-progress` before writing code. Two sessions must not share one issue.
+3. Do not start an issue whose GitHub **blocked-by** parents are still open.
+4. When the work merges to `main`, close the issue (`Fixes #<n>` in the PR). Do not rewrite this document.
+5. Tasks that share no files and whose remaining blockers are closed may be implemented in parallel.
+6. Same-file work is serialized on purpose: if two issues would both edit `sim.gd`, `rules.gd`, `game_view.gd`, `mapgen.gd`, `world.gd`, or `hud.gd`, the later issue lists the earlier one as blocked-by.
+7. Do not insert a Steam, LAN, save/load, or reclaim task.
 
-### Task 24 — Unit inventories
-
-- **Title:** `feat: attach Inventory to units`
-- **Files/components:** `src/sim/unit.gd`, `src/sim/mapgen.gd` (player carry caps only).
-- **Depends on:** none.
-- **Description:** Each unit gets an `Inventory` with the caps table (player 10/10, raider 5/3, guard 0/0). Mapgen’s player unit uses those caps. No gather. No HUD.
-
-### Task 25 — AI director class
-
-- **Title:** `feat: Director wave schedule class`
-- **Files/components:** `src/sim/ai_director.gd`.
-- **Depends on:** none.
-- **Description:** `class_name Director` with `wave_index`, `next_wave_at = FIRST_WAVE_AT`, `banner_timer`. `maybe_spawn(sim)` implements the clock: if `sim.time >= next_wave_at`, spawn `min(WAVE_CAP, WAVE_BASE + floor((n-1)/2))` raiders on walkable tiles adjacent to the living enemy depot, or skip spawn if that depot is missing; **always** `next_wave_at += WAVE_PERIOD` and increment `wave_index`. On a successful spawn set `banner_timer = RAID_BANNER_TIME`. Do **not** re-add `pathfind.gd`. Not called from `Sim.tick`.
-
-### Task 26 — AI raider brain
-
-- **Title:** `feat: raider state machine`
-- **Files/components:** `src/sim/ai_raider.gd`.
-- **Depends on:** none.
-- **Description:** `think(unit, sim)` implements the full raider diagram and priority lists (`PATH_TO_DEPOT`, `PATH_HOME`, `PATH_TO_HABITAT`, `SIEGE` commit, `LOOT`, `CHASE`, `ATTACK_HABITAT`, `DEAD_DROP`, despawn). `hauling` is `scrap > 0 or ice > 0`. Uses existing `pathfind.gd` (4-connected A*). Movement, melee target, and `siege_target_id` are intents for later tick steps. `LOOT` channel transfers, home-depot despawn (add carry to that depot; leftover loot at depot center; delete the raider), and `DEAD_DROP` (loot at feet; delete the raider) are applied here because they are diagram actions, not movement. Chase never preempts `SIEGE`. Non-hauling `SIEGE` does not exit when A* reopens. Not called from `Sim.tick`.
-
-### Task 27 — AI guard brain
-
-- **Title:** `feat: guard aggro and leash`
-- **Files/components:** `src/sim/ai_guard.gd`.
-- **Depends on:** none.
-- **Description:** Home = spawn position. Chase+melee if player within `GUARD_AGGRO` of home; else path home if farther than `GUARD_LEASH`; else idle. Never loots, sieges, or joins waves. Not called from `Sim.tick`.
-
-### Task 28 — Export script hardening
-
-- **Title:** `chore: harden export.sh and resource filters`
-- **Files/components:** `tools/export.sh`, `export_presets.cfg`.
-- **Depends on:** none.
-- **Description:** Both presets export `Linux/X11` → `colony.x86_64` and `Windows Desktop` → `colony.exe`. Resource filter includes `res://` game assets and excludes test-only junk if any. Script is invokable; booting the artifacts is verified in the export-verification task, not here. No new rules.
-
-### Task 29 — World collections and occupancy
-
-- **Title:** `feat: World dictionaries and occupy/vacate`
-- **Files/components:** `src/sim/world.gd`.
-- **Depends on:** none.
-- **Description:** Add `buildings`, `deposits`, `loot`, `projectiles` dictionaries. Helpers: occupy/vacate a footprint, query building at tile, point-to-AABB, nearest living depot. Occupancy still makes tiles unwalkable. No mapgen placement.
-
-### Task 30 — Snapshot entity and HUD fields
-
-- **Title:** `feat: snapshot buildings, props, combat, and HUD timers`
-- **Files/components:** `src/sim/snapshot.gd`, `src/sim/sim.gd` (`snapshot()` only).
-- **Depends on:** Task 24, Task 29.
-- **Description:** Snapshot copies buildings, deposits, loot, projectiles (id, kind, faction, pos, hp, hp_max, aim, inventory), director `next_wave_at` / `wave_index` / `banner_timer` (0 if no director yet), player `respawn_timer`, each faction’s `zero_ice_timer` and whether that faction has a living depot with `ice == 0`. Extend the existing unit records with `inventory` (scrap, ice, caps) so the HUD can show carry without reading `Sim` fields. Depot stocks stay on building records. Do not change `tick()` order. Views may start binding these fields.
-
-### Task 31 — Mapgen camps, stocks, and deposits
-
-- **Title:** `feat: mapgen places buildings, guard, turret, and deposits`
-- **Files/components:** `src/sim/mapgen.gd`, `tests/test_mapgen.gd`.
-- **Depends on:** Task 24, Task 29.
-- **Description:** Place player/enemy Habitat + Depot (2×2, occupancy, starting stocks), enemy turret, enemy guard, then scrap/ice deposits per the generator steps (minima, separation, no reserved rects, no corridor center line, retry-once). Extend `test_mapgen.gd`: deposit minima, camps in reserved rects, starting stocks, L-corridor non-footprint tiles stay `EMPTY`. Connectivity tests remain.
-
-### Task 32 — Placement rules and apply
-
-- **Title:** `feat: can_place / try_place walls and turrets`
-- **Files/components:** `src/sim/rules.gd` (create), `tests/test_rules.gd` (create; placement cases only), `src/sim/sim.gd` (`_apply_player_command` build branch only).
-- **Depends on:** Task 29, Task 30.
-- **Description:** `can_place` / `try_place` as specified (bounds, empty, no building/deposit, no unit overlap, not in `ENEMY_CAMP_RECT`, living player depot has scrap, `MAX_BUILDINGS`). Success deducts scrap and spawns a full-HP player building, `aim = (1, 0)`. `_apply_player_command` calls `try_place` once when `build_kind >= 0`. **No reclaim.** Turrets do not fire. No pause menu. Tests: reject rock, overlap, enemy rect, unaffordable, max buildings, missing depot; build deducts scrap.
-
-### Task 33 — Combat unit tests
-
-- **Title:** `test: projectile, melee, death, and depot spill cases`
-- **Files/components:** `tests/test_combat.gd`.
-- **Depends on:** Task 29.
-- **Description:** Construct `Sim` / `World` / entities in code (no `game.tscn`). Cases: projectile damages opposing unit; not same faction; two overlapping units → lowest `entity_id`; melee respects cooldown; death at 0; depot death spills remaining stock and does not set `LIFE_SUPPORT`.
-
-### Task 34 — Interact resolver
-
-- **Title:** `feat: gather, loot, deposit, and steal channels`
-- **Files/components:** `src/sim/rules.gd` (resolver helpers), `src/sim/sim.gd` (tick step 11 only), `tests/test_rules.gd` (gather / transfer / steal cases).
-- **Depends on:** Task 24, Task 31, Task 32.
-- **Description:** Single resolver in the specified priority (depot deposit vs steal, else loot, else resource deposit). Movement with `move.length() > 0` resets progress. Cadence: `GATHER_CHANNEL` (1 unit), `LOOT_CHANNEL` (as much as fits), `TRANSFER_PERIOD` / `TRANSFER_BATCH` (scrap then ice) for both deposit and steal. First transfer after one full period. Empty deposit removed. Do not increment `zero_ice_timer`. Tests: first depot transfer after one period, amount `TRANSFER_BATCH`; gather and steal branches.
-
-### Task 35 — Combat tick wiring
-
-- **Title:** `feat: rifle, turret fire, projectiles, melee, death, respawn`
-- **Files/components:** `src/sim/sim.gd` (tick steps 2 building/projectile cooldowns, 4 fire apply, 7 turret fire, 9 projectiles, 10 melee, 12 deaths/respawn).
-- **Depends on:** Task 31, Task 33, Task 34.
-- **Description:** Player fire from held `fire` + `weapon_cooldown`. Turrets acquire nearest living opposing **unit** in range, write `aim`, spawn faction projectiles. Integrate projectiles via `combat.gd`. Resolve melee intents. Process deaths (player drops carry, `respawn_timer = PLAYER_RESPAWN`, ignore gameplay commands; enemy units drop carry and are removed). Respawn at 0 with the walkable-tile fallback. Do not attach `Director` or decrement `banner_timer` (that is the AI-wiring task). No outcome stub — win/lose is the life-support task. No debug spawn key.
-
-### Task 36 — Life support and outcomes
-
-- **Title:** `feat: ice pull, starve clock, and evaluate_outcome`
-- **Files/components:** `src/sim/sim.gd` (`FactionLife` on `Sim`; tick steps 3 and 13), `src/sim/rules.gd` (`tick_life_support`, `evaluate_outcome`), `tests/test_rules.gd` (ice / outcome cases).
-- **Depends on:** Task 34, Task 35.
-- **Description:** 15 s / 20 s ice pull. `zero_ice_timer += SIM_DT` only while that faction has a living Habitat **and** a living depot with 0 ice. Destroying a depot does not start or continue the clock. `evaluate_outcome` checks in order (player habitat, player starve, enemy habitat, enemy starve). Same-tick both habitats dead → player lose. Tests: ice pull decrements depot; 600 ticks at 0 ice → lose; destroying the depot stops the timer; missing depot from t=0 never starts it; enemy habitat 0 → win; same-tick both dead → player lose. No end-screen UI.
-
-### Task 37 — Wire AI into the tick
-
-- **Title:** `feat: director, raider, and guard step plus raid tests`
-- **Files/components:** `src/sim/sim.gd` (tick steps 5, 6, stuck detector in step 8), `tests/test_ai_raid.gd`.
-- **Depends on:** Task 25, Task 26, Task 27, Task 31, Task 35, Task 36.
-- **Description:** Call `Director.maybe_spawn`, then each living raider/guard `think`, then stuck detector on moving AI. Decrement `banner_timer` in step 2. Do **not** re-add `pathfind.gd`. `test_ai_raid.gd` implements every case in the Test Strategy table (wave at t=60, loot channel, `next_wave_at` += 90, siege on blocked A*, committed smash through depot after walls die, chase does not leave `SIEGE`, hauling definition, hauling leaves `SIEGE` for `PATH_HOME`, missing home depot deletes hauling raider and drops loot, skipped spawn still advances the clock).
-
-### Task 38 — World view deposits
-
-- **Title:** `feat: draw scrap and ice deposits`
-- **Files/components:** `src/view/world_view.gd`.
-- **Depends on:** Task 30.
-- **Description:** Draw scrap triangles and ice diamonds from snapshot deposits (or keep ColorRect primitives matching the spec). Rocks unchanged. No loot (that is `LootView`).
-
-### Task 39 — Mount play views and build mode
-
-- **Title:** `feat: mount HUD, buildings, loot, projectiles, and build mode`
-- **Files/components:** `src/view/game_view.gd`, `src/ui/hud.gd` (bind live snapshot), `scenes/game.tscn` if needed.
-- **Depends on:** Task 23, Task 30, Task 31, Task 32, Task 38.
-- **Description:** Sync building/loot/projectile views by id. Mount HUD and build bar. Apply `assets/theme/default.tres` to them. Bind HUD to snapshot carry (`units[].inventory`), depot stocks, HP, ice countdown, raid banner. Build mode: keys 1/2 select kind, ghost under cursor colored by `rules.can_place`, LMB sets the session build latch for that frame, RMB/Q cancel. Resources come from the player depot. **No reclaim.** Do not mount pause, end, or F3.
-
-### Task 40 — Pause, end screen, and F3
-
-- **Title:** `feat: pause menu, end screen, Play Again, F3 overlay`
-- **Files/components:** `src/view/game_view.gd`, `src/ui/{pause_menu,end_screen,debug_overlay}.gd`, `src/autoload/app.gd` (Play Again / Menu routing if needed).
-- **Depends on:** Task 36, Task 39.
-- **Description:** Escape toggles the pause menu and `set_paused` (ignored on the end screen). Resume / Quit to Menu. When `outcome != NONE`, show `end_screen.tscn` with the mapped reason (no centered stub string). Apply `assets/theme/default.tres` to pause and end screens. Play Again starts a new `Sim` at the same seed. Menu returns to the main menu. F3 toggles the debug overlay. Closed loop is now fully gated.
-
-### Task 41 — Art pass and export verification
-
-- **Title:** `chore: apply placeholders, leftover HUD colors, verify exports`
-- **Files/components:** views that still use programmer rects (`src/view/*`, `src/ui/hud.gd`), `tools/export.sh` invocation notes only if a filter is still wrong.
-- **Depends on:** Task 28, Task 37, Task 40.
-- **Description:** Replace leftover ColorRects with the color-and-stripe spec and any sprites in `assets/sprites/placeholder/`. Confirm raid-banner and low-ice colors. Confirm Linux and Windows exports boot to the menu. Manual checklist executed. No new rules. README is **not** required.
-
-These tasks are the only implementation sequence. Do not insert a Steam, LAN, save/load, or reclaim task under this document.
+These GitHub issues are the only implementation sequence. Do not add a Steam, LAN, save/load, or reclaim issue.
