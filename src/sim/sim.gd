@@ -84,6 +84,7 @@ func snapshot() -> SimSnapshot:
 	snap.enemy_zero_ice_timer = _faction_zero_ice(Types.Faction.ENEMY)
 	snap.player_living_depot_ice_empty = _living_depot_ice_empty(Types.Faction.PLAYER)
 	snap.enemy_living_depot_ice_empty = _living_depot_ice_empty(Types.Faction.ENEMY)
+	_copy_gather_channel(snap, player)
 	return snap
 
 
@@ -157,6 +158,17 @@ func _inventory_record(inv: Inventory) -> Dictionary:
 		"cap_scrap": inv.cap_scrap,
 		"cap_ice": inv.cap_ice,
 	}
+
+
+func _copy_gather_channel(snap: SimSnapshot, player: Unit) -> void:
+	snap.gather_deposit_id = 0
+	snap.gather_progress = 0.0
+	if player == null or not player.alive or player.interact_progress <= 0.0:
+		return
+	if _interact_target_id <= 0 or not world.deposits.has(_interact_target_id):
+		return
+	snap.gather_deposit_id = _interact_target_id
+	snap.gather_progress = player.interact_progress
 
 
 func _copy_director(snap: SimSnapshot) -> void:

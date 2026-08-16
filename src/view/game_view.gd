@@ -14,6 +14,7 @@ var _unit_views: Dictionary = {}
 var _projectiles_root: Node2D
 var _projectile_views: Dictionary = {}
 var _ghost: BuildGhost
+var _gather_bar: GatherBar
 var _camera: CameraCtrl
 var _hud: Hud
 var _build_bar: BuildBar
@@ -42,12 +43,16 @@ func _ready() -> void:
 	_ghost.visible = false
 	_ghost.z_index = 10
 	add_child(_ghost)
+	_gather_bar = GatherBar.new()
+	add_child(_gather_bar)
 	_camera = CameraCtrl.new()
 	add_child(_camera)
 	_mount_ui()
 	var snap := _session.get_snapshot()
 	_world_view.rebuild(snap)
 	_sync_views(snap)
+	if _gather_bar != null:
+		_gather_bar.apply_snapshot(snap)
 	_camera.snap_to(_player_world_pos)
 
 
@@ -58,6 +63,8 @@ func _process(delta: float) -> void:
 	_session.tick(delta)
 	var snap := _session.get_snapshot()
 	_sync_views(snap)
+	if _gather_bar != null:
+		_gather_bar.apply_snapshot(snap)
 	_update_build_ghost()
 	if _hud != null:
 		_hud.apply_snapshot(snap)

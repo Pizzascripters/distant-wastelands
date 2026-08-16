@@ -399,6 +399,8 @@ If the resolved target’s `entity_id` changes, reset `interact_progress` to 0.
 
 **Gather.** Same hold. After an uninterrupted `GATHER_CHANNEL`, transfer `1` unit from the deposit to the player inventory, then reset `interact_progress` (repeat while held). When `remaining` hits 0, remove the deposit entity.
 
+**Gather channel presentation.** While the player is gathering a deposit (`interact` held, `move` is zero, the resolver target is that deposit, and `interact_progress > 0`), the view draws a short progress bar **above that deposit**. Fill is `interact_progress / GATHER_CHANNEL` (clamped to `[0, 1]`). Hide the bar when the channel is not a gather: movement reset, target change, deposit gone, `interact_progress == 0`, or any other interact target (loot pile, depot). Track `Color(0,0,0,0.65)`, fill `#F2EDE6`. This is channel feedback only — not a world-space HP bar. Loot pickup and depot transfer have no bar.
+
 **Pick up loot.** After an uninterrupted `LOOT_CHANNEL`, transfer as much of the pile as fits; leftover stays as the same pile; if both resources hit 0, remove the pile; reset `interact_progress`.
 
 **Shoot.** If not in build mode, player alive, `fire` pressed, and `weapon_cooldown <= 0`, spawn a projectile at `unit.pos + aim * MUZZLE_OFFSET`, velocity `aim * PLAYER_PROJ_SPEED`, remaining life `PLAYER_PROJ_LIFE`, damage `PLAYER_PROJ_DAMAGE`, faction `PLAYER`. Set `weapon_cooldown = PLAYER_FIRE_COOLDOWN`. No ammo.
@@ -755,6 +757,7 @@ Not a production art bible. The constraint is **parseability at a glance**.
 | HUD | Dark panel `Color(0,0,0,0.65)`, text `#F2EDE6`, Godot default font 16 px; numeric HP for player Habitat and Depot |
 | Low ice | Ice readout turns `#E24A3B` when depot ice ≤ 5 or `zero_ice_timer > 0` |
 | Raid banner | Top-center text while `banner_timer > 0` |
+| Gather channel | Short bar above the deposit being gathered; dark track `Color(0,0,0,0.65)`, fill `#F2EDE6`; hidden when not gathering |
 
 Audio is optional. If present, five one-shot SFX (shoot, hit, build, gather tick, raid alarm) at ≤ 200 ms each, CC0 or generated. No licensed music is required. **Visual feedback is mandatory; audio is not.** Mute must not block play.
 
@@ -842,7 +845,7 @@ func snapshot() -> SimSnapshot
 
 ### Snapshot (sim → view)
 
-`SimSnapshot` is a `RefCounted` with copied primitive fields the view needs: tick, time, `outcome`, `outcome_reason`, tiles (or a handle + dirty flag), arrays of unit/building/projectile/deposit/loot records (id, kind, faction, pos, hp, hp_max, **aim** — units and turrets — inventory, timers relevant to HUD), director `next_wave_at`, `wave_index`, `banner_timer`, player `respawn_timer`, each faction’s `zero_ice_timer` and whether that faction currently has a living depot with `ice == 0`.
+`SimSnapshot` is a `RefCounted` with copied primitive fields the view needs: tick, time, `outcome`, `outcome_reason`, tiles (or a handle + dirty flag), arrays of unit/building/projectile/deposit/loot records (id, kind, faction, pos, hp, hp_max, **aim** — units and turrets — inventory, timers relevant to HUD), director `next_wave_at`, `wave_index`, `banner_timer`, player `respawn_timer`, each faction’s `zero_ice_timer` and whether that faction currently has a living depot with `ice == 0`, plus gather-channel fields `gather_deposit_id` and `gather_progress` (0 / 0.0 when the player is not gathering a deposit).
 
 Turret barrel rotation **must** use the building record’s `aim` from the snapshot (set in tick step 7 whenever a target exists).
 
@@ -1177,7 +1180,7 @@ Play on default seed `1`, default window 1280×720.
 1. Main menu shows New Game and Quit. Quit closes the process.
 2. New Game spawns the player in the SW camp; Habitat and Depot are visible with teal stripes.
 3. WASD moves; mouse-aim notch follows the cursor; wheel zooms and clamps.
-4. Holding E on a scrap pile **while standing still** increments carry by 1/s; walking cancels the channel; the pile empties and disappears.
+4. Holding E on a scrap pile **while standing still** increments carry by 1/s; a short bar fills above the pile during the channel and hides when walking or the pile is gone; walking cancels the channel; the pile empties and disappears.
 5. Holding E on the player depot (stand next to it) moves carry into the HUD depot counts in batches of 5 after 0.2 s.
 6. 1 then click on a valid tile spends 5 scrap and places a wall; invalid tiles flash red and spend nothing.
 7. 2 then click places a turret for 15 scrap. The turret fires at a raider during the first wave without further input; its barrel tracks the target.
