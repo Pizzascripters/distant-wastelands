@@ -17,6 +17,7 @@ var _raid_banner: Label
 
 
 func _ready() -> void:
+	theme = preload("res://assets/theme/default.tres")
 	_bind_nodes()
 	_style_labels()
 	apply_snapshot(SimSnapshot.new())
