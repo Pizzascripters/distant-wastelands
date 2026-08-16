@@ -163,7 +163,7 @@ The Godot project root **is** the repository root. Application name in `project.
     audio/sfx/               # optional short WAV/OGG; silence is allowed
     theme/default.tres
   tests/
-    run.gd                   # test runner, exit 0/1; only via tools/test.sh
+    run.gd                   # discover test_*.gd + test_* cases; filter; exit 0/1
     test_inventory.gd
     test_rules.gd
     test_mapgen.gd
@@ -172,7 +172,7 @@ The Godot project root **is** the repository root. Application name in `project.
     test_pathfind.gd
   tools/
     export.sh                # wraps Godot headless export for both OS targets
-    test.sh                  # official test entry: private Xvfb + run.gd
+    test.sh                  # official test entry: private Xvfb + run.gd [-- filters]
 ```
 
 `res://` mirrors this tree (`res://src/...`, `res://scenes/...`).
@@ -1097,7 +1097,7 @@ This is a local game, not a service. Observability is for developers and playtes
 | --- | --- |
 | FPS, tick, entity counts, outcome, depot stocks, next wave | F3 debug overlay (`ui/debug_overlay.gd`), drawn only when toggled |
 | Failed asserts in sim (negative inventory, occupancy mismatch) | `push_error` + in debug builds `assert` |
-| Automated tests | `./tools/test.sh` → stdout `PASS` / `FAIL` lines; process exit code |
+| Automated tests | `./tools/test.sh` (optional filters) → stdout `PASS` / `FAIL` lines per case; process exit code |
 | Player-facing errors | None beyond “could not initialize renderer” from Godot |
 
 No metrics backend, no alerting, no crash dump pipeline in v1.
@@ -1129,17 +1129,26 @@ Not a SaaS flag rollout. v1 ships as a sequence of mergeable tasks (see **Task P
 
 ### Automated unit (required)
 
-The **only** official test command is:
+The **only** official test entry is `./tools/test.sh`. With no arguments it runs every discovered case. Optional positional filters select a subset. `--list` prints the matching files and cases and exits 0 (or 1 if filters match nothing).
 
 ```
-./tools/test.sh
+./tools/test.sh                         # every test_* case
+./tools/test.sh --list                  # print discovered cases
+./tools/test.sh mapgen                  # all cases in test_mapgen.gd
+./tools/test.sh boxed                   # cases whose name contains boxed
+./tools/test.sh mapgen:corridor         # file AND case filter
+./tools/test.sh test_pathfind.test_boxed_in
 ```
 
 `tools/test.sh` starts a **private Xvfb** (virtual X server, default screen `1280x720x24`) on a display number that is **not** the session display (`:0` / `:0.0`), sets `DISPLAY` to that server, unsets `WAYLAND_DISPLAY`, and runs:
 
 ```
-godot --display-driver x11 --audio-driver Dummy --path . -s res://tests/run.gd
+godot --display-driver x11 --audio-driver Dummy --path . -s res://tests/run.gd -- "$@"
 ```
+
+Do not start a second Xvfb per file. One wrapper process, one Godot process; `run.gd` selects cases.
+
+Before launching Godot, `test.sh` writes `.godot/global_script_class_cache.cfg` from `class_name` / `extends` in `src/**/*.gd`. Script mode does not scan those declarations; without the cache, global types fail to resolve. Do **not** open the editor (`godot --import` / `--editor`) for this. The cache file is derived and stays gitignored.
 
 Rules for agents and humans:
 
@@ -1147,21 +1156,55 @@ Rules for agents and humans:
 - **Do not** run Godot tests against the host display manager (`DISPLAY=:0`, XWayland on the session, or an unset `DISPLAY` that falls back to the session).
 - **Do not** use Xephyr or any nested window on the visible session.
 - `res://tests/run.gd` **must refuse** to run unless `COLONY_TEST_XVFB=1` is set (the wrapper sets this) and `DISPLAY` is not the session X display. Direct `godot … -s res://tests/run.gd` must exit 1.
-- Xvfb is a required Linux test dependency (`xvfb` package, or a user-local `Xvfb` binary on `PATH`). Software GL (`LIBGL_ALWAYS_SOFTWARE=1`) is the default so tests do not touch the session GPU.
+- Xvfb is a required Linux test dependency (`xvfb` package, or a user-local `Xvfb` binary on `PATH`). `python3` is required to write the class-name cache. Software GL (`LIBGL_ALWAYS_SOFTWARE=1`) is the default so tests do not touch the session GPU.
 - Automated tests are Linux-only in v1. Windows coverage is the manual playtest checklist, not this runner.
+- Do not add a third-party addon (no GUT/GdUnit in v1). Do not keep a hardcoded script list in `run.gd`.
 
-No third-party addon (no GUT/GdUnit dependency in v1). `run.gd` instantiates each test script, calls `run() -> PackedStringArray` of failure messages, prints a summary, `quit(1)` if any failure.
+#### Discovery and case contract
 
-Required cases:
+`run.gd` discovers scripts named `test_*.gd` under `res://tests/` and one extra directory level (`res://tests/<subdir>/test_*.gd`). It ignores `run.gd` and any helper that does not match that prefix.
 
-| File | Cases |
+Each discovered script must expose one or more **no-argument** methods named `test_*`. Each method returns `PackedStringArray` of failure messages; empty means pass. `run.gd` finds these via the script’s own method list (`get_script_method_list`). There is no `run()` registry and no per-file case list to keep in sync. Adding `tests/test_foo.gd` with `test_*` methods is enough.
+
+A script with no `test_*` methods is a failure for that file. A script that fails to load is a failure if no filters were given, or if any filter selects that file (path, stem, short name, or the file part of a `file:case` token). Unrelated load or empty-method failures are ignored when filtering. Zero discovered scripts and no filters is a valid empty suite (exit 0). Filters that match zero cases are a failure (exit 1); print `FAIL` and the available `stem.case` ids.
+
+Methods and files are run in lexicographic order. Print `PASS <path> <method>` or `FAIL <path> <method>: <message>` per case, then:
+
+```
+=== Test summary ===
+files: N
+cases: N
+failures: N
+```
+
+`quit(0)` if `failures == 0`, else `quit(1)`. `--list` prints each path and its method names, the same summary, and does not execute cases.
+
+#### Filters
+
+Arguments after `--` (forwarded from `./tools/test.sh`) are filters. `--list` is a flag, not a filter. Any other token that starts with `--` is an error.
+
+A filter that contains `/`, starts with `res://`, or ends with `.gd` is a **path** filter: it matches if the script path equals or ends with the token.
+
+A filter that contains `:` or `.` (and is not a path filter) splits on the first `:` or `.` into a file part and a case part. Both parts must match (AND).
+
+Otherwise the token matches if it is a **file** match **or** a **case** match (OR). Multiple tokens are OR’d: a case runs if any token matches it.
+
+File match uses the script stem (`test_mapgen`) and the short name (`mapgen`, the stem without a leading `test_`). A token matches if it equals the stem, equals the short name, or is a substring of the short name. Do **not** substring-match against the `test_` prefix (so `test` does not select every file).
+
+Case match uses the method name (`test_boxed_in`) and the short name (`boxed_in`, without a leading `test_`). A token matches if it equals the method name, equals the short name, or is a substring of the short name.
+
+#### Required cases
+
+Each table cell is one or more `test_*` methods. Methods land with the task that introduces the behavior; a file on `main` may omit methods for systems that do not exist yet.
+
+| File | Methods |
 | --- | --- |
-| `test_inventory.gd` | add/remove/clamp; leftover on overflow; empty remove returns 0 |
-| `test_rules.gd` | `can_place` rejects rock, overlap, enemy rect, unaffordable, max buildings, missing depot; ice pull decrements depot; with depot ice at 0, `zero_ice_timer` increases by `SIM_DT` each tick and hits `ZERO_ICE_LIMIT` in exactly 600 ticks → lose; destroying the depot **stops** further `zero_ice_timer` growth; a missing depot from t=0 never starts the timer; enemy habitat 0 → win; same-tick both habitats dead → player lose; build deducts scrap; first depot transfer occurs after one `TRANSFER_PERIOD`, amount `TRANSFER_BATCH` |
-| `test_mapgen.gd` | seed 1 is deterministic (tile hash equal across two runs); seeds 1–5 pass the connectivity assert **without** additional carving; deposit minima met; camps in reserved rects; starting stocks match constants; L-corridor tiles that are not footprints are `EMPTY` |
-| `test_combat.gd` | projectile damages opposing unit; does not damage same faction; two overlapping units → lowest `entity_id` is hit; melee respects cooldown (second hit requires waiting the cooldown); death at 0; depot death spills loot equal to remaining stock and does not by itself set `LIFE_SUPPORT` |
-| `test_pathfind.gd` | A* finds a path on an empty map; returns empty on boxed-in start; does not cut a diagonal through two corner rocks |
-| `test_ai_raid.gd` | at `t=60` exactly two raiders exist; a raider adjacent to a stocked depot for 3 s reduces depot stock and increases carry; director `next_wave_at` advances by 90; A* blocked by player walls → raider enters `SIEGE` and damages a wall; after those walls die, a **non-hauling** raider stays in `SIEGE` and damages the player Depot even though A* to the depot is now open; a living player inside `RAIDER_CHASE_RADIUS` at the wall does **not** pull a sieging raider into `CHASE`; `hauling` is `scrap > 0 or ice > 0`; a hauling raider whose home A* is open leaves `SIEGE` for `PATH_HOME` and does not melee the player Depot; enemy depot removed while a hauling raider is mid-map → raider deleted and loot dropped at its last position; skipped spawn when enemy depot is missing still advances `next_wave_at` |
+| `test_inventory.gd` | `test_add_remove_clamp` — add/remove/clamp; `test_overflow_leftover` — leftover on overflow; `test_empty_remove_returns_0` |
+| `test_rules.gd` | `test_can_place_rejects_rock`; `test_can_place_rejects_overlap`; `test_can_place_rejects_enemy_rect`; `test_can_place_rejects_unaffordable`; `test_can_place_rejects_max_buildings`; `test_can_place_rejects_missing_depot`; `test_ice_pull_decrements_depot`; `test_zero_ice_timer_increments_and_lose` — `zero_ice_timer` increases by `SIM_DT` each tick and hits `ZERO_ICE_LIMIT` in exactly 600 ticks → lose; `test_destroying_depot_stops_zero_ice_timer`; `test_missing_depot_never_starts_zero_ice_timer`; `test_enemy_habitat_0_is_win`; `test_same_tick_both_habitats_dead_is_player_lose`; `test_build_deducts_scrap`; `test_first_depot_transfer_after_period` — first transfer after one `TRANSFER_PERIOD`, amount `TRANSFER_BATCH` |
+| `test_mapgen.gd` | `test_seed1_deterministic` — seed 1 tile hash equal across two runs; `test_connectivity_seeds` — seeds 1–5 pass the connectivity assert **without** additional carving; `test_deposit_minima`; `test_camps_reserved`; `test_starting_stocks`; `test_corridor_empty` — L-corridor tiles that are not footprints are `EMPTY` |
+| `test_combat.gd` | `test_projectile_damages_opposing_unit`; `test_projectile_no_friendly_fire`; `test_lowest_entity_id_hit`; `test_melee_respects_cooldown` — second hit requires waiting the cooldown; `test_death_at_zero`; `test_depot_death_spills_loot_not_life_support` — spill equals remaining stock and does not by itself set `LIFE_SUPPORT` |
+| `test_pathfind.gd` | `test_empty_map` — A* finds a path on an empty map; `test_boxed_in` — empty on boxed-in start; `test_no_diagonal_cut` — does not cut a diagonal through two corner rocks |
+| `test_ai_raid.gd` | `test_first_wave_two_raiders` — at `t=60` exactly two raiders exist; `test_loot_channel_transfers` — adjacent to a stocked depot for 3 s reduces depot stock and increases carry; `test_next_wave_advances` — `next_wave_at` advances by 90; `test_blocked_path_enters_siege` — A* blocked by player walls → `SIEGE` and damages a wall; `test_non_hauling_siege_commits_to_depot` — after those walls die, a **non-hauling** raider stays in `SIEGE` and damages the player Depot even though A* to the depot is now open; `test_siege_not_preempted_by_chase` — a living player inside `RAIDER_CHASE_RADIUS` at the wall does **not** pull a sieging raider into `CHASE`; `test_hauling_definition` — `hauling` is `scrap > 0 or ice > 0`; `test_hauling_siege_leaves_for_home` — a hauling raider whose home A* is open leaves `SIEGE` for `PATH_HOME` and does not melee the player Depot; `test_dead_drop_when_enemy_depot_gone` — enemy depot removed while a hauling raider is mid-map → raider deleted and loot dropped at its last position; `test_skipped_spawn_advances_next_wave` — skipped spawn when enemy depot is missing still advances `next_wave_at` |
 
 Tests construct `Sim` / `Inventory` / `World` directly. They must not create a `game.tscn` tree.
 

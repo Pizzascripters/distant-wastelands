@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Official automated test entry.
 # Starts a private Xvfb and runs res://tests/run.gd on that display.
+# Extra args are forwarded after -- (filters or --list).
 # Never uses the host session display. Never uses godot --headless.
 set -euo pipefail
 
@@ -119,8 +120,53 @@ export LIBGL_ALWAYS_SOFTWARE="${LIBGL_ALWAYS_SOFTWARE:-1}"
 
 echo "Using virtual X server DISPLAY=${DISPLAY} (Xvfb pid ${XVFB_PID})"
 
+# Script mode does not scan class_name. Write the cache Godot's editor
+# would have written so global types resolve without opening the editor.
+python3 - "$ROOT" <<'PY'
+import pathlib
+import re
+import sys
+
+root = pathlib.Path(sys.argv[1])
+src = root / "src"
+entries = []
+class_re = re.compile(r"^class_name\s+(\w+)\s*$")
+extends_re = re.compile(r"^extends\s+(\w+)\s*$")
+for path in sorted(src.rglob("*.gd")):
+    lines = path.read_text(encoding="utf-8").splitlines()
+    cls = None
+    base = "RefCounted"
+    for line in lines[:8]:
+        m = class_re.match(line)
+        if m:
+            cls = m.group(1)
+            continue
+        m = extends_re.match(line)
+        if m:
+            base = m.group(1)
+    if cls is None:
+        continue
+    rel = path.relative_to(root).as_posix()
+    entries.append(
+        "{\n"
+        f"\"base\": &\"{base}\",\n"
+        f"\"class\": &\"{cls}\",\n"
+        "\"icon\": \"\",\n"
+        "\"is_abstract\": false,\n"
+        "\"is_tool\": false,\n"
+        "\"language\": &\"GDScript\",\n"
+        f"\"path\": \"res://{rel}\"\n"
+        "}"
+    )
+godot = root / ".godot"
+godot.mkdir(exist_ok=True)
+(godot / "global_script_class_cache.cfg").write_text(
+    "list=[" + ", ".join(entries) + "]\n", encoding="utf-8"
+)
+PY
+
 set +e
-"$GODOT_BIN" --display-driver x11 --audio-driver Dummy --path "$ROOT" -s res://tests/run.gd
+"$GODOT_BIN" --display-driver x11 --audio-driver Dummy --path "$ROOT" -s res://tests/run.gd -- "$@"
 status=$?
 set -e
 exit "$status"

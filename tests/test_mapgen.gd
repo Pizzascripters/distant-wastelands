@@ -1,31 +1,27 @@
 extends RefCounted
 
-func run() -> PackedStringArray:
+func test_seed1_deterministic() -> PackedStringArray:
 	var fails := PackedStringArray()
-	_test_seed1_deterministic(fails)
-	_test_connectivity_seeds(fails)
-	_test_corridor_empty(fails)
-	_test_camps_reserved(fails)
-	return fails
-
-
-func _test_seed1_deterministic(fails: PackedStringArray) -> void:
 	var a := Mapgen.generate(1)
 	var b := Mapgen.generate(1)
 	if a.tiles != b.tiles:
 		fails.append("seed 1 tile hash differs across two runs (%d vs %d)" % [_tile_hash(a.tiles), _tile_hash(b.tiles)])
 	if a.tiles.size() != Constants.MAP_W * Constants.MAP_H:
 		fails.append("world tile count is %d, expected %d" % [a.tiles.size(), Constants.MAP_W * Constants.MAP_H])
+	return fails
 
 
-func _test_connectivity_seeds(fails: PackedStringArray) -> void:
+func test_connectivity_seeds() -> PackedStringArray:
+	var fails := PackedStringArray()
 	for s in [1, 2, 3, 4, 5]:
 		var world := Mapgen.generate(s)
 		if not Mapgen.validate_connectivity(world):
 			fails.append("seed %d failed connectivity assert without extra carving" % s)
+	return fails
 
 
-func _test_corridor_empty(fails: PackedStringArray) -> void:
+func test_corridor_empty() -> PackedStringArray:
+	var fails := PackedStringArray()
 	var world := Mapgen.generate(Constants.DEFAULT_SEED)
 	for y in range(Constants.CORRIDOR_H_Y0, Constants.CORRIDOR_H_Y1 + 1):
 		for x in range(Constants.CORRIDOR_H_X0, Constants.CORRIDOR_H_X1 + 1):
@@ -33,17 +29,19 @@ func _test_corridor_empty(fails: PackedStringArray) -> void:
 				continue
 			if world.get_terrain(x, y) != Types.TileTerrain.EMPTY:
 				fails.append("L-corridor H tile (%d,%d) is not EMPTY" % [x, y])
-				return
+				return fails
 	for y in range(Constants.CORRIDOR_V_Y0, Constants.CORRIDOR_V_Y1 + 1):
 		for x in range(Constants.CORRIDOR_V_X0, Constants.CORRIDOR_V_X1 + 1):
 			if Mapgen.is_building_footprint(x, y):
 				continue
 			if world.get_terrain(x, y) != Types.TileTerrain.EMPTY:
 				fails.append("L-corridor V tile (%d,%d) is not EMPTY" % [x, y])
-				return
+				return fails
+	return fails
 
 
-func _test_camps_reserved(fails: PackedStringArray) -> void:
+func test_camps_reserved() -> PackedStringArray:
+	var fails := PackedStringArray()
 	var world := Mapgen.generate(Constants.DEFAULT_SEED)
 	_assert_rect_empty_of_rocks(fails, world, Constants.PLAYER_CAMP_RECT, "player camp")
 	_assert_rect_empty_of_rocks(fails, world, Constants.ENEMY_CAMP_RECT, "enemy camp")
@@ -57,6 +55,7 @@ func _test_camps_reserved(fails: PackedStringArray) -> void:
 		fails.append("player depot is outside PLAYER_CAMP_RECT")
 	if not Constants.ENEMY_CAMP_RECT.has_point(Constants.ENEMY_HABITAT_TILE):
 		fails.append("enemy habitat is outside ENEMY_CAMP_RECT")
+	return fails
 
 
 func _assert_rect_empty_of_rocks(fails: PackedStringArray, world: World, rect: Rect2i, label: String) -> void:
