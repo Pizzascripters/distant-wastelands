@@ -203,6 +203,8 @@ func _apply_player_command(cmd: InputCommand) -> void:
 	if cmd.aim.length_squared() > 0.0:
 		player.aim = cmd.aim
 	player.vel = cmd.move * Constants.PLAYER_SPEED
+	if cmd.build_kind >= 0:
+		Rules.try_place(world, cmd.build_kind, cmd.build_tile)
 
 
 func _integrate_unit(unit: Unit) -> void:
