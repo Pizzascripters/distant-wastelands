@@ -6,7 +6,6 @@
 | Author | [Author] |
 | Date | 2026-08-16 |
 | Status | Draft |
-| Version | 1.4 |
 | Audience | Engineers implementing the game from this document alone |
 
 This document is the exact requirements for v1. If a behavior is not specified here, it must not be implemented. New requirements must be added to this document before they are coded.
