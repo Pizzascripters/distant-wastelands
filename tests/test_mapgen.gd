@@ -6,6 +6,7 @@ func run() -> PackedStringArray:
 	_test_connectivity_seeds(fails)
 	_test_corridor_empty(fails)
 	_test_camps_reserved(fails)
+	_test_player_carry_caps(fails)
 	return fails
 
 
@@ -57,6 +58,37 @@ func _test_camps_reserved(fails: PackedStringArray) -> void:
 		fails.append("player depot is outside PLAYER_CAMP_RECT")
 	if not Constants.ENEMY_CAMP_RECT.has_point(Constants.ENEMY_HABITAT_TILE):
 		fails.append("enemy habitat is outside ENEMY_CAMP_RECT")
+
+
+func _test_player_carry_caps(fails: PackedStringArray) -> void:
+	var world := Mapgen.generate(Constants.DEFAULT_SEED)
+	var player: Unit = null
+	for id in world.units:
+		var unit: Unit = world.units[id]
+		if unit.kind == Types.UnitKind.PLAYER:
+			player = unit
+			break
+	if player == null:
+		fails.append("mapgen did not spawn a player unit")
+		return
+	if player.inventory == null:
+		fails.append("player unit has no inventory")
+		return
+	if player.inventory.cap_scrap != Constants.PLAYER_CARRY_SCRAP:
+		fails.append(
+			"player cap_scrap is %d, expected %d"
+			% [player.inventory.cap_scrap, Constants.PLAYER_CARRY_SCRAP]
+		)
+	if player.inventory.cap_ice != Constants.PLAYER_CARRY_ICE:
+		fails.append(
+			"player cap_ice is %d, expected %d"
+			% [player.inventory.cap_ice, Constants.PLAYER_CARRY_ICE]
+		)
+	if player.inventory.scrap != 0 or player.inventory.ice != 0:
+		fails.append(
+			"player carry started at %d/%d, expected 0/0"
+			% [player.inventory.scrap, player.inventory.ice]
+		)
 
 
 func _assert_rect_empty_of_rocks(fails: PackedStringArray, world: World, rect: Rect2i, label: String) -> void:
