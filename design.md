@@ -1274,13 +1274,6 @@ Each task must merge independently, keep tests that already exist green, and not
 - **Depends on:** none.
 - **Description:** Godot theme: default font 16 px, text `#F2EDE6`. File only; HUD and menus apply it when they are mounted. No new widgets.
 
-### Task 22 — Optional SFX files
-
-- **Title:** `chore: optional one-shot SFX`
-- **Files/components:** `assets/audio/sfx/` (shoot, hit, build, gather tick, raid alarm).
-- **Depends on:** none.
-- **Description:** Optional ≤ 200 ms CC0/generated WAVs. Silence is allowed — empty directory is a valid completion if no files are added. No playback hooks required.
-
 ### Task 23 — Remaining input actions and command fields
 
 - **Title:** `feat: bind fire, interact, build, pause, and debug actions`
