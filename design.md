@@ -107,6 +107,8 @@ The Godot project root **is** the repository root. Application name in `project.
   project.godot
   export_presets.cfg
   icon.svg
+  .godot/
+    global_script_class_cache.cfg  # tracked named-class registry
   src/
     autoload/
       app.gd                 # scene router: menu <-> game
@@ -177,6 +179,8 @@ The Godot project root **is** the repository root. Application name in `project.
 ```
 
 `res://` mirrors this tree (`res://src/...`, `res://scenes/...`).
+
+The rest of `.godot/` is editor output and is not tracked. `global_script_class_cache.cfg` is tracked: Godot registers `class_name` scripts from that file before autoloads parse. A source checkout must include it so `App` and other scripts can resolve named types (`Session`, `LocalSession`, `Constants`, …) without a prior editor import. Adding, renaming, moving, or removing a `class_name` script must update this file (the editor rewrites it on import; commit the result). Terrain textures still load from PNG when the import cache is missing.
 
 Autoloads (only these):
 
