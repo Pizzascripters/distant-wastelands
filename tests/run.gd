@@ -4,7 +4,10 @@ extends SceneTree
 ## Each listed script exposes `run() -> PackedStringArray` of failure messages.
 ## Empty list is valid (scaffold has zero cases).
 
-const TEST_SCRIPTS: Array[String] = []
+const TEST_SCRIPTS: Array[String] = [
+	"res://tests/test_mapgen.gd",
+	"res://tests/test_pathfind.gd",
+]
 
 
 func _is_session_x_display(display: String) -> bool:
