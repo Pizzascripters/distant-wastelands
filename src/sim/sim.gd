@@ -7,6 +7,7 @@ var outcome: int = Types.Outcome.NONE
 var outcome_reason: int = Types.OutcomeReason.NONE
 var world: World
 var player_id: int = 0
+var _interact_target_id: int = 0
 
 var _queue: Array[InputCommand] = []
 
@@ -19,6 +20,7 @@ func setup(p_seed: int) -> void:
 	outcome_reason = Types.OutcomeReason.NONE
 	_queue.clear()
 	player_id = 0
+	_interact_target_id = 0
 	for unit in world.units.values():
 		if unit.kind == Types.UnitKind.PLAYER:
 			player_id = unit.id
@@ -52,6 +54,8 @@ func tick() -> void:
 	for unit in world.units.values():
 		if unit.alive:
 			_integrate_unit(unit)
+
+	_interact_target_id = Rules.resolve_interact(world, get_player(), cmd, _interact_target_id)
 
 
 func snapshot() -> SimSnapshot:
