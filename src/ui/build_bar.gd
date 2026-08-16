@@ -14,6 +14,8 @@ var _turret: Label
 
 
 func _ready() -> void:
+	if theme == null:
+		theme = preload("res://assets/theme/default.tres")
 	mouse_filter = MOUSE_FILTER_IGNORE
 	var col := VBoxContainer.new()
 	col.mouse_filter = MOUSE_FILTER_IGNORE
