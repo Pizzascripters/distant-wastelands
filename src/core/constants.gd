@@ -1,0 +1,116 @@
+class_name Constants
+
+const MAP_W := 64
+const MAP_H := 64
+const TILE := 32
+const SIM_HZ := 20
+const SIM_DT := 0.05
+const MAX_CATCHUP_TICKS := 4
+const DEFAULT_SEED := 1
+
+const PLAYER_CAMP_RECT := Rect2i(2, 46, 14, 16)
+const ENEMY_CAMP_RECT := Rect2i(48, 2, 14, 16)
+const PLAYER_HABITAT_TILE := Vector2i(6, 52)
+const PLAYER_DEPOT_TILE := Vector2i(9, 52)
+const PLAYER_SPAWN_TILE := Vector2i(8, 55)
+const ENEMY_HABITAT_TILE := Vector2i(54, 6)
+const ENEMY_DEPOT_TILE := Vector2i(51, 6)
+const ENEMY_TURRET_TILE := Vector2i(48, 10)
+const ENEMY_GUARD_TILE := Vector2i(50, 9)
+
+const CORRIDOR_H_X0 := 11
+const CORRIDOR_H_X1 := 51
+const CORRIDOR_H_Y0 := 51
+const CORRIDOR_H_Y1 := 53
+const CORRIDOR_V_X0 := 50
+const CORRIDOR_V_X1 := 52
+const CORRIDOR_V_Y0 := 8
+const CORRIDOR_V_Y1 := 51
+const CORRIDOR_CENTER_X := 51
+const CORRIDOR_CENTER_Y := 52
+
+const DEPOSIT_PLACE_ATTEMPTS := 200
+const DEPOSIT_MIN_SEP := 2
+
+const PLAYER_SPEED := 120.0
+const PLAYER_HP := 50
+const PLAYER_RADIUS := 10.0
+const PLAYER_FIRE_COOLDOWN := 0.45
+const PLAYER_PROJ_DAMAGE := 7
+const PLAYER_PROJ_SPEED := 400.0
+const PLAYER_PROJ_LIFE := 0.8
+const PLAYER_CARRY_SCRAP := 10
+const PLAYER_CARRY_ICE := 10
+const PLAYER_RESPAWN := 5.0
+const RESPAWN_SEARCH := 4
+const MUZZLE_OFFSET := 14.0
+const AIM_DEADZONE := 1.0
+
+const RAIDER_HP := 25
+const RAIDER_SPEED := 90.0
+const RAIDER_RADIUS := 10.0
+const RAIDER_MELEE_UNIT := 6
+const RAIDER_MELEE_BUILDING := 8
+const RAIDER_MELEE_RANGE := 18.0
+const RAIDER_MELEE_COOLDOWN := 0.7
+const RAIDER_CARRY_SCRAP := 5
+const RAIDER_CARRY_ICE := 3
+const RAIDER_LOOT_CHANNEL := 3.0
+const RAIDER_CHASE_RADIUS := 96.0
+const RAIDER_CHASE_GIVEUP := 4.0
+const RAIDER_STUCK_TIME := 2.0
+const RAIDER_STUCK_SPEED := 8.0
+
+const GUARD_HP := 30
+const GUARD_SPEED := 80.0
+const GUARD_RADIUS := 10.0
+const GUARD_AGGRO := 192.0
+const GUARD_LEASH := 48.0
+const GUARD_MELEE_COOLDOWN := 0.65
+
+const HABITAT_HP := 200
+const DEPOT_HP := 100
+const DEPOT_CAP_SCRAP := 50
+const DEPOT_CAP_ICE := 50
+const WALL_HP := 60
+const WALL_COST := 5
+const TURRET_HP := 80
+const TURRET_COST := 15
+const TURRET_RANGE := 160.0
+const TURRET_DAMAGE := 10
+const TURRET_COOLDOWN := 1.0
+const TURRET_PROJ_SPEED := 360.0
+const TURRET_PROJ_LIFE := 0.6
+const PROJ_RADIUS := 3.0
+
+const START_PLAYER_SCRAP := 15
+const START_PLAYER_ICE := 20
+const START_ENEMY_SCRAP := 20
+const START_ENEMY_ICE := 40
+const ICE_PULL_PLAYER := 15.0
+const ICE_PULL_ENEMY := 20.0
+const ZERO_ICE_LIMIT := 30.0
+
+const GATHER_CHANNEL := 1.0
+const GATHER_RANGE := 20.0
+const TRANSFER_PERIOD := 0.2
+const TRANSFER_BATCH := 5
+const LOOT_CHANNEL := 0.3
+const INTERACT_BUILDING_RANGE := 24.0
+
+const FIRST_WAVE_AT := 60.0
+const WAVE_PERIOD := 90.0
+const WAVE_BASE := 2
+const WAVE_CAP := 4
+const RAID_BANNER_TIME := 3.0
+
+const SCRAP_DEPOSIT_COUNT := 18
+const SCRAP_DEPOSIT_AMOUNT := 8
+const ICE_DEPOSIT_COUNT := 12
+const ICE_DEPOSIT_AMOUNT := 6
+const MIN_SCRAP_DEPOSITS := 12
+const MIN_ICE_DEPOSITS := 8
+const ROCK_PERCENT := 12
+const MAX_BUILDINGS := 64
+const PATH_RECALC := 0.5
+const HIT_FLASH := 0.1
