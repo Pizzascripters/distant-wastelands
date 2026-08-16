@@ -1241,39 +1241,25 @@ Each task must merge independently, keep tests that already exist green, and not
 6. Same-file work is serialized on purpose: if two tasks would both edit `sim.gd`, `rules.gd`, `game_view.gd`, `mapgen.gd`, `world.gd`, or `hud.gd`, the later task lists the earlier one as a dependency.
 7. Do not insert a Steam, LAN, save/load, or reclaim task under this document.
 
-### Task 1 — Scaffold the Godot project
-
-- **Title:** `chore: scaffold Godot 4 project and folder layout`
-- **Files/components:** `project.godot`, `icon.svg`, `export_presets.cfg`, `tools/export.sh`, `scenes/boot.tscn`, `src/autoload/app.gd`, `src/core/constants.gd`, `src/core/types.gd`, empty `assets/` tree, `tests/run.gd` (runner only, zero cases).
-- **Depends on:** none.
-- **Description:** Editor-openable project. Boot scene + App autoload that shows a solid-color window and quits on a stub menu later. Renderer `gl_compatibility`, 1280×720, stretch settings. Export presets named but untested is OK. No gameplay.
-
-### Task 2 — World, mapgen, camera, player movement
-
-- **Title:** `feat: tile world, seeded mapgen, and player movement`
-- **Files/components:** `src/sim/{sim,world,mapgen,entity,unit,commands,snapshot,pathfind}.gd`, `src/session/{session,local_session}.gd`, `src/view/{game_view,world_view,unit_view,camera_ctrl}.gd`, `scenes/game.tscn`, `scenes/main_menu.tscn`, `src/ui/main_menu.gd`, `tests/test_mapgen.gd`, `tests/test_pathfind.gd`.
-- **Depends on:** Task 1.
-- **Description:** New Game starts a `LocalSession`. Player walks with WASD on the 64×64 map. Rocks render. Camera follows and zooms. Always-carve L-corridor + flood-fill **assert**. Ship `pathfind.gd` and `test_pathfind.gd` **in this task only** (later tasks use them; they are not re-added when AI lands). Implement the **command / tick / pause contract** on `LocalSession` (latest-held, latch `build_kind`, one enqueue per sim tick, consume on apply, pause skips acc+tick). Put that contract in a comment on `LocalSession.tick`. `set_paused` exists but the view does not call it yet. No gather, no HUD stocks, no pause menu.
-
 ### Task 3 — Inventory type
 
 - **Title:** `feat: Inventory add/remove/clamp`
 - **Files/components:** `src/sim/inventory.gd`, `tests/test_inventory.gd`.
-- **Depends on:** Task 2.
+- **Depends on:** none.
 - **Description:** `class_name Inventory` with the exact API in Resources and inventories (`free_space`, `can_add`, `add` leftover, `remove` actual). Caps are constructor/fields, not globals. Tests: add/remove/clamp; leftover on overflow; empty remove returns 0. No world wiring. No HUD.
 
 ### Task 4 — Deposit record
 
 - **Title:** `feat: Deposit record type`
 - **Files/components:** `src/sim/deposit.gd`.
-- **Depends on:** Task 2.
+- **Depends on:** none.
 - **Description:** `class_name Deposit` with `id`, `kind` (`ResourceKind`), `tile`, `remaining`. No `World` dictionary, no mapgen spawn, no view.
 
 ### Task 5 — Projectile record
 
 - **Title:** `feat: Projectile record type`
 - **Files/components:** `src/sim/projectile.gd`.
-- **Depends on:** Task 2.
+- **Depends on:** none.
 - **Description:** `class_name Projectile` with `id`, `faction`, `pos`, `vel`, `damage`, `life`. No spawn, no integration, no view.
 
 ### Task 6 — Building record
@@ -1301,105 +1287,105 @@ Each task must merge independently, keep tests that already exist green, and not
 
 - **Title:** `feat: BuildingView silhouettes and team stripe`
 - **Files/components:** `src/view/building_view.gd`.
-- **Depends on:** Task 2.
+- **Depends on:** none.
 - **Description:** Node that applies a snapshot building record: Habitat dome, Depot inner square, Wall inset, Turret box + barrel from `aim`. Fill `#4A5560`, 4 px top stripe teal/red by faction, hit flash `#F2EDE6` for `HIT_FLASH` when `hp` drops. Not mounted in `GameView`.
 
 ### Task 10 — Loot view
 
 - **Title:** `feat: LootView yellow square`
 - **Files/components:** `src/view/loot_view.gd`.
-- **Depends on:** Task 2.
+- **Depends on:** none.
 - **Description:** Node that draws a yellow `#E2C044` small square from a loot record. Not mounted.
 
 ### Task 11 — Projectile view
 
 - **Title:** `feat: ProjectileView faction-colored dots`
 - **Files/components:** `src/view/projectile_view.gd`.
-- **Depends on:** Task 2.
+- **Depends on:** none.
 - **Description:** Node that draws a 4 px circle (player teal; turret uses faction color) from a projectile record. Not mounted.
 
 ### Task 12 — Unit view kinds and hit flash
 
 - **Title:** `feat: UnitView raider/guard colors and hit flash`
 - **Files/components:** `src/view/unit_view.gd`.
-- **Depends on:** Task 2.
+- **Depends on:** none.
 - **Description:** Player teal, raider `#C23B22`, guard `#8B1E13` thicker outline, aim notch. Hit flash when `hp` decreases. No new unit types.
 
 ### Task 13 — HUD scene skeleton
 
 - **Title:** `feat: HUD panel for carry, depot stocks, and HP`
 - **Files/components:** `src/ui/hud.gd`, `scenes/ui/hud.tscn`.
-- **Depends on:** Task 2.
+- **Depends on:** none.
 - **Description:** Dark panel `Color(0,0,0,0.65)`, text `#F2EDE6`, 16 px. Widgets for player carry scrap/ice, depot scrap/ice (or `—`), Habitat HP, Depot HP, ice countdown slot, raid-banner slot. Reads whatever the snapshot already has; missing fields show 0 / hidden. Not mounted. No low-ice color logic required beyond the specified `#E24A3B` when the snapshot says depot ice ≤ 5 or `zero_ice_timer > 0`.
 
 ### Task 14 — Build ghost
 
 - **Title:** `feat: tile-snapped build ghost`
 - **Files/components:** `src/view/build_ghost.gd`.
-- **Depends on:** Task 2.
+- **Depends on:** none.
 - **Description:** Tile-snapped 40% ghost, green `#3DDC97` or red `#C23B22`. Color is a parameter (`valid: bool`); do not call `rules.can_place` — the mounter will pass validity. Not mounted. No placement.
 
 ### Task 15 — Build bar
 
 - **Title:** `feat: build bar labels for wall and turret`
 - **Files/components:** `src/ui/build_bar.gd`.
-- **Depends on:** Task 2.
+- **Depends on:** none.
 - **Description:** Shows Wall (1, cost 5) and Turret (2, cost 15). Highlights the selected kind. Not mounted. No placement.
 
 ### Task 16 — Pause menu scene
 
 - **Title:** `feat: pause menu scene`
 - **Files/components:** `src/ui/pause_menu.gd`, `scenes/ui/pause_menu.tscn`.
-- **Depends on:** Task 2.
+- **Depends on:** none.
 - **Description:** Widgets `Resume`, `Quit to Menu` only. Emits those two intents. Not mounted. Does not call `set_paused`.
 
 ### Task 17 — End screen scene
 
 - **Title:** `feat: end screen scene`
 - **Files/components:** `src/ui/end_screen.gd`, `scenes/ui/end_screen.tscn`.
-- **Depends on:** Task 2.
+- **Depends on:** none.
 - **Description:** Title `Colony standing` / `Colony lost`, one-line reason from the mapping table, buttons `Play Again` and `Menu`. Takes `(Outcome, OutcomeReason)` and sets the two strings. Not mounted. No Play Again wiring.
 
 ### Task 18 — Debug overlay
 
 - **Title:** `feat: F3 debug overlay widget`
 - **Files/components:** `src/ui/debug_overlay.gd`.
-- **Depends on:** Task 2.
+- **Depends on:** none.
 - **Description:** Draws tick, FPS, entity counts, outcome, depot stocks, next wave when given a snapshot. Hidden by default. Not mounted. No F3 toggle.
 
 ### Task 19 — World and prop placeholder sprites
 
 - **Title:** `chore: placeholder sprites for ground, rock, deposits, loot`
 - **Files/components:** `assets/sprites/placeholder/` (ground/rock/scrap/ice/loot only).
-- **Depends on:** Task 2.
+- **Depends on:** none.
 - **Description:** Optional 32×32 (or smaller) PNGs matching the color spec. Views may keep ColorRects; this task only adds files. No view rewiring.
 
 ### Task 20 — Unit and building placeholder sprites
 
 - **Title:** `chore: placeholder sprites for units, buildings, projectiles`
 - **Files/components:** `assets/sprites/placeholder/` (units, habitat, depot, wall, turret, projectiles).
-- **Depends on:** Task 2.
+- **Depends on:** none.
 - **Description:** Optional PNGs matching the color-and-stripe spec. No view rewiring.
 
 ### Task 21 — Default theme
 
 - **Title:** `chore: default UI theme`
 - **Files/components:** `assets/theme/default.tres`.
-- **Depends on:** Task 2.
+- **Depends on:** none.
 - **Description:** Godot theme: default font 16 px, text `#F2EDE6`. File only; HUD and menus apply it when they are mounted. No new widgets.
 
 ### Task 22 — Optional SFX files
 
 - **Title:** `chore: optional one-shot SFX`
 - **Files/components:** `assets/audio/sfx/` (shoot, hit, build, gather tick, raid alarm).
-- **Depends on:** Task 2.
+- **Depends on:** none.
 - **Description:** Optional ≤ 200 ms CC0/generated WAVs. Silence is allowed — empty directory is a valid completion if no files are added. No playback hooks required.
 
 ### Task 23 — Remaining input actions and command fields
 
 - **Title:** `feat: bind fire, interact, build, pause, and debug actions`
 - **Files/components:** `src/view/game_view.gd`, `project.godot` Input Map.
-- **Depends on:** Task 2.
+- **Depends on:** none.
 - **Description:** Bind `fire` (LMB), `interact` (E), `build_wall` (1), `build_turret` (2), `cancel` (RMB, Q), `pause` (Escape), `debug_overlay` (F3). `_read_command` writes `fire` and `interact` as held state. Do **not** enter build mode, show a ghost, toggle pause, or toggle F3. `build_kind` stays `-1`. Sim already ignores unused fields.
 
 ### Task 24 — Unit inventories
@@ -1413,28 +1399,28 @@ Each task must merge independently, keep tests that already exist green, and not
 
 - **Title:** `feat: Director wave schedule class`
 - **Files/components:** `src/sim/ai_director.gd`.
-- **Depends on:** Task 2.
+- **Depends on:** none.
 - **Description:** `class_name Director` with `wave_index`, `next_wave_at = FIRST_WAVE_AT`, `banner_timer`. `maybe_spawn(sim)` implements the clock: if `sim.time >= next_wave_at`, spawn `min(WAVE_CAP, WAVE_BASE + floor((n-1)/2))` raiders on walkable tiles adjacent to the living enemy depot, or skip spawn if that depot is missing; **always** `next_wave_at += WAVE_PERIOD` and increment `wave_index`. On a successful spawn set `banner_timer = RAID_BANNER_TIME`. Do **not** re-add `pathfind.gd`. Not called from `Sim.tick`.
 
 ### Task 26 — AI raider brain
 
 - **Title:** `feat: raider state machine`
 - **Files/components:** `src/sim/ai_raider.gd`.
-- **Depends on:** Task 2.
+- **Depends on:** none.
 - **Description:** `think(unit, sim)` implements the full raider diagram and priority lists (`PATH_TO_DEPOT`, `PATH_HOME`, `PATH_TO_HABITAT`, `SIEGE` commit, `LOOT`, `CHASE`, `ATTACK_HABITAT`, `DEAD_DROP`, despawn). `hauling` is `scrap > 0 or ice > 0`. Uses existing `pathfind.gd` (4-connected A*). Movement, melee target, and `siege_target_id` are intents for later tick steps. `LOOT` channel transfers, home-depot despawn (add carry to that depot; leftover loot at depot center; delete the raider), and `DEAD_DROP` (loot at feet; delete the raider) are applied here because they are diagram actions, not movement. Chase never preempts `SIEGE`. Non-hauling `SIEGE` does not exit when A* reopens. Not called from `Sim.tick`.
 
 ### Task 27 — AI guard brain
 
 - **Title:** `feat: guard aggro and leash`
 - **Files/components:** `src/sim/ai_guard.gd`.
-- **Depends on:** Task 2.
+- **Depends on:** none.
 - **Description:** Home = spawn position. Chase+melee if player within `GUARD_AGGRO` of home; else path home if farther than `GUARD_LEASH`; else idle. Never loots, sieges, or joins waves. Not called from `Sim.tick`.
 
 ### Task 28 — Export script hardening
 
 - **Title:** `chore: harden export.sh and resource filters`
 - **Files/components:** `tools/export.sh`, `export_presets.cfg`.
-- **Depends on:** Task 2.
+- **Depends on:** none.
 - **Description:** Both presets export `Linux/X11` → `colony.x86_64` and `Windows Desktop` → `colony.exe`. Resource filter includes `res://` game assets and excludes test-only junk if any. Script is invokable; booting the artifacts is verified in the export-verification task, not here. No new rules.
 
 ### Task 29 — World collections and occupancy
