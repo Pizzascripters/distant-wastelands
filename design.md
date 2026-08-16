@@ -99,10 +99,10 @@ Do **not** implement any of the following in v1. They are listed so later work h
 
 ### Engine and repository layout
 
-The Godot project root **is** the repository root (`/workspace`). Application name in `project.godot` is `colony` (internal id, not a product title). Window title is `Colony`.
+The Godot project root **is** the repository root. Application name in `project.godot` is `colony` (internal id, not a product title). Window title is `Colony`.
 
 ```
-/workspace/
+.
   CLAUDE.md
   design.md
   project.godot
@@ -1188,7 +1188,7 @@ Parking-lot questions for *later* documents (do not implement answers in v1):
 
 ## References
 
-- `/workspace/CLAUDE.md` — project constraints (2D Mars survival, design.md is law, no product-title references, LAN/Steam as future, Windows + Linux).
+- `CLAUDE.md` — project constraints (2D Mars survival, design.md is law, no product-title references, LAN/Steam as future, Windows + Linux).
 - Godot 4 documentation: project settings, Input Map, `Camera2D`, export presets, headless `--script`.
 - Godot High-level multiplayer / ENet (future LAN; do not initialize in v1).
 
