@@ -7,6 +7,9 @@ var current_session = null
 
 
 func _ready() -> void:
+	var win := get_window()
+	if win != null:
+		win.title = "Colony"
 	DisplayServer.window_set_title("Colony")
 
 
