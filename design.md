@@ -1267,13 +1267,6 @@ Each task must merge independently, keep tests that already exist green, and not
 - **Depends on:** none.
 - **Description:** Optional PNGs matching the color-and-stripe spec. No view rewiring.
 
-### Task 21 — Default theme
-
-- **Title:** `chore: default UI theme`
-- **Files/components:** `assets/theme/default.tres`.
-- **Depends on:** none.
-- **Description:** Godot theme: default font 16 px, text `#F2EDE6`. File only; HUD and menus apply it when they are mounted. No new widgets.
-
 ### Task 23 — Remaining input actions and command fields
 
 - **Title:** `feat: bind fire, interact, build, pause, and debug actions`
@@ -1390,7 +1383,7 @@ Each task must merge independently, keep tests that already exist green, and not
 
 - **Title:** `feat: mount HUD, buildings, loot, projectiles, and build mode`
 - **Files/components:** `src/view/game_view.gd`, `src/ui/hud.gd` (bind live snapshot), `scenes/game.tscn` if needed.
-- **Depends on:** Task 21, Task 23, Task 30, Task 31, Task 32, Task 38.
+- **Depends on:** Task 23, Task 30, Task 31, Task 32, Task 38.
 - **Description:** Sync building/loot/projectile views by id. Mount HUD and build bar. Apply `assets/theme/default.tres` to them. Bind HUD to snapshot carry (`units[].inventory`), depot stocks, HP, ice countdown, raid banner. Build mode: keys 1/2 select kind, ghost under cursor colored by `rules.can_place`, LMB sets the session build latch for that frame, RMB/Q cancel. Resources come from the player depot. **No reclaim.** Do not mount pause, end, or F3.
 
 ### Task 40 — Pause, end screen, and F3
@@ -1404,7 +1397,7 @@ Each task must merge independently, keep tests that already exist green, and not
 
 - **Title:** `chore: apply placeholders, leftover HUD colors, verify exports`
 - **Files/components:** views that still use programmer rects (`src/view/*`, `src/ui/hud.gd`), `tools/export.sh` invocation notes only if a filter is still wrong.
-- **Depends on:** Task 19, Task 20, Task 21, Task 28, Task 37, Task 40.
+- **Depends on:** Task 19, Task 20, Task 28, Task 37, Task 40.
 - **Description:** Replace leftover ColorRects with the color-and-stripe spec and any sprites from Tasks 19–20. Confirm raid-banner and low-ice colors. Confirm Linux and Windows exports boot to the menu. Manual checklist executed. No new rules. README is **not** required.
 
 These tasks are the only implementation sequence. Do not insert a Steam, LAN, save/load, or reclaim task under this document.
