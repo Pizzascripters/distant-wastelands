@@ -1267,13 +1267,6 @@ Each task must merge independently, keep tests that already exist green, and not
 - **Depends on:** none.
 - **Description:** Dark panel `Color(0,0,0,0.65)`, text `#F2EDE6`, 16 px. Widgets for player carry scrap/ice, depot scrap/ice (or `—`), Habitat HP, Depot HP, ice countdown slot, raid-banner slot. Reads whatever the snapshot already has; missing fields show 0 / hidden. Not mounted. No low-ice color logic required beyond the specified `#E24A3B` when the snapshot says depot ice ≤ 5 or `zero_ice_timer > 0`.
 
-### Task 14 — Build ghost
-
-- **Title:** `feat: tile-snapped build ghost`
-- **Files/components:** `src/view/build_ghost.gd`.
-- **Depends on:** none.
-- **Description:** Tile-snapped 40% ghost, green `#3DDC97` or red `#C23B22`. Color is a parameter (`valid: bool`); do not call `rules.can_place` — the mounter will pass validity. Not mounted. No placement.
-
 ### Task 15 — Build bar
 
 - **Title:** `feat: build bar labels for wall and turret`
@@ -1446,7 +1439,7 @@ Each task must merge independently, keep tests that already exist green, and not
 
 - **Title:** `feat: mount HUD, buildings, loot, projectiles, and build mode`
 - **Files/components:** `src/view/game_view.gd`, `src/ui/hud.gd` (bind live snapshot), `scenes/game.tscn` if needed.
-- **Depends on:** Task 13, Task 14, Task 15, Task 21, Task 23, Task 30, Task 31, Task 32, Task 38.
+- **Depends on:** Task 13, Task 15, Task 21, Task 23, Task 30, Task 31, Task 32, Task 38.
 - **Description:** Sync building/loot/projectile views by id. Mount HUD and build bar. Apply `assets/theme/default.tres` to them. Bind HUD to snapshot carry (`units[].inventory`), depot stocks, HP, ice countdown, raid banner. Build mode: keys 1/2 select kind, ghost under cursor colored by `rules.can_place`, LMB sets the session build latch for that frame, RMB/Q cancel. Resources come from the player depot. **No reclaim.** Do not mount pause, end, or F3.
 
 ### Task 40 — Pause, end screen, and F3
