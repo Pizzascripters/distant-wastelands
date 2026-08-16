@@ -5,6 +5,7 @@ extends SceneTree
 ## Empty list is valid (scaffold has zero cases).
 
 const TEST_SCRIPTS: Array[String] = [
+	"res://tests/test_inventory.gd",
 	"res://tests/test_mapgen.gd",
 	"res://tests/test_pathfind.gd",
 ]
