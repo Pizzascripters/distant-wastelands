@@ -1,0 +1,8 @@
+.godot/
+*.translation
+build/
+export/
+*.pck
+.DS_Store
+Thumbs.db
+*~
