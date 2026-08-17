@@ -10,6 +10,7 @@ func run() -> PackedStringArray:
 	_test_gather_channel_defaults(fails)
 	_test_gather_channel_while_mining(fails)
 	_test_player_o2_copied(fails)
+	_test_oxygen_and_hunger_flags(fails)
 	_test_tiles_recopy_on_generation(fails)
 	_test_last_tick_usec_to_sim_ms(fails)
 	return fails
@@ -37,6 +38,12 @@ func _test_defaults_and_player_inventory(fails: PackedStringArray) -> void:
 			"zero_ice timers were %s/%s, expected 0/0"
 			% [str(snap.player_zero_ice_timer), str(snap.enemy_zero_ice_timer)]
 		)
+	if snap.oxygen_failed:
+		fails.append("oxygen_failed should start false")
+	if snap.hunger_starving:
+		fails.append("hunger_starving should start false")
+	if "hunger_failed" in snap:
+		fails.append("snapshot must not carry hunger_failed")
 	var player := _player_rec(snap)
 	if player.is_empty():
 		fails.append("snapshot missing player unit")
@@ -248,6 +255,22 @@ func _test_player_o2_copied(fails: PackedStringArray) -> void:
 		fails.append("snapshot player_o2 is %s, expected 17.5" % str(snap.player_o2))
 	if not is_equal_approx(snap.player_o2_max, Constants.PLAYER_O2_MAX):
 		fails.append("snapshot player_o2_max is %s" % str(snap.player_o2_max))
+
+
+func _test_oxygen_and_hunger_flags(fails: PackedStringArray) -> void:
+	var sim := Sim.new()
+	sim.setup(Constants.DEFAULT_SEED)
+	sim.oxygen_failed = true
+	sim.hunger_starving = true
+	var snap := sim.snapshot()
+	if not snap.oxygen_failed:
+		fails.append("snapshot missed oxygen_failed")
+	if not snap.hunger_starving:
+		fails.append("snapshot missed hunger_starving")
+	sim.oxygen_failed = false
+	sim.hunger_starving = false
+	if not snap.oxygen_failed or not snap.hunger_starving:
+		fails.append("snapshot oxygen/hunger flags mutated with sim")
 
 
 func _test_tiles_recopy_on_generation(fails: PackedStringArray) -> void:

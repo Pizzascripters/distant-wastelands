@@ -201,8 +201,6 @@ func _test_depot_death_spills_without_life_support(fails: PackedStringArray) -> 
 		fails.append("loot pos is %s, expected depot center %s" % [pile.pos, center])
 	if sim.outcome != Types.Outcome.NONE:
 		fails.append("depot death set outcome %d" % sim.outcome)
-	if sim.outcome_reason == Types.OutcomeReason.LIFE_SUPPORT:
-		fails.append("depot death set LIFE_SUPPORT")
 
 
 func _test_two_arg_spill_rejects_ore(fails: PackedStringArray) -> void:

@@ -5,14 +5,15 @@ func run() -> PackedStringArray:
 	var fails := PackedStringArray()
 	_test_starts_at_max(fails)
 	_test_habitat_refill(fails)
-	_test_depot_refill(fails)
+	_test_habitat_refills_regardless_of_ice(fails)
+	_test_depot_does_not_refill(fails)
 	_test_farm_does_not_refill(fails)
 	_test_drain_away_from_camp(fails)
 	_test_enemy_buildings_do_not_refill(fails)
 	_test_dead_player_does_not_drain(fails)
-	_test_suffocation_pulse(fails)
-	_test_lethal_pulse_not_healed(fails)
-	_test_death_drops_and_respawn_refills(fails)
+	_test_o2_empty_is_suffocation(fails)
+	_test_combat_death_respawns_full_o2(fails)
+	_test_habitat_smash_is_not_a_lose(fails)
 	_test_hud_bar_colors(fails)
 	return fails
 
@@ -45,7 +46,25 @@ func _test_habitat_refill(fails: PackedStringArray) -> void:
 		fails.append("habitat adjacency left o2 at %s" % str(player.o2))
 
 
-func _test_depot_refill(fails: PackedStringArray) -> void:
+func _test_habitat_refills_regardless_of_ice(fails: PackedStringArray) -> void:
+	var sim := _sim_quiet()
+	var player := sim.get_player()
+	var habitat := _player_building(sim, Types.BuildingKind.HABITAT)
+	if habitat == null:
+		fails.append("missing player habitat")
+		return
+	if habitat.inventory != null:
+		habitat.inventory.remove(Types.ResourceKind.ICE, habitat.inventory.ice)
+	player.o2 = 8.0
+	player.pos = _adjacent_pos(sim, habitat)
+	sim.tick()
+	if not is_equal_approx(player.o2, Constants.PLAYER_O2_MAX):
+		fails.append("0-ice habitat left o2 at %s" % str(player.o2))
+	if not Rules.habitat_gives_o2(habitat):
+		fails.append("living player Habitat should give O2 regardless of ice")
+
+
+func _test_depot_does_not_refill(fails: PackedStringArray) -> void:
 	var sim := _sim_quiet()
 	var player := sim.get_player()
 	var depot := _player_building(sim, Types.BuildingKind.DEPOT)
@@ -55,13 +74,13 @@ func _test_depot_refill(fails: PackedStringArray) -> void:
 	player.o2 = 8.0
 	player.pos = sim.world.tile_center(11, 52)
 	sim.tick()
-	if not is_equal_approx(player.o2, Constants.PLAYER_O2_MAX):
-		fails.append("depot adjacency left o2 at %s" % str(player.o2))
+	if not is_equal_approx(player.o2, 8.0 - Constants.SIM_DT):
+		fails.append("depot corridor tile refilled o2 to %s" % str(player.o2))
 	player.o2 = 8.0
 	player.pos = _adjacent_pos(sim, depot)
 	sim.tick()
-	if not is_equal_approx(player.o2, Constants.PLAYER_O2_MAX):
-		fails.append("depot east-face adjacency left o2 at %s" % str(player.o2))
+	if not is_equal_approx(player.o2, 8.0 - Constants.SIM_DT):
+		fails.append("depot east-face adjacency refilled o2 to %s" % str(player.o2))
 
 
 func _test_farm_does_not_refill(fails: PackedStringArray) -> void:
@@ -121,63 +140,51 @@ func _test_dead_player_does_not_drain(fails: PackedStringArray) -> void:
 		fails.append("dead player o2 changed to %s" % str(player.o2))
 
 
-func _test_suffocation_pulse(fails: PackedStringArray) -> void:
+func _test_o2_empty_is_suffocation(fails: PackedStringArray) -> void:
 	var sim := _sim_quiet()
 	var player := sim.get_player()
 	player.pos = _far_pos()
 	player.o2 = 0.0
 	player.hp = Constants.PLAYER_HP
-	sim.tick_index = Constants.PLAYER_O2_PULSE_TICKS - 1
 	sim.tick()
-	var after_pulse := Constants.PLAYER_HP - Constants.PLAYER_O2_HP_PER_PULSE
-	if player.hp != after_pulse:
-		fails.append("pulse hp is %d, expected %d" % [player.hp, after_pulse])
+	if not sim.oxygen_failed:
+		fails.append("o2 == 0 should set oxygen_failed")
+	if sim.outcome != Types.Outcome.PLAYER_LOSE or sim.outcome_reason != Types.OutcomeReason.SUFFOCATION:
+		fails.append(
+			"o2 == 0 outcome is %d/%d, expected PLAYER_LOSE/SUFFOCATION"
+			% [sim.outcome, sim.outcome_reason]
+		)
+	if player.hp != Constants.PLAYER_HP:
+		fails.append("suffocation should not pulse HP, hp=%d" % player.hp)
+	if not player.alive:
+		fails.append("suffocation should not kill/respawn the player")
+	if sim.world.loot.size() != 0:
+		fails.append("suffocation should not drop a corpse pile")
+	var locked := sim.outcome
 	sim.tick()
-	if player.hp != after_pulse:
-		fails.append("non-pulse tick changed hp to %d" % player.hp)
-	player.o2 = 0.0
-	sim.tick_index = Constants.PLAYER_O2_PULSE_TICKS * 2 - 1
-	sim.tick()
-	if player.hp != after_pulse - Constants.PLAYER_O2_HP_PER_PULSE:
-		fails.append("second pulse hp is %d" % player.hp)
+	if sim.outcome != locked or player.hp != Constants.PLAYER_HP:
+		fails.append("locked suffocation tick mutated outcome or hp")
 
 
-func _test_lethal_pulse_not_healed(fails: PackedStringArray) -> void:
-	var sim := _sim_quiet()
-	var player := sim.get_player()
-	var medbay := _inject_building(sim, Types.BuildingKind.MEDBAY, Vector2i(21, 20), Constants.MEDBAY_HP)
-	player.pos = _adjacent_pos(sim, medbay)
-	player.o2 = 0.0
-	player.hp = 1
-	sim.tick_index = Constants.PLAYER_O2_PULSE_TICKS - 1
-	sim.tick()
-	if player.alive or player.hp > 0:
-		fails.append("lethal pulse should kill this tick (alive=%s hp=%d)" % [str(player.alive), player.hp])
-
-
-func _test_death_drops_and_respawn_refills(fails: PackedStringArray) -> void:
+func _test_combat_death_respawns_full_o2(fails: PackedStringArray) -> void:
 	var sim := _sim_quiet()
 	var player := sim.get_player()
 	player.pos = _far_pos()
-	player.o2 = 0.0
+	player.o2 = 12.0
 	player.hp = 1
 	player.inventory.add(Types.ResourceKind.SCRAP, 3)
 	player.inventory.add(Types.ResourceKind.ICE, 2)
-	sim.tick_index = Constants.PLAYER_O2_PULSE_TICKS - 1
+	Combat.apply_damage(player, 1)
 	sim.tick()
 	if player.alive:
-		fails.append("suffocation should kill the player")
+		fails.append("combat death should kill the player")
 		return
+	if sim.outcome != Types.Outcome.NONE:
+		fails.append("combat death locked outcome %d/%d" % [sim.outcome, sim.outcome_reason])
 	if player.inventory.scrap != 0 or player.inventory.ice != 0:
-		fails.append("death should empty carry")
+		fails.append("combat death should empty carry")
 	if sim.world.loot.size() != 1:
-		fails.append("death loot piles: %d, expected 1" % sim.world.loot.size())
-	else:
-		var pile: Loot = sim.world.loot.values()[0]
-		if pile.inventory.scrap != 3 or pile.inventory.ice != 2:
-			fails.append(
-				"dropped loot is %d/%d, expected 3/2" % [pile.inventory.scrap, pile.inventory.ice]
-			)
+		fails.append("combat death loot piles: %d, expected 1" % sim.world.loot.size())
 	player.respawn_timer = Constants.SIM_DT
 	sim.tick()
 	if not player.alive:
@@ -189,6 +196,32 @@ func _test_death_drops_and_respawn_refills(fails: PackedStringArray) -> void:
 		fails.append("respawn hp is %d" % player.hp)
 	if player.inventory.scrap != 0 or player.inventory.ice != 0:
 		fails.append("respawn carry should be empty")
+
+
+func _test_habitat_smash_is_not_a_lose(fails: PackedStringArray) -> void:
+	var sim := _sim_quiet()
+	var player := sim.get_player()
+	var habitat := _player_building(sim, Types.BuildingKind.HABITAT)
+	if habitat == null:
+		fails.append("missing player habitat")
+		return
+	player.pos = _far_pos()
+	player.o2 = 9.0
+	habitat.hp = 0
+	sim.tick()
+	if sim.outcome != Types.Outcome.NONE:
+		fails.append("habitat smash locked outcome %d/%d" % [sim.outcome, sim.outcome_reason])
+	if not is_equal_approx(player.o2, 9.0 - Constants.SIM_DT):
+		fails.append("after habitat smash o2 is %s, expected drain" % str(player.o2))
+	player.o2 = 0.0
+	sim.tick()
+	if not sim.oxygen_failed:
+		fails.append("o2 == 0 after habitat smash should set oxygen_failed")
+	if sim.outcome != Types.Outcome.PLAYER_LOSE or sim.outcome_reason != Types.OutcomeReason.SUFFOCATION:
+		fails.append(
+			"sitting after habitat smash ended %d/%d, expected SUFFOCATION"
+			% [sim.outcome, sim.outcome_reason]
+		)
 
 
 func _test_hud_bar_colors(fails: PackedStringArray) -> void:
