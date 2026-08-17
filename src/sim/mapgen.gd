@@ -119,7 +119,6 @@ static func _place_player_camp(world: World) -> void:
 	depot.inventory.add(Types.ResourceKind.ICE, Constants.START_PLAYER_ICE)
 	depot.inventory.add(Types.ResourceKind.ORE, Constants.START_PLAYER_ORE)
 	depot.inventory.add(Types.ResourceKind.PARTS, Constants.START_PLAYER_PARTS)
-	depot.inventory.add(Types.ResourceKind.FOOD, Constants.START_PLAYER_DEPOT_FOOD)
 	var player := _spawn_unit(
 		world,
 		Types.UnitKind.PLAYER,
@@ -150,7 +149,6 @@ static func _place_enemy_camp(world: World) -> void:
 	depot.inventory.add(Types.ResourceKind.ICE, Constants.START_ENEMY_ICE)
 	depot.inventory.add(Types.ResourceKind.ORE, Constants.START_ENEMY_ORE)
 	depot.inventory.add(Types.ResourceKind.PARTS, Constants.START_ENEMY_PARTS)
-	depot.inventory.add(Types.ResourceKind.FOOD, Constants.START_ENEMY_FOOD)
 	_spawn_building(
 		world,
 		Types.BuildingKind.TURRET,
@@ -185,7 +183,7 @@ static func _spawn_building(
 			Constants.DEPOT_CAP_ICE,
 			Constants.DEPOT_CAP_ORE,
 			Constants.DEPOT_CAP_PARTS,
-			Constants.DEPOT_CAP_FOOD
+			0
 		)
 	world.buildings[building.id] = building
 	world.occupy(building)

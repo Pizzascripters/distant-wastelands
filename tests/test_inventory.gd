@@ -12,6 +12,7 @@ func run() -> PackedStringArray:
 	_test_four_arg_bags_accept_ore(fails)
 	_test_four_arg_rejects_food(fails)
 	_test_five_arg_bags_accept_food(fails)
+	_test_depot_rejects_food(fails)
 	return fails
 
 
@@ -204,6 +205,11 @@ func _test_five_arg_bags_accept_food(fails: PackedStringArray) -> void:
 	var raider := Unit.inventory_for(Types.UnitKind.RAIDER)
 	if raider.add(Types.ResourceKind.FOOD, Constants.RAIDER_CARRY_FOOD) != 0:
 		fails.append("raider bag rejected food")
+
+
+func _test_depot_rejects_food(fails: PackedStringArray) -> void:
+	if Constants.DEPOT_CAP_FOOD != 0:
+		fails.append("DEPOT_CAP_FOOD is %d, expected 0" % Constants.DEPOT_CAP_FOOD)
 	var depot := Inventory.new(
 		Constants.DEPOT_CAP_SCRAP,
 		Constants.DEPOT_CAP_ICE,
@@ -211,5 +217,10 @@ func _test_five_arg_bags_accept_food(fails: PackedStringArray) -> void:
 		Constants.DEPOT_CAP_PARTS,
 		Constants.DEPOT_CAP_FOOD
 	)
-	if depot.add(Types.ResourceKind.FOOD, 6) != 0 or depot.food != 6:
-		fails.append("depot five-arg bag rejected food")
+	if depot.cap_food != 0:
+		fails.append("depot cap_food is %d, expected 0" % depot.cap_food)
+	var leftover := depot.add(Types.ResourceKind.FOOD, 6)
+	if leftover != 6 or depot.food != 0:
+		fails.append("depot accepted food leftover/food %d/%d" % [leftover, depot.food])
+	if depot.can_add(Types.ResourceKind.FOOD, 1):
+		fails.append("depot can_add food 1 should be false")

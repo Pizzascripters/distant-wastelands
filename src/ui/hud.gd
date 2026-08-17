@@ -98,8 +98,8 @@ func _ensure_ui() -> void:
 	vbox.name = "VBox"
 	vbox.mouse_filter = MOUSE_FILTER_IGNORE
 	vbox.add_theme_constant_override("separation", 4)
-	_carry = _resource_row("Carry")
-	_depot = _resource_row("Depot")
+	_carry = _resource_row("Carry", true)
+	_depot = _resource_row("Depot", false)
 	vbox.add_child(_carry["row"])
 	vbox.add_child(_depot["row"])
 	_ice_countdown = _label("")
@@ -120,20 +120,22 @@ func _ensure_ui() -> void:
 	add_child(_raid_banner)
 
 
-func _resource_row(title: String) -> Dictionary:
+func _resource_row(title: String, include_food: bool) -> Dictionary:
 	var row := HBoxContainer.new()
 	row.name = title
 	row.mouse_filter = MOUSE_FILTER_IGNORE
 	row.add_theme_constant_override("separation", 6)
 	row.add_child(_label(title))
 	var slots := {}
-	for kind in [
+	var kinds: Array = [
 		["scrap", _SCRAP_PATH],
 		["ice", _ICE_PATH],
 		["ore", _ORE_PATH],
 		["parts", _PARTS_PATH],
-		["food", _FOOD_PATH],
-	]:
+	]
+	if include_food:
+		kinds.append(["food", _FOOD_PATH])
+	for kind in kinds:
 		var icon := TextureRect.new()
 		icon.name = "%sIcon" % kind[0].capitalize()
 		icon.custom_minimum_size = Vector2(ICON_PX, ICON_PX)
@@ -269,7 +271,7 @@ func _label(text: String) -> Label:
 
 func _set_counts(group: Dictionary, inv: Dictionary, low_ice: bool) -> void:
 	var counts: Dictionary = group["counts"]
-	for key in ["scrap", "ice", "ore", "parts", "food"]:
+	for key in counts.keys():
 		var lab: Label = counts[key]
 		lab.text = str(int(inv.get(key, 0)))
 		var color := TEXT
@@ -282,7 +284,7 @@ func _set_counts(group: Dictionary, inv: Dictionary, low_ice: bool) -> void:
 
 func _set_missing(group: Dictionary) -> void:
 	var counts: Dictionary = group["counts"]
-	for key in ["scrap", "ice", "ore", "parts", "food"]:
+	for key in counts.keys():
 		var lab: Label = counts[key]
 		lab.text = MISSING
 		lab.add_theme_color_override("font_color", TEXT)

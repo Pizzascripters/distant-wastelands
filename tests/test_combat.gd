@@ -253,8 +253,10 @@ func _test_four_arg_spill_holds_ore(fails: PackedStringArray) -> void:
 		Constants.DEPOT_CAP_PARTS,
 		Constants.DEPOT_CAP_FOOD
 	)
-	if five.add(Types.ResourceKind.FOOD, 4) != 0 or five.food != 4:
-		fails.append("five-arg depot bag rejected food")
+	if five.cap_food != 0:
+		fails.append("depot cap_food is %d, expected 0" % five.cap_food)
+	if five.add(Types.ResourceKind.FOOD, 4) != 4 or five.food != 0:
+		fails.append("five-arg depot bag accepted food")
 
 
 func _test_five_kind_spill_holds_food(fails: PackedStringArray) -> void:
@@ -271,7 +273,7 @@ func _test_five_kind_spill_holds_food(fails: PackedStringArray) -> void:
 		Constants.DEPOT_CAP_ICE,
 		Constants.DEPOT_CAP_ORE,
 		Constants.DEPOT_CAP_PARTS,
-		Constants.DEPOT_CAP_FOOD
+		999
 	)
 	depot.inventory.add(Types.ResourceKind.FOOD, 7)
 	world.buildings[depot.id] = depot

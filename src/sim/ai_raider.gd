@@ -380,7 +380,6 @@ static func _transfer_loot(unit: Unit, depot: Building) -> void:
 		Types.ResourceKind.ICE,
 		Types.ResourceKind.ORE,
 		Types.ResourceKind.PARTS,
-		Types.ResourceKind.FOOD,
 	]:
 		var taken := stock.remove(kind, carry.free_space(kind))
 		carry.add(kind, taken)
@@ -394,7 +393,7 @@ static func _apply_home_despawn(unit: Unit, sim: Sim, home: Building) -> void:
 		leftover.add(Types.ResourceKind.ICE, home.inventory.add(Types.ResourceKind.ICE, carry.ice))
 		leftover.add(Types.ResourceKind.ORE, home.inventory.add(Types.ResourceKind.ORE, carry.ore))
 		leftover.add(Types.ResourceKind.PARTS, home.inventory.add(Types.ResourceKind.PARTS, carry.parts))
-		leftover.add(Types.ResourceKind.FOOD, home.inventory.add(Types.ResourceKind.FOOD, carry.food))
+		leftover.add(Types.ResourceKind.FOOD, carry.food)
 		carry.scrap = 0
 		carry.ice = 0
 		carry.ore = 0
@@ -536,7 +535,6 @@ static func _can_loot_more(unit: Unit, depot: Building) -> bool:
 		Types.ResourceKind.ICE,
 		Types.ResourceKind.ORE,
 		Types.ResourceKind.PARTS,
-		Types.ResourceKind.FOOD,
 	]:
 		if _kind_amount(stock, kind) > 0 and carry.free_space(kind) > 0:
 			return true

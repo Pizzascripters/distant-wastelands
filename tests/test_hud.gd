@@ -27,8 +27,11 @@ func run() -> PackedStringArray:
 	for key in ["Scrap", "Ice", "Ore", "Parts", "Food"]:
 		if not carry.has(key):
 			fails.append("carry missing %s count" % key)
+	for key in ["Scrap", "Ice", "Ore", "Parts"]:
 		if not depot.has(key):
 			fails.append("depot missing %s count" % key)
+	if depot.has("Food"):
+		fails.append("depot row must not show Food")
 	if carry.get("Scrap", "") != "0" or depot.get("Scrap", "") != "—":
 		fails.append("empty snap carry/depot were %s / %s" % [str(carry), str(depot)])
 
@@ -61,11 +64,18 @@ func run() -> PackedStringArray:
 		fails.append("carry food was %s" % str(carry))
 	if depot.get("Ice", "") != "4" or depot.get("Parts", "") != "1":
 		fails.append("depot ice/parts were %s" % str(depot))
-	if depot.get("Food", "") != "2":
-		fails.append("depot food was %s" % str(depot))
-	var food_lab := _count_label(hud, "Depot", "Food")
+	if depot.has("Food"):
+		fails.append("depot row must not show Food after apply")
+	snap.units[0]["inventory"]["food"] = 4
+	hud.apply_snapshot(snap)
+	carry = _counts(hud, "Carry")
+	if carry.get("Food", "") != "4":
+		fails.append("carry food warn count was %s" % str(carry))
+	var food_lab := _count_label(hud, "Carry", "Food")
 	if food_lab == null or food_lab.get_theme_color("font_color") != Color("E24A3B"):
-		fails.append("depot food <= FOOD_WARN should use the low-food color")
+		fails.append("carry food <= FOOD_WARN should use the low-food color")
+	snap.units[0]["inventory"]["food"] = 24
+	hud.apply_snapshot(snap)
 	var ice_lab := _count_label(hud, "Depot", "Ice")
 	if ice_lab == null or ice_lab.get_theme_color("font_color") != Color("E24A3B"):
 		fails.append("depot ice <= 5 should use low-ice color")
