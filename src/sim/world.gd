@@ -56,6 +56,19 @@ func is_solid(x: int, y: int) -> bool:
 	return not is_walkable(x, y)
 
 
+func blocks_movement(x: int, y: int, unit: Unit) -> bool:
+	if not in_bounds(x, y):
+		return true
+	if tiles[index_of(x, y)] == Types.TileTerrain.ROCK:
+		return true
+	var building := building_at(x, y)
+	if building == null:
+		return false
+	if building.kind == Types.BuildingKind.GATE and unit != null and unit.kind == Types.UnitKind.PLAYER:
+		return false
+	return true
+
+
 func tile_center(x: int, y: int) -> Vector2:
 	return Vector2((x + 0.5) * Constants.TILE, (y + 0.5) * Constants.TILE)
 

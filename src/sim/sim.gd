@@ -312,7 +312,8 @@ func _apply_player_command(cmd: InputCommand) -> void:
 			player.aim,
 			Constants.PLAYER_PROJ_DAMAGE,
 			Constants.PLAYER_PROJ_SPEED,
-			Constants.PLAYER_PROJ_LIFE
+			Constants.PLAYER_PROJ_LIFE,
+			player
 		)
 		player.weapon_cooldown = Constants.PLAYER_FIRE_COOLDOWN
 
@@ -321,9 +322,9 @@ func _integrate_unit(unit: Unit) -> void:
 	var delta := unit.vel * Constants.SIM_DT
 	var pos := unit.pos
 	pos.x += delta.x
-	pos = _resolve_circle_tiles(pos, unit.radius)
+	pos = _resolve_circle_tiles(unit, pos, unit.radius)
 	pos.y += delta.y
-	pos = _resolve_circle_tiles(pos, unit.radius)
+	pos = _resolve_circle_tiles(unit, pos, unit.radius)
 	var r := unit.radius
 	var limit := float(Constants.MAP_W * Constants.TILE)
 	pos.x = clampf(pos.x, r, limit - r)
@@ -331,7 +332,7 @@ func _integrate_unit(unit: Unit) -> void:
 	unit.pos = pos
 
 
-func _resolve_circle_tiles(pos: Vector2, radius: float) -> Vector2:
+func _resolve_circle_tiles(unit: Unit, pos: Vector2, radius: float) -> Vector2:
 	var tile := float(Constants.TILE)
 	var min_tx := int(floor((pos.x - radius) / tile))
 	var max_tx := int(floor((pos.x + radius) / tile))
@@ -340,7 +341,7 @@ func _resolve_circle_tiles(pos: Vector2, radius: float) -> Vector2:
 	for _pass in 2:
 		for y in range(min_ty, max_ty + 1):
 			for x in range(min_tx, max_tx + 1):
-				if world.is_walkable(x, y):
+				if not world.blocks_movement(x, y, unit):
 					continue
 				pos = _push_circle_out_of_aabb(pos, radius, world.tile_aabb(x, y))
 	return pos
@@ -440,7 +441,8 @@ func _fire_enemy_rifles() -> void:
 			unit.aim,
 			Constants.RAIDER_PROJ_DAMAGE,
 			Constants.PLAYER_PROJ_SPEED,
-			Constants.PLAYER_PROJ_LIFE
+			Constants.PLAYER_PROJ_LIFE,
+			unit
 		)
 		if unit.kind == Types.UnitKind.GUARD:
 			unit.weapon_cooldown = Constants.GUARD_FIRE_COOLDOWN
@@ -497,7 +499,13 @@ func _nearest_opposing_unit(origin: Vector2, faction: int, max_range: float) -> 
 
 
 func _spawn_projectile(
-	faction: int, origin: Vector2, aim: Vector2, damage: int, speed: float, life: float
+	faction: int,
+	origin: Vector2,
+	aim: Vector2,
+	damage: int,
+	speed: float,
+	life: float,
+	shooter: Unit = null
 ) -> void:
 	var dir := aim
 	if dir.length_squared() <= 0.0001:
@@ -511,6 +519,8 @@ func _spawn_projectile(
 	proj.vel = dir * speed
 	proj.damage = damage
 	proj.life = life
+	if shooter != null:
+		proj.ignore_gate_id = Combat.overlapping_friendly_gate_id(world, shooter)
 	world.projectiles[proj.id] = proj
 
 

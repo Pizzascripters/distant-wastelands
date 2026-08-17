@@ -22,6 +22,7 @@ const TURRET_ENEMY := "res://assets/sprites/placeholder/turret_enemy.png"
 const WORKSHOP_PLAYER := "res://assets/sprites/placeholder/workshop_player.png"
 const LAB_PLAYER := "res://assets/sprites/placeholder/lab_player.png"
 const MEDBAY_PLAYER := "res://assets/sprites/placeholder/medbay_player.png"
+const GATE_PLAYER := "res://assets/sprites/placeholder/gate_player.png"
 const CROSS := Color("E24A3B")
 const CROSS_LEN := 6.0
 const CROSS_W := 2.0
@@ -119,6 +120,8 @@ func _draw() -> void:
 			_draw_workshop(fill, stripe)
 		Types.BuildingKind.MEDBAY:
 			_draw_medbay(fill, stripe)
+		Types.BuildingKind.GATE:
+			_draw_gate(fill, stripe)
 		_:
 			_draw_wall(fill, stripe)
 
@@ -142,6 +145,8 @@ func _ensure_texture() -> void:
 			path = LAB_PLAYER
 		Types.BuildingKind.MEDBAY:
 			path = MEDBAY_PLAYER
+		Types.BuildingKind.GATE:
+			path = GATE_PLAYER
 		_:
 			path = WALL_PLAYER if player else WALL_ENEMY
 	_tex = WorldView.load_png(path)
@@ -200,6 +205,18 @@ func _draw_medbay(fill: Color, stripe: Color) -> void:
 		CROSS_W,
 		true
 	)
+
+
+func _draw_gate(fill: Color, stripe: Color) -> void:
+	var left := Rect2(WALL_INSET, WALL_INSET, 8.0, WALL_SIZE)
+	var right := Rect2(22.0, WALL_INSET, 8.0, WALL_SIZE)
+	var lintel := Rect2(WALL_INSET, WALL_INSET, WALL_SIZE, 10.0)
+	draw_rect(left, fill, true)
+	draw_rect(right, fill, true)
+	draw_rect(lintel, fill, true)
+	draw_rect(Rect2(WALL_INSET, WALL_INSET, WALL_SIZE, STRIPE_H), stripe, true)
+	draw_rect(Rect2(WALL_INSET, WALL_INSET, WALL_SIZE, WALL_SIZE), OUTLINE, false, 1.0)
+	draw_arc(Vector2(16.0, 14.0), 6.0, PI, TAU, 10, OUTLINE, 1.0, true)
 
 
 func _draw_wall(fill: Color, stripe: Color) -> void:

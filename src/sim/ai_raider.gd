@@ -461,6 +461,8 @@ static func _is_smash_blocker(kind: int) -> bool:
 
 
 static func _nearest_player_wall_or_turret(world: World, unit: Unit) -> Building:
+	# Hauling smash set: nearest solid player building that is not Depot/Habitat
+	# (Wall, Turret, Gate, Workshop, Greenhouse, Lab, Medbay).
 	var best: Building = null
 	var best_d := INF
 	for raw in world.buildings.values():

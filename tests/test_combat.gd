@@ -14,6 +14,8 @@ func run() -> PackedStringArray:
 	_test_depot_death_spills_without_life_support(fails)
 	_test_two_arg_spill_rejects_ore(fails)
 	_test_four_arg_spill_holds_ore(fails)
+	_test_player_on_gate_shot_lives(fails)
+	_test_muzzle_in_friendly_wall_eaten(fails)
 	return fails
 
 
@@ -240,6 +242,76 @@ func _test_four_arg_spill_holds_ore(fails: PackedStringArray) -> void:
 		fails.append(
 			"four-arg spill ore/parts %d/%d, expected 6/2" % [pile.inventory.ore, pile.inventory.parts]
 		)
+
+
+func _test_player_on_gate_shot_lives(fails: PackedStringArray) -> void:
+	var world := World.new()
+	var tile := Vector2i(8, 8)
+	var gate := _place_building(world, Types.BuildingKind.GATE, Types.Faction.PLAYER, tile, Constants.GATE_HP)
+	var player := _make_unit(
+		world, Types.UnitKind.PLAYER, Types.Faction.PLAYER, world.tile_center(tile.x, tile.y), Constants.PLAYER_HP
+	)
+	var ignore := Combat.overlapping_friendly_gate_id(world, player)
+	if ignore != gate.id:
+		fails.append("centered player should ignore the overlapped Gate, got %d" % ignore)
+	var muzzle := player.pos + Vector2(Constants.MUZZLE_OFFSET, 0.0)
+	var proj := _make_proj(Types.Faction.PLAYER, muzzle, Constants.PLAYER_PROJ_DAMAGE)
+	proj.vel = Vector2(Constants.PLAYER_PROJ_SPEED, 0.0)
+	proj.ignore_gate_id = ignore
+	if Combat.integrate_projectile(world, proj):
+		fails.append("shot from a Gate into empty ground should live after first integrate")
+	if proj.ignore_gate_id != 0:
+		fails.append("ignore_gate_id should clear after the first integrate")
+	if gate.hp != Constants.GATE_HP:
+		fails.append("friendly Gate took damage from the first-integrate shot")
+	var linger := _make_proj(Types.Faction.PLAYER, muzzle, Constants.PLAYER_PROJ_DAMAGE)
+	linger.vel = Vector2(40.0, 0.0)
+	linger.ignore_gate_id = gate.id
+	if Combat.integrate_projectile(world, linger):
+		fails.append("first integrate should skip the overlapped friendly Gate")
+	var eat := _make_proj(Types.Faction.PLAYER, world.footprint_aabb(gate).get_center(), Constants.PLAYER_PROJ_DAMAGE)
+	if not Combat.resolve_projectile_hit(world, eat):
+		fails.append("projectile hitting a player Gate should be eaten")
+	if gate.hp != Constants.GATE_HP:
+		fails.append("friendly Gate should eat a shot with no damage")
+
+
+func _test_muzzle_in_friendly_wall_eaten(fails: PackedStringArray) -> void:
+	var world := World.new()
+	var gate_tile := Vector2i(8, 8)
+	var wall_tile := Vector2i(9, 8)
+	var gate := _place_building(world, Types.BuildingKind.GATE, Types.Faction.PLAYER, gate_tile, Constants.GATE_HP)
+	var wall := _place_building(world, Types.BuildingKind.WALL, Types.Faction.PLAYER, wall_tile, Constants.WALL_HP)
+	var player_pos := Vector2(float(wall_tile.x * Constants.TILE) - Constants.MUZZLE_OFFSET, world.tile_center(gate_tile.x, gate_tile.y).y)
+	var player := _make_unit(world, Types.UnitKind.PLAYER, Types.Faction.PLAYER, player_pos, Constants.PLAYER_HP)
+	var ignore := Combat.overlapping_friendly_gate_id(world, player)
+	if ignore != gate.id:
+		fails.append("offset player should still overlap the Gate, ignore=%d" % ignore)
+	var muzzle := player.pos + Vector2(Constants.MUZZLE_OFFSET, 0.0)
+	if world.world_to_tile(muzzle) != wall_tile:
+		fails.append("muzzle should sit in the Wall tile, got %s" % world.world_to_tile(muzzle))
+	var proj := _make_proj(Types.Faction.PLAYER, muzzle, Constants.PLAYER_PROJ_DAMAGE)
+	proj.vel = Vector2(Constants.PLAYER_PROJ_SPEED, 0.0)
+	proj.ignore_gate_id = ignore
+	if not Combat.integrate_projectile(world, proj):
+		fails.append("shot whose muzzle is in a friendly Wall should be eaten on first integrate")
+	if wall.hp != Constants.WALL_HP:
+		fails.append("friendly Wall should eat the shot with no damage")
+	if gate.hp != Constants.GATE_HP:
+		fails.append("friendly Gate should not take the muzzle-in-wall shot")
+
+
+func _place_building(world: World, kind: int, faction: int, tile: Vector2i, hp: int) -> Building:
+	var building := Building.new()
+	building.id = world.alloc_id()
+	building.kind = kind
+	building.faction = faction
+	building.origin_tile = tile
+	building.hp = hp
+	building.hp_max = hp
+	world.buildings[building.id] = building
+	world.occupy(building)
+	return building
 
 
 func _make_unit(world: World, kind: int, faction: int, pos: Vector2, hp: int) -> Unit:

@@ -50,7 +50,28 @@ static func resolve_projectile_hit(world: World, proj: Projectile) -> bool:
 
 static func integrate_projectile(world: World, proj: Projectile) -> bool:
 	proj.pos += proj.vel * Constants.SIM_DT
-	return resolve_projectile_hit(world, proj)
+	var hit := resolve_projectile_hit(world, proj)
+	proj.ignore_gate_id = 0
+	return hit
+
+
+static func overlapping_friendly_gate_id(world: World, unit: Unit) -> int:
+	if world == null or unit == null or not unit.alive:
+		return 0
+	var best_id := 0
+	for raw in world.buildings.values():
+		var building := raw as Building
+		if building == null or building.hp <= 0:
+			continue
+		if building.kind != Types.BuildingKind.GATE:
+			continue
+		if building.faction != unit.faction:
+			continue
+		if world.point_aabb_distance(unit.pos, world.footprint_aabb(building)) > unit.radius:
+			continue
+		if best_id == 0 or building.id < best_id:
+			best_id = building.id
+	return best_id
 
 
 static func apply_melee(attacker: Unit, target: Object) -> bool:
@@ -277,6 +298,10 @@ static func _lowest_index_solid_tile(world: World, proj: Projectile) -> Vector2i
 		for x in range(min_tx, max_tx + 1):
 			if not world.in_bounds(x, y) or world.is_walkable(x, y):
 				continue
+			if proj.ignore_gate_id > 0:
+				var bid: int = world.occupancy[world.index_of(x, y)]
+				if bid == proj.ignore_gate_id:
+					continue
 			if not _circle_aabb_overlaps(proj.pos, radius, world.tile_aabb(x, y)):
 				continue
 			var index := y * Constants.MAP_W + x
