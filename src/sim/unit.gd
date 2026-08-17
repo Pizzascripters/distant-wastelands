@@ -9,6 +9,7 @@ var weapon_cooldown: float = 0.0
 var alive: bool = true
 var respawn_timer: float = 0.0
 var o2: float = Constants.PLAYER_O2_MAX
+var fire_target_id: int = 0
 var ai_state: int = Types.RaiderState.SPAWNED
 var ai_state_time: float = 0.0
 var path: Array[Vector2i] = []

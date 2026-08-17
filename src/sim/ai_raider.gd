@@ -1,7 +1,7 @@
 class_name AiRaider
 extends RefCounted
 
-## Raider state machine. Writes vel / melee / siege_target_id intents.
+## Raider state machine. Writes vel / melee / fire / siege_target_id intents.
 ## LOOT transfers, home-depot despawn, and DEAD_DROP apply here.
 
 const MELEE_TARGET_META := &"melee_target_id"
@@ -50,13 +50,19 @@ static func think(unit: Unit, sim: Sim) -> void:
 			return
 		if unit.ai_state == before:
 			unit.ai_state_time += Constants.SIM_DT
+			_write_ranged_intent(unit, sim)
 			return
 	unit.ai_state_time += Constants.SIM_DT
+	_write_ranged_intent(unit, sim)
 
 
 static func is_hauling(unit: Unit) -> bool:
 	var inv := unit.inventory
 	return inv != null and (inv.scrap > 0 or inv.ice > 0 or inv.ore > 0 or inv.parts > 0)
+
+
+static func _write_ranged_intent(unit: Unit, sim: Sim) -> void:
+	Combat.write_fire_intent(sim.world, unit, _living_player(sim))
 
 
 static func _think_path_to_depot(unit: Unit, sim: Sim) -> void:

@@ -13,6 +13,7 @@ func run() -> PackedStringArray:
 	_test_hauling_leaves_siege_for_home(fails)
 	_test_missing_home_dead_drops(fails)
 	_test_skipped_spawn_advances_clock(fails)
+	_test_siege_rifle_damages_from_range(fails)
 	return fails
 
 
@@ -192,6 +193,29 @@ func _test_skipped_spawn_advances_clock(fails: PackedStringArray) -> void:
 		)
 
 
+func _test_siege_rifle_damages_from_range(fails: PackedStringArray) -> void:
+	var sim := _ready_sim()
+	_banish_player(sim)
+	var wall_tile := Vector2i(20, 30)
+	for x in range(20, 30):
+		sim.world.set_terrain(x, 30, Types.TileTerrain.EMPTY)
+	var wall := _place_wall(sim, wall_tile)
+	var aabb := sim.world.footprint_aabb(wall)
+	var raider := _inject_raider(sim, Vector2(aabb.end.x + 200.0, aabb.get_center().y))
+	raider.ai_state = Types.RaiderState.SIEGE
+	var hp0 := wall.hp
+	_tick(sim, 1)
+	if _enemy_proj_count(sim) < 1:
+		fails.append("siege raider should fire at a wall inside ENEMY_RIFLE_RANGE on the first tick")
+	_tick(sim, 14)
+	if raider.ai_state != Types.RaiderState.SIEGE:
+		fails.append("ranged siege left SIEGE, got %d" % raider.ai_state)
+	if wall.hp >= hp0:
+		fails.append("siege rifle did not damage a wall inside ENEMY_RIFLE_RANGE")
+	if hp0 - wall.hp >= Constants.RAIDER_MELEE_BUILDING:
+		fails.append("siege wall lost %d hp, expected rifle damage" % (hp0 - wall.hp))
+
+
 func _ready_sim() -> Sim:
 	var sim := Sim.new()
 	sim.setup(Constants.DEFAULT_SEED)
@@ -314,3 +338,11 @@ func _loot_at(world: World, pos: Vector2) -> Loot:
 		if pile.pos.is_equal_approx(pos):
 			return pile
 	return null
+
+
+func _enemy_proj_count(sim: Sim) -> int:
+	var n := 0
+	for proj in sim.world.projectiles.values():
+		if proj.faction == Types.Faction.ENEMY:
+			n += 1
+	return n

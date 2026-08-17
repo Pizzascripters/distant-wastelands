@@ -7,6 +7,8 @@ func run() -> PackedStringArray:
 	_test_projectile_skips_same_faction(fails)
 	_test_projectile_hits_lowest_id(fails)
 	_test_projectile_hits_adjacent_tile_halo(fails)
+	_test_enemy_projectile_friendly_fire_off(fails)
+	_test_enemy_projectile_hits_player_building(fails)
 	_test_melee_respects_cooldown(fails)
 	_test_death_at_zero(fails)
 	_test_depot_death_spills_without_life_support(fails)
@@ -69,6 +71,56 @@ func _test_projectile_hits_adjacent_tile_halo(fails: PackedStringArray) -> void:
 	var expected := Constants.RAIDER_HP - Constants.PLAYER_PROJ_DAMAGE
 	if raider.hp != expected:
 		fails.append("adjacent-tile unit hp is %d, expected %d" % [raider.hp, expected])
+
+
+func _test_enemy_projectile_friendly_fire_off(fails: PackedStringArray) -> void:
+	var world := World.new()
+	var pos := Vector2(100, 100)
+	var raider := _make_unit(world, Types.UnitKind.RAIDER, Types.Faction.ENEMY, pos, Constants.RAIDER_HP)
+	var player := _make_unit(world, Types.UnitKind.PLAYER, Types.Faction.PLAYER, pos, Constants.PLAYER_HP)
+	Combat.bucket_units(world)
+	var ally_shot := _make_proj(Types.Faction.ENEMY, pos, Constants.RAIDER_PROJ_DAMAGE)
+	Combat.resolve_projectile_hit(world, ally_shot)
+	if raider.hp != Constants.RAIDER_HP:
+		fails.append("enemy projectile damaged a same-faction unit")
+	if player.hp != Constants.PLAYER_HP - Constants.RAIDER_PROJ_DAMAGE:
+		fails.append(
+			"enemy projectile player hp is %d, expected %d"
+			% [player.hp, Constants.PLAYER_HP - Constants.RAIDER_PROJ_DAMAGE]
+		)
+
+
+func _test_enemy_projectile_hits_player_building(fails: PackedStringArray) -> void:
+	var world := World.new()
+	var wall := Building.new()
+	wall.id = world.alloc_id()
+	wall.kind = Types.BuildingKind.WALL
+	wall.faction = Types.Faction.PLAYER
+	wall.origin_tile = Vector2i(3, 3)
+	wall.hp = Constants.WALL_HP
+	wall.hp_max = Constants.WALL_HP
+	world.buildings[wall.id] = wall
+	world.occupy(wall)
+	var center := world.footprint_aabb(wall).get_center()
+	var shot := _make_proj(Types.Faction.ENEMY, center, Constants.RAIDER_PROJ_DAMAGE)
+	if not Combat.resolve_projectile_hit(world, shot):
+		fails.append("enemy projectile should hit a player wall")
+	if wall.hp != Constants.WALL_HP - Constants.RAIDER_PROJ_DAMAGE:
+		fails.append("player wall hp is %d after enemy projectile" % wall.hp)
+	var enemy_wall := Building.new()
+	enemy_wall.id = world.alloc_id()
+	enemy_wall.kind = Types.BuildingKind.WALL
+	enemy_wall.faction = Types.Faction.ENEMY
+	enemy_wall.origin_tile = Vector2i(6, 3)
+	enemy_wall.hp = Constants.WALL_HP
+	enemy_wall.hp_max = Constants.WALL_HP
+	world.buildings[enemy_wall.id] = enemy_wall
+	world.occupy(enemy_wall)
+	var eat := _make_proj(Types.Faction.ENEMY, world.footprint_aabb(enemy_wall).get_center(), Constants.RAIDER_PROJ_DAMAGE)
+	if not Combat.resolve_projectile_hit(world, eat):
+		fails.append("enemy projectile hitting an enemy wall should be eaten")
+	if enemy_wall.hp != Constants.WALL_HP:
+		fails.append("enemy projectile damaged a same-faction building")
 
 
 func _test_melee_respects_cooldown(fails: PackedStringArray) -> void:
