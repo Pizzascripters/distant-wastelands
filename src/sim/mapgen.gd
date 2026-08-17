@@ -213,7 +213,14 @@ static func _place_deposits(world: World, rng: RandomNumberGenerator) -> void:
 	var ice_n := _place_deposits_of_kind(
 		world, rng, Types.ResourceKind.ICE, Constants.ICE_DEPOSIT_COUNT, Constants.ICE_DEPOSIT_AMOUNT
 	)
-	if scrap_n >= Constants.MIN_SCRAP_DEPOSITS and ice_n >= Constants.MIN_ICE_DEPOSITS:
+	var ore_n := _place_deposits_of_kind(
+		world, rng, Types.ResourceKind.ORE, Constants.ORE_DEPOSIT_COUNT, Constants.ORE_DEPOSIT_AMOUNT
+	)
+	if (
+		scrap_n >= Constants.MIN_SCRAP_DEPOSITS
+		and ice_n >= Constants.MIN_ICE_DEPOSITS
+		and ore_n >= Constants.MIN_ORE_DEPOSITS
+	):
 		return
 	_clear_random_non_reserved_rocks(world, rng)
 	if scrap_n < Constants.MIN_SCRAP_DEPOSITS:
@@ -232,10 +239,29 @@ static func _place_deposits(world: World, rng: RandomNumberGenerator) -> void:
 			Constants.ICE_DEPOSIT_COUNT - ice_n,
 			Constants.ICE_DEPOSIT_AMOUNT
 		)
-	var ok := scrap_n >= Constants.MIN_SCRAP_DEPOSITS and ice_n >= Constants.MIN_ICE_DEPOSITS
+	if ore_n < Constants.MIN_ORE_DEPOSITS:
+		ore_n += _place_deposits_of_kind(
+			world,
+			rng,
+			Types.ResourceKind.ORE,
+			Constants.ORE_DEPOSIT_COUNT - ore_n,
+			Constants.ORE_DEPOSIT_AMOUNT
+		)
+	var ok := (
+		scrap_n >= Constants.MIN_SCRAP_DEPOSITS
+		and ice_n >= Constants.MIN_ICE_DEPOSITS
+		and ore_n >= Constants.MIN_ORE_DEPOSITS
+	)
 	if not ok:
-		push_error("mapgen deposit minima failed seed=%d scrap=%d ice=%d" % [world.seed, scrap_n, ice_n])
-	assert(ok, "mapgen deposit minima failed seed=%d scrap=%d ice=%d" % [world.seed, scrap_n, ice_n])
+		push_error(
+			"mapgen deposit minima failed seed=%d scrap=%d ice=%d ore=%d"
+			% [world.seed, scrap_n, ice_n, ore_n]
+		)
+	assert(
+		ok,
+		"mapgen deposit minima failed seed=%d scrap=%d ice=%d ore=%d"
+		% [world.seed, scrap_n, ice_n, ore_n]
+	)
 
 
 static func _place_deposits_of_kind(

@@ -7,13 +7,17 @@ const ROCK_FILL := Color("3A241C")
 const ROCK_OUTLINE := Color("1A100C")
 const SCRAP_FILL := Color("C45C26")
 const ICE_FILL := Color("A8D8EA")
+const ORE_FILL := Color("5A6A78")
 const SCRAP_W := 20.0
 const SCRAP_H := 16.0
 const ICE_SIZE := 18.0
+const ORE_W := 18.0
+const ORE_H := 16.0
 const GROUND_PATH := "res://assets/sprites/tiles/ground.png"
 const ROCK_PATH := "res://assets/sprites/tiles/rock.png"
 const SCRAP_PATH := "res://assets/sprites/placeholder/scrap.png"
 const ICE_PATH := "res://assets/sprites/placeholder/ice.png"
+const ORE_PATH := "res://assets/sprites/placeholder/ore.png"
 
 var _tiles: PackedByteArray = PackedByteArray()
 var _deposits: Array[Dictionary] = []
@@ -21,6 +25,7 @@ var _ground_tex: Texture2D
 var _rock_tex: Texture2D
 var _scrap_tex: Texture2D
 var _ice_tex: Texture2D
+var _ore_tex: Texture2D
 var _textures_ready: bool = false
 var _terrain_tex: ImageTexture
 var _overlay_redraws: int = 0
@@ -84,6 +89,7 @@ func _ensure_textures() -> void:
 	_rock_tex = load_png(ROCK_PATH)
 	_scrap_tex = load_png(SCRAP_PATH)
 	_ice_tex = load_png(ICE_PATH)
+	_ore_tex = load_png(ORE_PATH)
 	_textures_ready = true
 
 
@@ -159,8 +165,11 @@ func _draw_deposits() -> void:
 		if int(rec.get("remaining", 0)) <= 0:
 			continue
 		var center: Vector2 = rec.get("pos", Vector2.ZERO)
-		if rec.get("kind", Types.ResourceKind.SCRAP) == Types.ResourceKind.ICE:
+		var kind: int = rec.get("kind", Types.ResourceKind.SCRAP)
+		if kind == Types.ResourceKind.ICE:
 			_draw_ice(center)
+		elif kind == Types.ResourceKind.ORE:
+			_draw_ore(center)
 		else:
 			_draw_scrap(center)
 
@@ -196,4 +205,23 @@ func _draw_ice(center: Vector2) -> void:
 			Vector2(center.x - h, center.y),
 		]),
 		ICE_FILL
+	)
+
+
+func _draw_ore(center: Vector2) -> void:
+	if _ore_tex != null:
+		var sz := Vector2(_ore_tex.get_width(), _ore_tex.get_height())
+		draw_texture(_ore_tex, center - sz * 0.5)
+		return
+	var hw := ORE_W * 0.5
+	var hh := ORE_H * 0.5
+	var top := hw * 0.55
+	draw_colored_polygon(
+		PackedVector2Array([
+			Vector2(center.x - top, center.y - hh),
+			Vector2(center.x + top, center.y - hh),
+			Vector2(center.x + hw, center.y + hh),
+			Vector2(center.x - hw, center.y + hh),
+		]),
+		ORE_FILL
 	)
