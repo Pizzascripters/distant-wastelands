@@ -2,13 +2,6 @@
 
 [ext_resource type="Script" uid="uid://g8dl2dizrudzd" path="res://src/ui/hud.gd" id="1_hud"]
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
-content_margin_left = 12.0
-content_margin_top = 10.0
-content_margin_right = 12.0
-content_margin_bottom = 10.0
-bg_color = Color(0, 0, 0, 0.65)
-
 [node name="Hud" type="Control"]
 layout_mode = 3
 anchors_preset = 15
@@ -18,70 +11,3 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 script = ExtResource("1_hud")
-
-[node name="Panel" type="PanelContainer" parent="."]
-layout_mode = 1
-offset_left = 12.0
-offset_top = 12.0
-mouse_filter = 2
-theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
-
-[node name="VBox" type="VBoxContainer" parent="Panel"]
-layout_mode = 2
-theme_override_constants/separation = 2
-
-[node name="CarryScrap" type="Label" parent="Panel/VBox"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.94902, 0.929412, 0.901961, 1)
-theme_override_font_sizes/font_size = 16
-text = "Carry scrap  0"
-
-[node name="CarryIce" type="Label" parent="Panel/VBox"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.94902, 0.929412, 0.901961, 1)
-theme_override_font_sizes/font_size = 16
-text = "Carry ice  0"
-
-[node name="DepotScrap" type="Label" parent="Panel/VBox"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.94902, 0.929412, 0.901961, 1)
-theme_override_font_sizes/font_size = 16
-text = "Depot scrap  —"
-
-[node name="DepotIce" type="Label" parent="Panel/VBox"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.94902, 0.929412, 0.901961, 1)
-theme_override_font_sizes/font_size = 16
-text = "Depot ice  —"
-
-[node name="HabitatHp" type="Label" parent="Panel/VBox"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.94902, 0.929412, 0.901961, 1)
-theme_override_font_sizes/font_size = 16
-text = "Habitat HP  0"
-
-[node name="DepotHp" type="Label" parent="Panel/VBox"]
-layout_mode = 2
-theme_override_colors/font_color = Color(0.94902, 0.929412, 0.901961, 1)
-theme_override_font_sizes/font_size = 16
-text = "Depot HP  0"
-
-[node name="IceCountdown" type="Label" parent="Panel/VBox"]
-visible = false
-layout_mode = 2
-theme_override_colors/font_color = Color(0.94902, 0.929412, 0.901961, 1)
-theme_override_font_sizes/font_size = 16
-
-[node name="RaidBanner" type="Label" parent="."]
-visible = false
-layout_mode = 1
-anchors_preset = 10
-anchor_right = 1.0
-offset_top = 8.0
-offset_bottom = 32.0
-grow_horizontal = 2
-mouse_filter = 2
-theme_override_colors/font_color = Color(0.94902, 0.929412, 0.901961, 1)
-theme_override_font_sizes/font_size = 16
-text = "Raid incoming"
-horizontal_alignment = 1
