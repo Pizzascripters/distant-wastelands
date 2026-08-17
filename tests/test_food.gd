@@ -9,7 +9,13 @@ func run() -> PackedStringArray:
 	_test_farm_death_does_not_spill(fails)
 	_test_farm_not_depot(fails)
 	_test_eats_one_per_period(fails)
-	_test_missed_meal_loses(fails)
+	_test_missed_meal_latches(fails)
+	_test_pulse_only_while_starving(fails)
+	_test_harvest_clears_latch(fails)
+	_test_loot_clears_latch(fails)
+	_test_respawn_grace(fails)
+	_test_lethal_hunger_respawns(fails)
+	_test_same_tick_hunger_and_o2_is_suffocation(fails)
 	_test_depot_dump_leaves_carry_food(fails)
 	return fails
 
@@ -131,31 +137,165 @@ func _test_eats_one_per_period(fails: PackedStringArray) -> void:
 	_tick(sim, 1)
 	if player.inventory.food != start - 1:
 		fails.append("player food after 15s is %d, expected %d" % [player.inventory.food, start - 1])
-	if sim.hunger_failed or sim.outcome != Types.Outcome.NONE:
-		fails.append("eating a meal should not lose")
+	if sim.hunger_starving or sim.outcome != Types.Outcome.NONE:
+		fails.append("eating a meal should not starve or lose")
 
 
-func _test_missed_meal_loses(fails: PackedStringArray) -> void:
+func _test_missed_meal_latches(fails: PackedStringArray) -> void:
 	var sim := _quiet()
 	var player := sim.get_player()
 	if player == null:
-		fails.append("hunger lose missing player")
+		fails.append("hunger latch missing player")
 		return
 	player.inventory.remove(Types.ResourceKind.FOOD, player.inventory.food)
 	_tick(sim, _ticks_for(Constants.FOOD_EAT_PERIOD))
-	if not sim.hunger_failed:
-		fails.append("missed meal should set hunger_failed")
-	if sim.outcome != Types.Outcome.PLAYER_LOSE or sim.outcome_reason != Types.OutcomeReason.HUNGER:
+	if not sim.hunger_starving:
+		fails.append("missed meal should set hunger_starving")
+	if sim.outcome != Types.Outcome.NONE:
+		fails.append("missed meal outcome is %d/%d, expected NONE" % [sim.outcome, sim.outcome_reason])
+
+
+func _test_pulse_only_while_starving(fails: PackedStringArray) -> void:
+	var sim := _quiet()
+	var player := sim.get_player()
+	player.pos = _far_from_habitat()
+	player.inventory.remove(Types.ResourceKind.FOOD, player.inventory.food)
+	player.hp = Constants.PLAYER_HP
+	sim.hunger_starving = true
+	sim.tick_index = Constants.PLAYER_HUNGER_PULSE_TICKS - 1
+	sim.tick()
+	var after_pulse := Constants.PLAYER_HP - Constants.PLAYER_HUNGER_HP_PER_PULSE
+	if player.hp != after_pulse:
+		fails.append("hunger pulse hp is %d, expected %d" % [player.hp, after_pulse])
+	if sim.outcome != Types.Outcome.NONE:
+		fails.append("hunger pulse locked outcome %d/%d" % [sim.outcome, sim.outcome_reason])
+	sim.tick()
+	if player.hp != after_pulse:
+		fails.append("non-pulse tick changed hp to %d" % player.hp)
+	player.inventory.add(Types.ResourceKind.FOOD, 1)
+	sim.tick_index = Constants.PLAYER_HUNGER_PULSE_TICKS * 2 - 1
+	sim.tick()
+	if sim.hunger_starving:
+		fails.append("carry food should clear hunger_starving")
+	if player.hp != after_pulse:
+		fails.append("pulse ran after latch cleared, hp=%d" % player.hp)
+
+
+func _test_harvest_clears_latch(fails: PackedStringArray) -> void:
+	var sim := _quiet()
+	var player := sim.get_player()
+	var farm := _place_farm(sim)
+	if player == null or farm == null:
+		fails.append("harvest latch missing player or farm")
+		return
+	player.inventory.remove(Types.ResourceKind.FOOD, player.inventory.food)
+	farm.food_stock = 12
+	sim.hunger_starving = true
+	player.hp = Constants.PLAYER_HP
+	_stand_beside(player, sim.world, farm)
+	_hold_interact(sim, 4)
+	if player.inventory.food < 1:
+		fails.append("harvest did not add food")
+		return
+	if sim.hunger_starving:
+		fails.append("harvest that adds food should clear hunger_starving")
+	var hp_before := player.hp
+	sim.tick_index = Constants.PLAYER_HUNGER_PULSE_TICKS - 1
+	sim.tick()
+	if player.hp != hp_before:
+		fails.append("pulse after harvest latch-clear changed hp to %d" % player.hp)
+
+
+func _test_loot_clears_latch(fails: PackedStringArray) -> void:
+	var sim := _quiet()
+	var player := sim.get_player()
+	if player == null:
+		fails.append("loot latch missing player")
+		return
+	player.inventory.remove(Types.ResourceKind.FOOD, player.inventory.food)
+	sim.hunger_starving = true
+	var pile := Loot.new()
+	pile.id = sim.world.alloc_id()
+	pile.pos = player.pos
+	pile.inventory.add(Types.ResourceKind.FOOD, 3)
+	sim.world.loot[pile.id] = pile
+	_hold_interact(sim, int(round(Constants.LOOT_CHANNEL / Constants.SIM_DT)))
+	if player.inventory.food < 1:
+		fails.append("loot did not add food")
+		return
+	if sim.hunger_starving:
+		fails.append("loot that adds food should clear hunger_starving")
+
+
+func _test_respawn_grace(fails: PackedStringArray) -> void:
+	var sim := _quiet()
+	var player := sim.get_player()
+	player.pos = _far_from_habitat()
+	player.inventory.remove(Types.ResourceKind.FOOD, player.inventory.food)
+	sim.hunger_starving = true
+	player.hp = 1
+	sim.tick_index = Constants.PLAYER_HUNGER_PULSE_TICKS - 1
+	sim.tick()
+	if player.alive:
+		fails.append("lethal hunger pulse should kill")
+		return
+	player.respawn_timer = Constants.SIM_DT
+	sim.tick()
+	if not player.alive:
+		fails.append("hunger death should respawn")
+		return
+	if sim.hunger_starving:
+		fails.append("respawn should clear hunger_starving")
+	if player.food_debt_timer != 0.0:
+		fails.append("respawn food_debt_timer is %s" % str(player.food_debt_timer))
+	var hp := player.hp
+	_tick(sim, _ticks_for(Constants.FOOD_EAT_PERIOD) - 1)
+	if player.hp != hp:
+		fails.append("hunger pulsed during 15s respawn grace, hp=%d" % player.hp)
+	if sim.hunger_starving:
+		fails.append("latch re-set before the next meal")
+
+
+func _test_lethal_hunger_respawns(fails: PackedStringArray) -> void:
+	var sim := _quiet()
+	var player := sim.get_player()
+	player.pos = _far_from_habitat()
+	player.o2 = 30.0
+	player.inventory.remove(Types.ResourceKind.FOOD, player.inventory.food)
+	sim.hunger_starving = true
+	player.hp = 1
+	sim.tick_index = Constants.PLAYER_HUNGER_PULSE_TICKS - 1
+	sim.tick()
+	if player.alive or player.hp > 0:
+		fails.append("lethal hunger should be combat death (alive=%s hp=%d)" % [str(player.alive), player.hp])
+	if sim.outcome != Types.Outcome.NONE:
+		fails.append("lethal hunger locked outcome %d/%d" % [sim.outcome, sim.outcome_reason])
+	player.respawn_timer = Constants.SIM_DT
+	sim.tick()
+	if not player.alive:
+		fails.append("hunger death should respawn")
+		return
+	if not is_equal_approx(player.o2, Constants.PLAYER_O2_MAX):
+		fails.append("hunger respawn o2 is %s, expected max" % str(player.o2))
+
+
+func _test_same_tick_hunger_and_o2_is_suffocation(fails: PackedStringArray) -> void:
+	var sim := _quiet()
+	var player := sim.get_player()
+	player.pos = _far_from_habitat()
+	player.o2 = 0.0
+	player.inventory.remove(Types.ResourceKind.FOOD, player.inventory.food)
+	sim.hunger_starving = true
+	player.hp = 1
+	sim.tick_index = Constants.PLAYER_HUNGER_PULSE_TICKS - 1
+	sim.tick()
+	if not sim.oxygen_failed:
+		fails.append("same-tick hunger + o2 == 0 should set oxygen_failed")
+	if sim.outcome != Types.Outcome.PLAYER_LOSE or sim.outcome_reason != Types.OutcomeReason.SUFFOCATION:
 		fails.append(
-			"missed meal outcome is %d/%d"
+			"same-tick hunger + o2 == 0 outcome is %d/%d"
 			% [sim.outcome, sim.outcome_reason]
 		)
-	var alive := player.alive
-	_tick(sim, _ticks_for(Constants.PLAYER_RESPAWN) + 2)
-	if sim.outcome != Types.Outcome.PLAYER_LOSE:
-		fails.append("hunger lose should stay locked")
-	if player.alive != alive and player.alive:
-		fails.append("hunger lose should not respawn")
 
 
 func _test_depot_dump_leaves_carry_food(fails: PackedStringArray) -> void:
@@ -239,3 +379,7 @@ func _tick(sim: Sim, ticks: int) -> void:
 
 func _ticks_for(seconds: float) -> int:
 	return int(round(seconds / Constants.SIM_DT))
+
+
+func _far_from_habitat() -> Vector2:
+	return Vector2(20.5 * Constants.TILE, 20.5 * Constants.TILE)

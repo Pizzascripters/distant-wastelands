@@ -17,11 +17,14 @@ func run() -> PackedStringArray:
 	_test_gather(fails)
 	_test_steal(fails)
 	_test_ice_pull_decrements_depot(fails)
-	_test_zero_ice_starve_loses_at_600(fails)
-	_test_destroying_depot_stops_starve_clock(fails)
+	_test_zero_ice_does_not_lose(fails)
+	_test_destroying_depot_is_not_a_lose(fails)
 	_test_missing_depot_never_starts_timer(fails)
-	_test_enemy_habitat_zero_wins(fails)
-	_test_same_tick_both_habitats_dead_player_loses(fails)
+	_test_enemy_habitat_zero_is_not_win(fails)
+	_test_habitat_smash_is_not_a_lose(fails)
+	_test_oxygen_failed_is_suffocation(fails)
+	_test_same_tick_oxygen_and_habitat_death_is_suffocation(fails)
+	_test_same_tick_hunger_lethal_and_o2_is_suffocation(fails)
 	_test_place_workshop_and_lab(fails)
 	_test_lab_occupies_2x2(fails)
 	_test_workshop_closer_wins_when_craftable(fails)
@@ -31,7 +34,7 @@ func run() -> PackedStringArray:
 	_test_player_slides_onto_gate_raider_blocked(fails)
 	_test_place_farm_after_hydroponics(fails)
 	_test_farm_harvest_transfer(fails)
-	_test_hunger_lose(fails)
+	_test_hunger_is_not_a_lose(fails)
 	_test_depot_skips_food(fails)
 	return fails
 
@@ -323,7 +326,7 @@ func _test_ice_pull_decrements_depot(fails: PackedStringArray) -> void:
 		fails.append("ice pull left depot ice %d, expected %d" % [depot.inventory.ice, before - 1])
 
 
-func _test_zero_ice_starve_loses_at_600(fails: PackedStringArray) -> void:
+func _test_zero_ice_does_not_lose(fails: PackedStringArray) -> void:
 	var sim := Sim.new()
 	sim.setup(Constants.DEFAULT_SEED)
 	var depot := _player_depot(sim.world)
@@ -332,23 +335,18 @@ func _test_zero_ice_starve_loses_at_600(fails: PackedStringArray) -> void:
 		return
 	_empty_ice(depot)
 	var limit_ticks := _ticks_for(Constants.ZERO_ICE_LIMIT)
-	_tick_idle(sim, limit_ticks - 1)
+	_tick_idle(sim, limit_ticks)
 	if sim.outcome != Types.Outcome.NONE:
-		fails.append("starve outcome locked at tick %d, expected NONE" % sim.tick_index)
-	var rec: Variant = sim.life.get(Types.Faction.PLAYER)
-	if rec == null or rec.zero_ice_timer < Constants.ZERO_ICE_LIMIT - Constants.SIM_DT - 0.0001:
-		fails.append("zero_ice_timer before limit tick is %s" % str(rec.zero_ice_timer if rec else rec))
-	_tick_idle(sim, 1)
-	if sim.outcome != Types.Outcome.PLAYER_LOSE or sim.outcome_reason != Types.OutcomeReason.LIFE_SUPPORT:
 		fails.append(
-			"600 zero-ice ticks gave %d/%d, expected PLAYER_LOSE/LIFE_SUPPORT"
+			"zero ice locked outcome %d/%d, expected NONE"
 			% [sim.outcome, sim.outcome_reason]
 		)
+	var rec: Variant = sim.life.get(Types.Faction.PLAYER)
 	if rec == null or rec.zero_ice_timer < Constants.ZERO_ICE_LIMIT:
 		fails.append("zero_ice_timer after 600 ticks is %s" % str(rec.zero_ice_timer if rec else rec))
 
 
-func _test_destroying_depot_stops_starve_clock(fails: PackedStringArray) -> void:
+func _test_destroying_depot_is_not_a_lose(fails: PackedStringArray) -> void:
 	var sim := Sim.new()
 	sim.setup(Constants.DEFAULT_SEED)
 	var depot := _player_depot(sim.world)
@@ -369,8 +367,8 @@ func _test_destroying_depot_stops_starve_clock(fails: PackedStringArray) -> void
 	_tick_idle(sim, _ticks_for(Constants.ZERO_ICE_LIMIT))
 	if not is_equal_approx(rec.zero_ice_timer, frozen):
 		fails.append("zero_ice_timer grew after depot death (%s -> %s)" % [str(frozen), str(rec.zero_ice_timer)])
-	if sim.outcome == Types.Outcome.PLAYER_LOSE and sim.outcome_reason == Types.OutcomeReason.LIFE_SUPPORT:
-		fails.append("destroying the depot set LIFE_SUPPORT")
+	if sim.outcome != Types.Outcome.NONE:
+		fails.append("destroying the depot set outcome %d/%d" % [sim.outcome, sim.outcome_reason])
 
 
 func _test_missing_depot_never_starts_timer(fails: PackedStringArray) -> void:
@@ -385,11 +383,11 @@ func _test_missing_depot_never_starts_timer(fails: PackedStringArray) -> void:
 	var rec: Variant = sim.life.get(Types.Faction.PLAYER)
 	if rec != null and rec.zero_ice_timer != 0.0:
 		fails.append("missing depot from t=0 set zero_ice_timer to %s" % str(rec.zero_ice_timer))
-	if sim.outcome == Types.Outcome.PLAYER_LOSE and sim.outcome_reason == Types.OutcomeReason.LIFE_SUPPORT:
-		fails.append("missing depot from t=0 set LIFE_SUPPORT")
+	if sim.outcome != Types.Outcome.NONE:
+		fails.append("missing depot from t=0 set outcome %d/%d" % [sim.outcome, sim.outcome_reason])
 
 
-func _test_enemy_habitat_zero_wins(fails: PackedStringArray) -> void:
+func _test_enemy_habitat_zero_is_not_win(fails: PackedStringArray) -> void:
 	var sim := Sim.new()
 	sim.setup(Constants.DEFAULT_SEED)
 	var habitat := _faction_building(sim.world, Types.Faction.ENEMY, Types.BuildingKind.HABITAT)
@@ -398,14 +396,14 @@ func _test_enemy_habitat_zero_wins(fails: PackedStringArray) -> void:
 		return
 	habitat.hp = 0
 	_tick_idle(sim, 1)
-	if sim.outcome != Types.Outcome.PLAYER_WIN or sim.outcome_reason != Types.OutcomeReason.HABITAT_DESTROYED:
+	if sim.outcome != Types.Outcome.NONE:
 		fails.append(
-			"enemy habitat 0 gave %d/%d, expected PLAYER_WIN/HABITAT_DESTROYED"
+			"enemy habitat 0 gave %d/%d, expected NONE"
 			% [sim.outcome, sim.outcome_reason]
 		)
 
 
-func _test_same_tick_both_habitats_dead_player_loses(fails: PackedStringArray) -> void:
+func _test_habitat_smash_is_not_a_lose(fails: PackedStringArray) -> void:
 	var sim := Sim.new()
 	sim.setup(Constants.DEFAULT_SEED)
 	var player_h := _faction_building(sim.world, Types.Faction.PLAYER, Types.BuildingKind.HABITAT)
@@ -416,9 +414,69 @@ func _test_same_tick_both_habitats_dead_player_loses(fails: PackedStringArray) -
 	player_h.hp = 0
 	enemy_h.hp = 0
 	_tick_idle(sim, 1)
-	if sim.outcome != Types.Outcome.PLAYER_LOSE or sim.outcome_reason != Types.OutcomeReason.HABITAT_DESTROYED:
+	if sim.outcome != Types.Outcome.NONE:
 		fails.append(
-			"same-tick both habitats dead gave %d/%d, expected PLAYER_LOSE/HABITAT_DESTROYED"
+			"both habitats dead gave %d/%d, expected NONE"
+			% [sim.outcome, sim.outcome_reason]
+		)
+
+
+func _test_oxygen_failed_is_suffocation(fails: PackedStringArray) -> void:
+	var sim := Sim.new()
+	sim.setup(Constants.DEFAULT_SEED)
+	sim.oxygen_failed = true
+	var result := Rules.evaluate_outcome(sim)
+	if result.x != Types.Outcome.PLAYER_LOSE or result.y != Types.OutcomeReason.SUFFOCATION:
+		fails.append(
+			"evaluate_outcome(oxygen_failed) is %d/%d, expected PLAYER_LOSE/SUFFOCATION"
+			% [result.x, result.y]
+		)
+
+
+func _test_same_tick_oxygen_and_habitat_death_is_suffocation(fails: PackedStringArray) -> void:
+	var sim := Sim.new()
+	sim.setup(Constants.DEFAULT_SEED)
+	if sim.director != null:
+		sim.director.next_wave_at = 1.0e9
+	var player := sim.get_player()
+	var habitat := _faction_building(sim.world, Types.Faction.PLAYER, Types.BuildingKind.HABITAT)
+	if player == null or habitat == null:
+		fails.append("oxygen+habitat test missing player or habitat")
+		return
+	player.pos = Vector2(20.5 * Constants.TILE, 20.5 * Constants.TILE)
+	player.o2 = 0.0
+	habitat.hp = 0
+	_tick_idle(sim, 1)
+	if not sim.oxygen_failed:
+		fails.append("same-tick o2 == 0 + habitat death should set oxygen_failed")
+	if sim.outcome != Types.Outcome.PLAYER_LOSE or sim.outcome_reason != Types.OutcomeReason.SUFFOCATION:
+		fails.append(
+			"same-tick o2 == 0 + habitat death gave %d/%d"
+			% [sim.outcome, sim.outcome_reason]
+		)
+
+
+func _test_same_tick_hunger_lethal_and_o2_is_suffocation(fails: PackedStringArray) -> void:
+	var sim := Sim.new()
+	sim.setup(Constants.DEFAULT_SEED)
+	if sim.director != null:
+		sim.director.next_wave_at = 1.0e9
+	var player := sim.get_player()
+	if player == null:
+		fails.append("same-tick hunger+o2 missing player")
+		return
+	player.pos = Vector2(20.5 * Constants.TILE, 20.5 * Constants.TILE)
+	player.o2 = 0.0
+	player.hp = 1
+	player.inventory.remove(Types.ResourceKind.FOOD, player.inventory.food)
+	sim.hunger_starving = true
+	sim.tick_index = Constants.PLAYER_HUNGER_PULSE_TICKS - 1
+	_tick_idle(sim, 1)
+	if not sim.oxygen_failed:
+		fails.append("same-tick hunger-lethal + o2 == 0 should set oxygen_failed")
+	if sim.outcome != Types.Outcome.PLAYER_LOSE or sim.outcome_reason != Types.OutcomeReason.SUFFOCATION:
+		fails.append(
+			"same-tick hunger-lethal + o2 == 0 gave %d/%d"
 			% [sim.outcome, sim.outcome_reason]
 		)
 
@@ -726,19 +784,21 @@ func _test_farm_harvest_transfer(fails: PackedStringArray) -> void:
 		fails.append("farm stock after harvest is %d" % farm.food_stock)
 
 
-func _test_hunger_lose(fails: PackedStringArray) -> void:
+func _test_hunger_is_not_a_lose(fails: PackedStringArray) -> void:
 	var sim := Sim.new()
 	sim.setup(Constants.DEFAULT_SEED)
 	if sim.director != null:
 		sim.director.next_wave_at = 1.0e9
 	var player := sim.get_player()
 	if player == null:
-		fails.append("hunger lose missing player")
+		fails.append("hunger latch missing player")
 		return
 	player.inventory.remove(Types.ResourceKind.FOOD, player.inventory.food)
 	_tick_idle(sim, _ticks_for(Constants.FOOD_EAT_PERIOD))
-	if sim.outcome != Types.Outcome.PLAYER_LOSE or sim.outcome_reason != Types.OutcomeReason.HUNGER:
-		fails.append("missed meal outcome is %d/%d" % [sim.outcome, sim.outcome_reason])
+	if not sim.hunger_starving:
+		fails.append("missed meal should set hunger_starving")
+	if sim.outcome != Types.Outcome.NONE:
+		fails.append("missed meal outcome is %d/%d, expected NONE" % [sim.outcome, sim.outcome_reason])
 
 
 func _test_depot_skips_food(fails: PackedStringArray) -> void:

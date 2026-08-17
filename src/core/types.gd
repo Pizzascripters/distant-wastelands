@@ -7,7 +7,7 @@ enum ResourceKind { SCRAP, ICE, ORE, PARTS, FOOD }
 enum TechKind { HYDROPONICS, METALLURGY, FIELD_MEDICINE, BALLISTICS }
 enum TileTerrain { EMPTY, ROCK }
 enum Outcome { NONE, PLAYER_WIN, PLAYER_LOSE }
-enum OutcomeReason { NONE, HABITAT_DESTROYED, LIFE_SUPPORT, HUNGER }
+enum OutcomeReason { NONE, SUFFOCATION }
 enum RaiderState {
 	SPAWNED,
 	PATH_TO_DEPOT,

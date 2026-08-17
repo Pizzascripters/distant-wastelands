@@ -20,7 +20,8 @@ var research_progress: float = 0.0
 var research_paid: bool = false
 var techs_done: int = 0
 var medbay_heal_acc: float = 0.0
-var hunger_failed: bool = false
+var oxygen_failed: bool = false
+var hunger_starving: bool = false
 var _interact_target_id: int = 0
 var _interact_withdraw: bool = false
 
@@ -40,7 +41,8 @@ func setup(p_seed: int) -> void:
 	research_paid = false
 	techs_done = 0
 	medbay_heal_acc = 0.0
-	hunger_failed = false
+	oxygen_failed = false
+	hunger_starving = false
 	_queue.clear()
 	player_id = 0
 	last_tick_usec = 0
@@ -151,7 +153,8 @@ func snapshot() -> SimSnapshot:
 	snap.research_progress = research_progress
 	snap.research_paid = research_paid
 	snap.techs_done = techs_done
-	snap.hunger_failed = hunger_failed
+	snap.oxygen_failed = oxygen_failed
+	snap.hunger_starving = hunger_starving
 	if path_queue != null:
 		snap.completed_this_tick = path_queue.completed_this_tick
 	return snap
@@ -603,8 +606,6 @@ func _drop_unit_carry(unit: Unit) -> void:
 
 
 func _maybe_respawn_player() -> void:
-	if hunger_failed:
-		return
 	var player := get_player()
 	if player == null or player.alive or player.respawn_timer > 0.0:
 		return
@@ -615,6 +616,7 @@ func _maybe_respawn_player() -> void:
 	player.hp = player.hp_max
 	player.o2 = Constants.PLAYER_O2_MAX
 	player.food_debt_timer = 0.0
+	hunger_starving = false
 	player.alive = true
 	player.vel = Vector2.ZERO
 	player.weapon_cooldown = 0.0
@@ -632,8 +634,8 @@ func _tick_player_oxygen() -> void:
 		player.o2 = Constants.PLAYER_O2_MAX
 	else:
 		player.o2 = maxf(0.0, player.o2 - Constants.SIM_DT)
-	if player.o2 == 0.0 and tick_index % Constants.PLAYER_O2_PULSE_TICKS == 0:
-		Combat.apply_damage(player, Constants.PLAYER_O2_HP_PER_PULSE)
+	if player.o2 == 0.0:
+		oxygen_failed = true
 
 
 func _tick_medbay_heal() -> void:
@@ -665,17 +667,11 @@ func _adjacent_player_medbay(player: Unit) -> bool:
 
 func _adjacent_o2_refill(player: Unit) -> bool:
 	for building in world.buildings.values():
-		if building.hp <= 0 or building.faction != Types.Faction.PLAYER:
-			continue
-		if not _is_o2_refill_building(building):
+		if not Rules.habitat_gives_o2(building):
 			continue
 		if world.point_aabb_distance(player.pos, world.footprint_aabb(building)) <= Constants.INTERACT_BUILDING_RANGE:
 			return true
 	return false
-
-
-func _is_o2_refill_building(building: Building) -> bool:
-	return building.kind == Types.BuildingKind.HABITAT or building.kind == Types.BuildingKind.DEPOT
 
 
 func _own_depot_withdrawing(cmd: InputCommand, target_id: int) -> bool:
@@ -734,12 +730,17 @@ func _tick_hunger() -> void:
 	var player := get_player()
 	if player == null or not player.alive:
 		return
+	if player.inventory != null and player.inventory.food >= 1:
+		hunger_starving = false
 	player.food_debt_timer += Constants.SIM_DT
-	if player.food_debt_timer < Constants.FOOD_EAT_PERIOD:
-		return
-	player.food_debt_timer -= Constants.FOOD_EAT_PERIOD
-	if player.inventory == null or player.inventory.remove(Types.ResourceKind.FOOD, 1) < 1:
-		hunger_failed = true
+	if player.food_debt_timer >= Constants.FOOD_EAT_PERIOD:
+		player.food_debt_timer -= Constants.FOOD_EAT_PERIOD
+		if player.inventory != null and player.inventory.food >= 1:
+			player.inventory.remove(Types.ResourceKind.FOOD, 1)
+		else:
+			hunger_starving = true
+	if hunger_starving and tick_index % Constants.PLAYER_HUNGER_PULSE_TICKS == 0:
+		Combat.apply_damage(player, Constants.PLAYER_HUNGER_HP_PER_PULSE)
 
 
 func _player_habitat() -> Building:

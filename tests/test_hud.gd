@@ -82,18 +82,14 @@ func run() -> PackedStringArray:
 	var banner := hud.find_child("RaidBanner", true, false) as Label
 	if banner == null or not banner.visible or banner.text != "Raid incoming":
 		fails.append("raid banner should show while banner_timer > 0")
-	var countdown := hud.find_child("IceCountdown", true, false) as Label
-	if countdown != null and countdown.visible:
-		fails.append("countdown should stay hidden while depot ice > 0")
+	if hud.find_child("IceCountdown", true, false) != null:
+		fails.append("HUD must not have an IceCountdown node")
 
 	snap.buildings[0]["inventory"]["ice"] = 0
 	snap.player_zero_ice_timer = 12.0
 	hud.apply_snapshot(snap)
-	countdown = hud.find_child("IceCountdown", true, false) as Label
-	if countdown == null or not countdown.visible:
-		fails.append("zero-ice countdown should show")
-	elif countdown.text != "18":
-		fails.append("countdown is %s, expected 18" % countdown.text)
+	if hud.find_child("IceCountdown", true, false) != null:
+		fails.append("zero ice must not create a starve countdown")
 
 	_assert_hp(hud, fails, 50, 50, Color("E07A5F"), 1.0)
 	snap.units[0]["hp"] = 25

@@ -111,19 +111,20 @@ static func tick_life_support(sim: Sim) -> void:
 				rec.zero_ice_timer = 0.0
 
 
+static func habitat_gives_o2(building: Building) -> bool:
+	return (
+		building != null
+		and building.kind == Types.BuildingKind.HABITAT
+		and building.faction == Types.Faction.PLAYER
+		and building.hp > 0
+	)
+
+
 static func evaluate_outcome(sim: Sim) -> Vector2i:
 	if sim == null or sim.world == null:
 		return Vector2i(Types.Outcome.NONE, Types.OutcomeReason.NONE)
-	if _living_building(sim.world, Types.Faction.PLAYER, Types.BuildingKind.HABITAT) == null:
-		return Vector2i(Types.Outcome.PLAYER_LOSE, Types.OutcomeReason.HABITAT_DESTROYED)
-	if bool(sim.hunger_failed):
-		return Vector2i(Types.Outcome.PLAYER_LOSE, Types.OutcomeReason.HUNGER)
-	if _zero_ice_timer(sim, Types.Faction.PLAYER) >= Constants.ZERO_ICE_LIMIT:
-		return Vector2i(Types.Outcome.PLAYER_LOSE, Types.OutcomeReason.LIFE_SUPPORT)
-	if _living_building(sim.world, Types.Faction.ENEMY, Types.BuildingKind.HABITAT) == null:
-		return Vector2i(Types.Outcome.PLAYER_WIN, Types.OutcomeReason.HABITAT_DESTROYED)
-	if _zero_ice_timer(sim, Types.Faction.ENEMY) >= Constants.ZERO_ICE_LIMIT:
-		return Vector2i(Types.Outcome.PLAYER_WIN, Types.OutcomeReason.LIFE_SUPPORT)
+	if bool(sim.oxygen_failed):
+		return Vector2i(Types.Outcome.PLAYER_LOSE, Types.OutcomeReason.SUFFOCATION)
 	return Vector2i(Types.Outcome.NONE, Types.OutcomeReason.NONE)
 
 
@@ -231,7 +232,7 @@ static func resolve_interact(
 		return chosen.id
 	if best_obj is Loot:
 		_begin_channel(unit, last_target_id, best_id)
-		_tick_loot(world, unit, best_obj as Loot)
+		_tick_loot(world, unit, best_obj as Loot, sim)
 		return best_id
 	if best_obj is Deposit:
 		_begin_channel(unit, last_target_id, best_id)
@@ -249,7 +250,7 @@ static func resolve_interact(
 		var farm_b := best_obj as Building
 		if farm_b.id != last_target_id:
 			unit.interact_progress = 0.0
-		_tick_farm_harvest(unit, farm_b)
+		_tick_farm_harvest(unit, farm_b, sim)
 		return farm_b.id
 	unit.interact_progress = 0.0
 	return 0
@@ -415,14 +416,23 @@ static func _tick_depot_transfer(unit: Unit, depot: Building, withdrawing: bool)
 			_move_up_to(src, dest, kind, Constants.TRANSFER_BATCH)
 
 
-static func _tick_loot(world: World, unit: Unit, pile: Loot) -> void:
+static func _tick_loot(world: World, unit: Unit, pile: Loot, sim: Sim = null) -> void:
 	unit.interact_progress += Constants.SIM_DT
 	if unit.interact_progress < Constants.LOOT_CHANNEL:
 		return
 	unit.interact_progress = 0.0
 	if pile.inventory != null:
+		var food_before := 0
+		if unit.inventory != null:
+			food_before = _kind_amount(unit.inventory, Types.ResourceKind.FOOD)
 		for kind in _HAULABLES:
 			_move_up_to(pile.inventory, unit.inventory, kind, _kind_amount(pile.inventory, kind))
+		if (
+			sim != null
+			and unit.inventory != null
+			and _kind_amount(unit.inventory, Types.ResourceKind.FOOD) > food_before
+		):
+			sim.hunger_starving = false
 		if _has_stock(pile.inventory):
 			return
 	world.loot.erase(pile.id)
@@ -493,7 +503,7 @@ static func _interact_farm(world: World, unit: Unit) -> Building:
 	return best
 
 
-static func _tick_farm_harvest(unit: Unit, farm: Building) -> void:
+static func _tick_farm_harvest(unit: Unit, farm: Building, sim: Sim = null) -> void:
 	unit.interact_progress += Constants.SIM_DT
 	if unit.inventory == null:
 		return
@@ -505,6 +515,8 @@ static func _tick_farm_harvest(unit: Unit, farm: Building) -> void:
 			continue
 		farm.food_stock -= amt
 		unit.inventory.add(Types.ResourceKind.FOOD, amt)
+		if sim != null:
+			sim.hunger_starving = false
 
 
 static func _interact_depot(world: World, pos: Vector2) -> Building:
@@ -590,15 +602,6 @@ static func _ice_pull_period(faction: int) -> float:
 	if faction == Types.Faction.PLAYER:
 		return Constants.ICE_PULL_PLAYER
 	return Constants.ICE_PULL_ENEMY
-
-
-static func _zero_ice_timer(sim: Sim, faction: int) -> float:
-	if sim == null or not sim.life is Dictionary:
-		return 0.0
-	var rec: Variant = sim.life.get(faction)
-	if rec == null:
-		return 0.0
-	return float(rec.zero_ice_timer)
 
 
 static func _deposit_at(world: World, tile: Vector2i) -> bool:

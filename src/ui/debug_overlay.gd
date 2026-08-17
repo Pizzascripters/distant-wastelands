@@ -88,6 +88,7 @@ func _refresh() -> void:
 		["loot  %d" % _record_count(snap, "loot"), TEXT],
 		["projectiles  %d" % _record_count(snap, "projectiles"), TEXT],
 		["outcome  %s" % _outcome_name(snap.outcome), TEXT],
+		["oxygen_failed  %s" % str(_bool_field(snap, "oxygen_failed", false)), TEXT],
 		["player depot  %s" % _depot_line(snap, Types.Faction.PLAYER), TEXT],
 		["enemy depot  %s" % _depot_line(snap, Types.Faction.ENEMY), TEXT],
 		["carry food  %d" % _carry_food(snap), TEXT],
@@ -221,6 +222,12 @@ func _float_field(snap: SimSnapshot, key: String, fallback: float) -> float:
 func _int_field(snap: SimSnapshot, key: String, fallback: int) -> int:
 	if key in snap:
 		return int(snap.get(key))
+	return fallback
+
+
+func _bool_field(snap: SimSnapshot, key: String, fallback: bool) -> bool:
+	if key in snap:
+		return bool(snap.get(key))
 	return fallback
 
 

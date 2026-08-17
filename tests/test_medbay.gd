@@ -83,16 +83,20 @@ func _test_lethal_pulse_not_undone(fails: PackedStringArray) -> void:
 	var player := sim.get_player()
 	var medbay := _inject_medbay(sim, Vector2i(21, 20))
 	player.pos = _adjacent_pos(sim, medbay)
-	player.o2 = 0.0
+	player.o2 = 12.0
 	player.hp = 1
+	player.inventory.remove(Types.ResourceKind.FOOD, player.inventory.food)
+	sim.hunger_starving = true
 	sim.medbay_heal_acc = Constants.MEDBAY_HEAL_PERIOD
-	sim.tick_index = Constants.PLAYER_O2_PULSE_TICKS - 1
+	sim.tick_index = Constants.PLAYER_HUNGER_PULSE_TICKS - 1
 	sim.tick()
 	if player.alive or player.hp > 0:
 		fails.append(
-			"lethal oxygen pulse next to a Medbay should kill this tick (alive=%s hp=%d)"
+			"lethal hunger pulse next to a Medbay should kill this tick (alive=%s hp=%d)"
 			% [str(player.alive), player.hp]
 		)
+	if sim.outcome != Types.Outcome.NONE:
+		fails.append("hunger death next to Medbay locked outcome %d/%d" % [sim.outcome, sim.outcome_reason])
 
 
 func _test_place_after_field_medicine(fails: PackedStringArray) -> void:

@@ -3,7 +3,6 @@ extends Control
 
 const TEXT := Color("F2EDE6")
 const FONT_SIZE := 16
-const TITLE_WIN := "Colony standing"
 const TITLE_LOSE := "Colony lost"
 
 signal play_again
@@ -29,9 +28,7 @@ func _ready() -> void:
 func set_outcome(outcome: int, reason: int) -> void:
 	if not _bind_nodes():
 		return
-	if outcome == Types.Outcome.PLAYER_WIN:
-		_title.text = TITLE_WIN
-	elif outcome == Types.Outcome.PLAYER_LOSE:
+	if outcome == Types.Outcome.PLAYER_LOSE:
 		_title.text = TITLE_LOSE
 	else:
 		_title.text = ""
@@ -39,16 +36,8 @@ func set_outcome(outcome: int, reason: int) -> void:
 
 
 func _reason_line(outcome: int, reason: int) -> String:
-	if outcome == Types.Outcome.PLAYER_WIN and reason == Types.OutcomeReason.HABITAT_DESTROYED:
-		return "Enemy habitat destroyed"
-	if outcome == Types.Outcome.PLAYER_WIN and reason == Types.OutcomeReason.LIFE_SUPPORT:
-		return "Enemy life support failed"
-	if outcome == Types.Outcome.PLAYER_LOSE and reason == Types.OutcomeReason.HABITAT_DESTROYED:
-		return "Habitat destroyed"
-	if outcome == Types.Outcome.PLAYER_LOSE and reason == Types.OutcomeReason.LIFE_SUPPORT:
-		return "Life support failed"
-	if outcome == Types.Outcome.PLAYER_LOSE and reason == Types.OutcomeReason.HUNGER:
-		return "Starved"
+	if outcome == Types.Outcome.PLAYER_LOSE and reason == Types.OutcomeReason.SUFFOCATION:
+		return "Ran out of oxygen"
 	return ""
 
 

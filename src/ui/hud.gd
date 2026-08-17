@@ -25,7 +25,6 @@ const _FOOD_PATH := "res://assets/sprites/placeholder/food.png"
 
 var _carry: Dictionary = {}
 var _depot: Dictionary = {}
-var _ice_countdown: Label
 var _o2_track: ColorRect
 var _o2_fill: ColorRect
 var _o2_value: Label
@@ -54,19 +53,12 @@ func apply_snapshot(snap: SimSnapshot) -> void:
 	_set_counts(_carry, carry, false)
 
 	var depot := _player_building(snap, Types.BuildingKind.DEPOT)
-	var zero_ice := _player_zero_ice_timer(snap)
 	if depot.is_empty():
 		_set_missing(_depot)
-		_ice_countdown.visible = false
 	else:
 		var depot_inv := _inventory_from(depot.get("inventory", {}))
 		var depot_ice: int = depot_inv["ice"]
-		var low_ice := depot_ice <= 5 or zero_ice > 0.0
-		_set_counts(_depot, depot_inv, low_ice)
-		var show_countdown := depot_ice == 0 or zero_ice > 0.0
-		_ice_countdown.visible = show_countdown
-		if show_countdown:
-			_ice_countdown.text = str(maxi(ceili(Constants.ZERO_ICE_LIMIT - zero_ice), 0))
+		_set_counts(_depot, depot_inv, depot_ice <= 5)
 
 	_apply_o2(snap)
 	_apply_hp(snap)
@@ -102,10 +94,6 @@ func _ensure_ui() -> void:
 	_depot = _resource_row("Depot", false)
 	vbox.add_child(_carry["row"])
 	vbox.add_child(_depot["row"])
-	_ice_countdown = _label("")
-	_ice_countdown.name = "IceCountdown"
-	_ice_countdown.visible = false
-	vbox.add_child(_ice_countdown)
 	vbox.add_child(_make_o2_row())
 	vbox.add_child(_make_hp_row())
 	panel.add_child(vbox)
@@ -318,17 +306,6 @@ func _player_building(snap: SimSnapshot, kind: int) -> Dictionary:
 			continue
 		return rec
 	return {}
-
-
-func _player_zero_ice_timer(snap: SimSnapshot) -> float:
-	if "player_zero_ice_timer" in snap:
-		return float(snap.get("player_zero_ice_timer"))
-	if "zero_ice_timer" in snap:
-		var value: Variant = snap.get("zero_ice_timer")
-		if value is Dictionary:
-			return float(value.get(Types.Faction.PLAYER, 0.0))
-		return float(value)
-	return 0.0
 
 
 func _float_field(snap: SimSnapshot, key: String, fallback: float) -> float:
