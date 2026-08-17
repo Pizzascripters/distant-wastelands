@@ -89,14 +89,29 @@ func _refresh() -> void:
 		["projectiles  %d" % _record_count(snap, "projectiles"), TEXT],
 		["outcome  %s" % _outcome_name(snap.outcome), TEXT],
 		["oxygen_failed  %s" % str(_bool_field(snap, "oxygen_failed", false)), TEXT],
-		["player habitat  %s" % _habitat_line(snap, Types.Faction.PLAYER), TEXT],
+		["habitat ice pool  %d" % _habitat_ice_pool(snap), TEXT],
 		["enemy habitat  %s" % _habitat_line(snap, Types.Faction.ENEMY), TEXT],
-		["player depot  %s" % _depot_line(snap, Types.Faction.PLAYER), TEXT],
+		["depot pool  %s" % _depot_pool_line(snap), TEXT],
 		["enemy depot  %s" % _depot_line(snap, Types.Faction.ENEMY), TEXT],
 		["carry food  %d" % _carry_food(snap), TEXT],
 		["o2  %.2f" % _float_field(snap, "player_o2", Constants.PLAYER_O2_MAX), TEXT],
 		["research  %s" % _research_line(snap), TEXT],
-		["next wave  %.2f" % _float_field(snap, "next_raid_at", 0.0), TEXT],
+		[
+			"next raid  %.2f  wave %d"
+			% [_float_field(snap, "next_raid_at", 0.0), _int_field(snap, "wave_index", 0)],
+			TEXT,
+		],
+		[
+			"active  %d  sleep %d"
+			% [
+				_int_field(snap, "active_unit_count", 0),
+				_int_field(snap, "sleeping_unit_count", 0),
+			],
+			TEXT,
+		],
+		["discovered  %s" % _discovered_line(snap), TEXT],
+		["player tile  %s" % _player_tile_line(snap), TEXT],
+		["density  %d" % _density_at_player(snap), TEXT],
 		[
 			"completed_this_tick  %d" % _int_field(snap, "completed_this_tick", 0),
 			TEXT,
@@ -149,6 +164,128 @@ func _depot_line(snap: SimSnapshot, faction: int) -> String:
 		return MISSING
 	var inv := _inventory_from(rec.get("inventory", {}))
 	return "scrap %d  ore %d  parts %d" % [inv["scrap"], inv["ore"], inv["parts"]]
+
+
+func _depot_pool_line(snap: SimSnapshot) -> String:
+	var pools := _depot_pools(snap)
+	return "scrap %d  ore %d  parts %d" % [pools["scrap"], pools["ore"], pools["parts"]]
+
+
+func _depot_pools(snap: SimSnapshot) -> Dictionary:
+	var totals := {"scrap": 0, "ore": 0, "parts": 0}
+	var saw := false
+	for rec in _records(snap, "buildings"):
+		if not rec is Dictionary:
+			continue
+		if rec.get("kind", -1) != Types.BuildingKind.DEPOT:
+			continue
+		if rec.get("faction", -1) != Types.Faction.PLAYER:
+			continue
+		if rec.has("hp") and int(rec["hp"]) <= 0:
+			continue
+		saw = true
+		var inv := _inventory_from(rec.get("inventory", {}))
+		totals["scrap"] += int(inv["scrap"])
+		totals["ore"] += int(inv["ore"])
+		totals["parts"] += int(inv["parts"])
+	if saw:
+		return totals
+	return {
+		"scrap": _int_field(snap, "depot_scrap_pool", 0),
+		"ore": _int_field(snap, "depot_ore_pool", 0),
+		"parts": _int_field(snap, "depot_parts_pool", 0),
+	}
+
+
+func _habitat_ice_pool(snap: SimSnapshot) -> int:
+	var total := 0
+	var saw := false
+	for rec in _records(snap, "buildings"):
+		if not rec is Dictionary:
+			continue
+		if rec.get("kind", -1) != Types.BuildingKind.HABITAT:
+			continue
+		if rec.get("faction", -1) != Types.Faction.PLAYER:
+			continue
+		if rec.has("hp") and int(rec["hp"]) <= 0:
+			continue
+		saw = true
+		var inv := _inventory_from(rec.get("inventory", {}))
+		total += int(inv["ice"])
+	if saw:
+		return total
+	return _int_field(snap, "habitat_ice_pool", 0)
+
+
+func _discovered_line(snap: SimSnapshot) -> String:
+	var total := _int_field(snap, "map_w", Constants.MAP_W) * _int_field(snap, "map_h", Constants.MAP_H)
+	var found := 0
+	if "discovered" in snap:
+		var bits: Variant = snap.discovered
+		if bits is PackedByteArray:
+			for bit in bits:
+				if int(bit) != 0:
+					found += 1
+	return "%d / %d" % [found, total]
+
+
+func _player_tile_line(snap: SimSnapshot) -> String:
+	var tile := _player_tile(snap)
+	if tile.x < 0:
+		return MISSING
+	return "%d, %d" % [tile.x, tile.y]
+
+
+func _player_tile(snap: SimSnapshot) -> Vector2i:
+	for rec in _records(snap, "units"):
+		if not rec is Dictionary:
+			continue
+		if rec.get("kind", -1) != Types.UnitKind.PLAYER:
+			continue
+		if rec.has("tile"):
+			return rec["tile"]
+		var pos: Vector2 = rec.get("pos", Vector2(-1.0, -1.0))
+		if pos.x < 0.0 or pos.y < 0.0:
+			return Vector2i(-1, -1)
+		return Vector2i(
+			int(floor(pos.x / float(Constants.TILE))),
+			int(floor(pos.y / float(Constants.TILE)))
+		)
+	return Vector2i(-1, -1)
+
+
+func _density_at_player(snap: SimSnapshot) -> int:
+	var tile := _player_tile(snap)
+	if tile.x < 0:
+		return 0
+	var n := Constants.ENEMY_DENSITY_N
+	var ox := int(tile.x / n) * n
+	var oy := int(tile.y / n) * n
+	var count := 0
+	for rec in _records(snap, "units"):
+		if not rec is Dictionary:
+			continue
+		if rec.get("faction", -1) != Types.Faction.ENEMY:
+			continue
+		if rec.has("alive") and not bool(rec["alive"]):
+			continue
+		if rec.has("hp") and int(rec["hp"]) <= 0:
+			continue
+		var other := _record_tile(rec)
+		if other.x < ox or other.x >= ox + n or other.y < oy or other.y >= oy + n:
+			continue
+		count += 1
+	return count
+
+
+func _record_tile(rec: Dictionary) -> Vector2i:
+	if rec.has("tile"):
+		return rec["tile"]
+	var pos: Vector2 = rec.get("pos", Vector2.ZERO)
+	return Vector2i(
+		int(floor(pos.x / float(Constants.TILE))),
+		int(floor(pos.y / float(Constants.TILE)))
+	)
 
 
 func _habitat_line(snap: SimSnapshot, faction: int) -> String:

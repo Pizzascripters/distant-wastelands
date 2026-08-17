@@ -159,6 +159,9 @@ func snapshot() -> SimSnapshot:
 		snap.player_o2 = player.o2
 		snap.player_o2_max = Constants.PLAYER_O2_MAX
 	snap.habitat_ice_pool = Rules.player_pool_amount(world, Types.ResourceKind.ICE)
+	snap.depot_scrap_pool = Rules.player_pool_amount(world, Types.ResourceKind.SCRAP)
+	snap.depot_ore_pool = Rules.player_pool_amount(world, Types.ResourceKind.ORE)
+	snap.depot_parts_pool = Rules.player_pool_amount(world, Types.ResourceKind.PARTS)
 	_copy_gather_channel(snap, player)
 	snap.research_selected = research_selected
 	snap.research_progress = research_progress
