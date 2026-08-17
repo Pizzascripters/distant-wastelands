@@ -36,23 +36,41 @@ func _ready() -> void:
 
 
 func apply_record(rec: Dictionary) -> void:
-	_kind = rec.get("kind", Types.BuildingKind.WALL)
-	_faction = rec.get("faction", Types.Faction.PLAYER)
-	_aim = rec.get("aim", Vector2.RIGHT)
+	var dirty := false
+	var kind: int = rec.get("kind", Types.BuildingKind.WALL)
+	var faction: int = rec.get("faction", Types.Faction.PLAYER)
+	var aim: Vector2 = rec.get("aim", Vector2.RIGHT)
+	if _kind != kind:
+		_kind = kind
+		dirty = true
+	if _faction != faction:
+		_faction = faction
+		dirty = true
+	if _kind == Types.BuildingKind.TURRET and not _aim.is_equal_approx(aim):
+		dirty = true
+	_aim = aim
 	_ensure_texture()
 	# Local origin is the footprint top-left.
 	if rec.has("origin_tile"):
 		var tile: Vector2i = rec["origin_tile"]
-		position = Vector2(tile) * float(Constants.TILE)
+		var origin := Vector2(tile) * float(Constants.TILE)
+		if position != origin:
+			position = origin
+			dirty = true
 	elif rec.has("pos"):
-		position = rec["pos"]
+		var pos: Vector2 = rec["pos"]
+		if position != pos:
+			position = pos
+			dirty = true
 	if rec.has("hp"):
 		var hp: int = rec["hp"]
 		if _hp >= 0 and hp < _hp:
 			_flash_left = Constants.HIT_FLASH
 			set_process(true)
+			dirty = true
 		_hp = hp
-	queue_redraw()
+	if dirty:
+		queue_redraw()
 
 
 func _process(delta: float) -> void:

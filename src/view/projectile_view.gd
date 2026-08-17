@@ -9,6 +9,7 @@ const ENEMY_PATH := "res://assets/sprites/placeholder/projectile_enemy.png"
 
 var fill: Color = PLAYER_FILL
 var _faction: int = Types.Faction.PLAYER
+var _applied: bool = false
 var _tex: Texture2D
 var _tex_faction: int = -999
 
@@ -20,7 +21,12 @@ func _ready() -> void:
 
 func apply_record(rec: Dictionary) -> void:
 	position = rec["pos"]
-	_faction = rec["faction"]
+	var faction: int = rec["faction"]
+	var first := not _applied
+	_applied = true
+	if not first and faction == _faction:
+		return
+	_faction = faction
 	if _faction == Types.Faction.PLAYER:
 		fill = PLAYER_FILL
 	else:

@@ -28,6 +28,7 @@ var _player_world_pos: Vector2 = Vector2.ZERO
 var _last_aim: Vector2 = Vector2.RIGHT
 var _ended: bool = false
 var _ignore_gameplay_input: bool = false
+var _terrain_ready: bool = false
 
 
 func _ready() -> void:
@@ -57,6 +58,7 @@ func _ready() -> void:
 	_mount_ui()
 	var snap := _session.get_snapshot()
 	_world_view.rebuild(snap)
+	_terrain_ready = true
 	_sync_views(snap)
 	if _gather_bar != null:
 		_gather_bar.apply_snapshot(snap)
@@ -250,7 +252,11 @@ func _session_world() -> World:
 
 
 func _sync_views(snap: SimSnapshot) -> void:
-	_world_view.apply_deposits(snap)
+	if _terrain_ready:
+		_world_view.apply_deposits(snap)
+	else:
+		_world_view.rebuild(snap)
+		_terrain_ready = true
 	_sync_records(snap.buildings, _building_views, _buildings_root, BuildingView)
 	_sync_records(snap.loot, _loot_views, _loot_root, LootView)
 	_sync_records(snap.units, _unit_views, _units_root, UnitView)

@@ -30,18 +30,33 @@ func _ready() -> void:
 
 
 func apply_record(rec: Dictionary) -> void:
-	position = rec["pos"]
-	_aim = rec.get("aim", Vector2.RIGHT)
-	_kind = rec.get("kind", Types.UnitKind.PLAYER)
-	visible = rec.get("alive", true)
+	var dirty := false
+	var pos: Vector2 = rec["pos"]
+	var aim: Vector2 = rec.get("aim", Vector2.RIGHT)
+	var kind: int = rec.get("kind", Types.UnitKind.PLAYER)
+	var alive: bool = rec.get("alive", true)
+	if position != pos:
+		position = pos
+		dirty = true
+	if not _aim.is_equal_approx(aim):
+		_aim = aim
+		dirty = true
+	if _kind != kind:
+		_kind = kind
+		dirty = true
+	if visible != alive:
+		visible = alive
+		dirty = true
 	_ensure_texture()
 	if rec.has("hp"):
 		var hp: int = rec["hp"]
 		if _hp >= 0 and hp < _hp:
 			_flash_left = Constants.HIT_FLASH
 			set_process(true)
+			dirty = true
 		_hp = hp
-	queue_redraw()
+	if dirty:
+		queue_redraw()
 
 
 func _process(delta: float) -> void:
