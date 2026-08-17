@@ -15,6 +15,12 @@ func run() -> PackedStringArray:
 	_test_first_depot_transfer(fails)
 	_test_gather(fails)
 	_test_steal(fails)
+	_test_ice_pull_decrements_depot(fails)
+	_test_zero_ice_starve_loses_at_600(fails)
+	_test_destroying_depot_stops_starve_clock(fails)
+	_test_missing_depot_never_starts_timer(fails)
+	_test_enemy_habitat_zero_wins(fails)
+	_test_same_tick_both_habitats_dead_player_loses(fails)
 	return fails
 
 
@@ -234,6 +240,146 @@ func _test_steal(fails: PackedStringArray) -> void:
 		fails.append("enemy depot scrap is %d, expected %d" % [depot.inventory.scrap, 9 - Constants.TRANSFER_BATCH])
 	if depot.inventory.ice != 0:
 		fails.append("enemy depot ice is %d, expected 0" % depot.inventory.ice)
+
+
+func _test_ice_pull_decrements_depot(fails: PackedStringArray) -> void:
+	var sim := Sim.new()
+	sim.setup(Constants.DEFAULT_SEED)
+	var depot := _player_depot(sim.world)
+	if depot == null or depot.inventory == null:
+		fails.append("generated map missing player depot")
+		return
+	var before := depot.inventory.ice
+	if before < 1:
+		fails.append("player depot ice is %d, expected starting stock" % before)
+		return
+	_tick_idle(sim, _ticks_for(Constants.ICE_PULL_PLAYER) - 1)
+	if depot.inventory.ice != before:
+		fails.append("ice pull ran before one ICE_PULL_PLAYER (%d -> %d)" % [before, depot.inventory.ice])
+	_tick_idle(sim, 1)
+	if depot.inventory.ice != before - 1:
+		fails.append("ice pull left depot ice %d, expected %d" % [depot.inventory.ice, before - 1])
+
+
+func _test_zero_ice_starve_loses_at_600(fails: PackedStringArray) -> void:
+	var sim := Sim.new()
+	sim.setup(Constants.DEFAULT_SEED)
+	var depot := _player_depot(sim.world)
+	if depot == null or depot.inventory == null:
+		fails.append("generated map missing player depot")
+		return
+	_empty_ice(depot)
+	var limit_ticks := _ticks_for(Constants.ZERO_ICE_LIMIT)
+	_tick_idle(sim, limit_ticks - 1)
+	if sim.outcome != Types.Outcome.NONE:
+		fails.append("starve outcome locked at tick %d, expected NONE" % sim.tick_index)
+	var rec: Variant = sim.life.get(Types.Faction.PLAYER)
+	if rec == null or rec.zero_ice_timer < Constants.ZERO_ICE_LIMIT - Constants.SIM_DT - 0.0001:
+		fails.append("zero_ice_timer before limit tick is %s" % str(rec.zero_ice_timer if rec else rec))
+	_tick_idle(sim, 1)
+	if sim.outcome != Types.Outcome.PLAYER_LOSE or sim.outcome_reason != Types.OutcomeReason.LIFE_SUPPORT:
+		fails.append(
+			"600 zero-ice ticks gave %d/%d, expected PLAYER_LOSE/LIFE_SUPPORT"
+			% [sim.outcome, sim.outcome_reason]
+		)
+	if rec == null or rec.zero_ice_timer < Constants.ZERO_ICE_LIMIT:
+		fails.append("zero_ice_timer after 600 ticks is %s" % str(rec.zero_ice_timer if rec else rec))
+
+
+func _test_destroying_depot_stops_starve_clock(fails: PackedStringArray) -> void:
+	var sim := Sim.new()
+	sim.setup(Constants.DEFAULT_SEED)
+	var depot := _player_depot(sim.world)
+	if depot == null or depot.inventory == null:
+		fails.append("generated map missing player depot")
+		return
+	_empty_ice(depot)
+	_tick_idle(sim, 10)
+	var rec: Variant = sim.life.get(Types.Faction.PLAYER)
+	if rec == null:
+		fails.append("missing player FactionLife")
+		return
+	var frozen: float = rec.zero_ice_timer
+	if frozen <= 0.0:
+		fails.append("starve clock did not advance before depot death")
+		return
+	Combat.process_building_death(sim.world, depot)
+	_tick_idle(sim, _ticks_for(Constants.ZERO_ICE_LIMIT))
+	if not is_equal_approx(rec.zero_ice_timer, frozen):
+		fails.append("zero_ice_timer grew after depot death (%s -> %s)" % [str(frozen), str(rec.zero_ice_timer)])
+	if sim.outcome == Types.Outcome.PLAYER_LOSE and sim.outcome_reason == Types.OutcomeReason.LIFE_SUPPORT:
+		fails.append("destroying the depot set LIFE_SUPPORT")
+
+
+func _test_missing_depot_never_starts_timer(fails: PackedStringArray) -> void:
+	var sim := Sim.new()
+	sim.setup(Constants.DEFAULT_SEED)
+	var depot := _player_depot(sim.world)
+	if depot == null:
+		fails.append("generated map missing player depot")
+		return
+	Combat.process_building_death(sim.world, depot)
+	_tick_idle(sim, _ticks_for(Constants.ZERO_ICE_LIMIT))
+	var rec: Variant = sim.life.get(Types.Faction.PLAYER)
+	if rec != null and rec.zero_ice_timer != 0.0:
+		fails.append("missing depot from t=0 set zero_ice_timer to %s" % str(rec.zero_ice_timer))
+	if sim.outcome == Types.Outcome.PLAYER_LOSE and sim.outcome_reason == Types.OutcomeReason.LIFE_SUPPORT:
+		fails.append("missing depot from t=0 set LIFE_SUPPORT")
+
+
+func _test_enemy_habitat_zero_wins(fails: PackedStringArray) -> void:
+	var sim := Sim.new()
+	sim.setup(Constants.DEFAULT_SEED)
+	var habitat := _faction_building(sim.world, Types.Faction.ENEMY, Types.BuildingKind.HABITAT)
+	if habitat == null:
+		fails.append("generated map missing enemy habitat")
+		return
+	habitat.hp = 0
+	_tick_idle(sim, 1)
+	if sim.outcome != Types.Outcome.PLAYER_WIN or sim.outcome_reason != Types.OutcomeReason.HABITAT_DESTROYED:
+		fails.append(
+			"enemy habitat 0 gave %d/%d, expected PLAYER_WIN/HABITAT_DESTROYED"
+			% [sim.outcome, sim.outcome_reason]
+		)
+
+
+func _test_same_tick_both_habitats_dead_player_loses(fails: PackedStringArray) -> void:
+	var sim := Sim.new()
+	sim.setup(Constants.DEFAULT_SEED)
+	var player_h := _faction_building(sim.world, Types.Faction.PLAYER, Types.BuildingKind.HABITAT)
+	var enemy_h := _faction_building(sim.world, Types.Faction.ENEMY, Types.BuildingKind.HABITAT)
+	if player_h == null or enemy_h == null:
+		fails.append("generated map missing a habitat")
+		return
+	player_h.hp = 0
+	enemy_h.hp = 0
+	_tick_idle(sim, 1)
+	if sim.outcome != Types.Outcome.PLAYER_LOSE or sim.outcome_reason != Types.OutcomeReason.HABITAT_DESTROYED:
+		fails.append(
+			"same-tick both habitats dead gave %d/%d, expected PLAYER_LOSE/HABITAT_DESTROYED"
+			% [sim.outcome, sim.outcome_reason]
+		)
+
+
+func _tick_idle(sim: Sim, ticks: int) -> void:
+	for _i in ticks:
+		sim.tick()
+
+
+func _ticks_for(seconds: float) -> int:
+	return int(round(seconds / Constants.SIM_DT))
+
+
+func _empty_ice(depot: Building) -> void:
+	if depot.inventory != null and depot.inventory.ice > 0:
+		depot.inventory.remove(Types.ResourceKind.ICE, depot.inventory.ice)
+
+
+func _faction_building(world: World, faction: int, kind: int) -> Building:
+	for building in world.buildings.values():
+		if building.kind == kind and building.faction == faction:
+			return building
+	return null
 
 
 func _hold_interact(sim: Sim, ticks: int) -> void:

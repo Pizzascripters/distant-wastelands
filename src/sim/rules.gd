@@ -61,6 +61,41 @@ static func try_place(world: World, kind: int, tile: Vector2i) -> bool:
 	return true
 
 
+static func tick_life_support(sim: Sim) -> void:
+	if sim == null or sim.world == null or not sim.life is Dictionary:
+		return
+	for faction in [Types.Faction.PLAYER, Types.Faction.ENEMY]:
+		if _living_building(sim.world, faction, Types.BuildingKind.HABITAT) == null:
+			continue
+		var rec: Variant = sim.life.get(faction)
+		if rec == null:
+			continue
+		rec.ice_debt_timer += Constants.SIM_DT
+		var depot := _living_building(sim.world, faction, Types.BuildingKind.DEPOT)
+		if depot != null and depot.inventory != null and depot.inventory.ice == 0:
+			rec.zero_ice_timer += Constants.SIM_DT
+		var period := _ice_pull_period(faction)
+		if rec.ice_debt_timer >= period:
+			rec.ice_debt_timer -= period
+			if depot != null and depot.inventory != null and depot.inventory.ice >= 1:
+				depot.inventory.remove(Types.ResourceKind.ICE, 1)
+				rec.zero_ice_timer = 0.0
+
+
+static func evaluate_outcome(sim: Sim) -> Vector2i:
+	if sim == null or sim.world == null:
+		return Vector2i(Types.Outcome.NONE, Types.OutcomeReason.NONE)
+	if _living_building(sim.world, Types.Faction.PLAYER, Types.BuildingKind.HABITAT) == null:
+		return Vector2i(Types.Outcome.PLAYER_LOSE, Types.OutcomeReason.HABITAT_DESTROYED)
+	if _zero_ice_timer(sim, Types.Faction.PLAYER) >= Constants.ZERO_ICE_LIMIT:
+		return Vector2i(Types.Outcome.PLAYER_LOSE, Types.OutcomeReason.LIFE_SUPPORT)
+	if _living_building(sim.world, Types.Faction.ENEMY, Types.BuildingKind.HABITAT) == null:
+		return Vector2i(Types.Outcome.PLAYER_WIN, Types.OutcomeReason.HABITAT_DESTROYED)
+	if _zero_ice_timer(sim, Types.Faction.ENEMY) >= Constants.ZERO_ICE_LIMIT:
+		return Vector2i(Types.Outcome.PLAYER_WIN, Types.OutcomeReason.LIFE_SUPPORT)
+	return Vector2i(Types.Outcome.NONE, Types.OutcomeReason.NONE)
+
+
 static func resolve_interact(world: World, unit: Unit, cmd: InputCommand, last_target_id: int) -> int:
 	if unit == null:
 		return 0
@@ -199,15 +234,36 @@ static func _hp_for(kind: int) -> int:
 
 
 static func _living_player_depot(world: World) -> Building:
+	return _living_building(world, Types.Faction.PLAYER, Types.BuildingKind.DEPOT)
+
+
+static func _living_building(world: World, faction: int, kind: int) -> Building:
+	if world == null:
+		return null
 	for building in world.buildings.values():
-		if building.kind != Types.BuildingKind.DEPOT:
+		if building.kind != kind:
 			continue
-		if building.faction != Types.Faction.PLAYER:
+		if building.faction != faction:
 			continue
 		if building.hp <= 0:
 			continue
 		return building
 	return null
+
+
+static func _ice_pull_period(faction: int) -> float:
+	if faction == Types.Faction.PLAYER:
+		return Constants.ICE_PULL_PLAYER
+	return Constants.ICE_PULL_ENEMY
+
+
+static func _zero_ice_timer(sim: Sim, faction: int) -> float:
+	if sim == null or not sim.life is Dictionary:
+		return 0.0
+	var rec: Variant = sim.life.get(faction)
+	if rec == null:
+		return 0.0
+	return float(rec.zero_ice_timer)
 
 
 static func _deposit_at(world: World, tile: Vector2i) -> bool:
