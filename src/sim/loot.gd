@@ -7,4 +7,4 @@ var inventory: Inventory
 
 
 func _init() -> void:
-	inventory = Inventory.new(999, 999)
+	inventory = Inventory.new(999, 999, 999, 999)

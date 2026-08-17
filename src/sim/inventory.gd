@@ -3,13 +3,19 @@ extends RefCounted
 
 var scrap: int = 0
 var ice: int = 0
+var ore: int = 0
+var parts: int = 0
 var cap_scrap: int = 0
 var cap_ice: int = 0
+var cap_ore: int = 0
+var cap_parts: int = 0
 
 
-func _init(p_cap_scrap: int = 0, p_cap_ice: int = 0) -> void:
+func _init(p_cap_scrap: int = 0, p_cap_ice: int = 0, p_cap_ore: int = 0, p_cap_parts: int = 0) -> void:
 	cap_scrap = maxi(p_cap_scrap, 0)
 	cap_ice = maxi(p_cap_ice, 0)
+	cap_ore = maxi(p_cap_ore, 0)
+	cap_parts = maxi(p_cap_parts, 0)
 
 
 func free_space(kind: int) -> int:
@@ -44,6 +50,10 @@ func _amount(kind: int) -> int:
 			return scrap
 		Types.ResourceKind.ICE:
 			return ice
+		Types.ResourceKind.ORE:
+			return ore
+		Types.ResourceKind.PARTS:
+			return parts
 		_:
 			return 0
 
@@ -54,6 +64,10 @@ func _cap(kind: int) -> int:
 			return cap_scrap
 		Types.ResourceKind.ICE:
 			return cap_ice
+		Types.ResourceKind.ORE:
+			return cap_ore
+		Types.ResourceKind.PARTS:
+			return cap_parts
 		_:
 			return 0
 
@@ -64,3 +78,7 @@ func _set_amount(kind: int, value: int) -> void:
 			scrap = value
 		Types.ResourceKind.ICE:
 			ice = value
+		Types.ResourceKind.ORE:
+			ore = value
+		Types.ResourceKind.PARTS:
+			parts = value

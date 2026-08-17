@@ -22,8 +22,18 @@ var siege_target_id: int = 0
 static func inventory_for(unit_kind: int) -> Inventory:
 	match unit_kind:
 		Types.UnitKind.PLAYER:
-			return Inventory.new(Constants.PLAYER_CARRY_SCRAP, Constants.PLAYER_CARRY_ICE)
+			return Inventory.new(
+				Constants.PLAYER_CARRY_SCRAP,
+				Constants.PLAYER_CARRY_ICE,
+				Constants.PLAYER_CARRY_ORE,
+				Constants.PLAYER_CARRY_PARTS
+			)
 		Types.UnitKind.RAIDER:
-			return Inventory.new(Constants.RAIDER_CARRY_SCRAP, Constants.RAIDER_CARRY_ICE)
+			return Inventory.new(
+				Constants.RAIDER_CARRY_SCRAP,
+				Constants.RAIDER_CARRY_ICE,
+				Constants.RAIDER_CARRY_ORE,
+				Constants.RAIDER_CARRY_PARTS
+			)
 		_:
-			return Inventory.new(0, 0)
+			return Inventory.new(0, 0, 0, 0)

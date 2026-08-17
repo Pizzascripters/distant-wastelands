@@ -42,6 +42,14 @@ func _test_defaults_and_player_inventory(fails: PackedStringArray) -> void:
 		fails.append("player cap_scrap is %s, expected %d" % [str(inv.get("cap_scrap")), Constants.PLAYER_CARRY_SCRAP])
 	if int(inv.get("cap_ice", -1)) != Constants.PLAYER_CARRY_ICE:
 		fails.append("player cap_ice is %s, expected %d" % [str(inv.get("cap_ice")), Constants.PLAYER_CARRY_ICE])
+	if int(inv.get("cap_ore", -1)) != Constants.PLAYER_CARRY_ORE:
+		fails.append("player cap_ore is %s, expected %d" % [str(inv.get("cap_ore")), Constants.PLAYER_CARRY_ORE])
+	if int(inv.get("cap_parts", -1)) != Constants.PLAYER_CARRY_PARTS:
+		fails.append(
+			"player cap_parts is %s, expected %d" % [str(inv.get("cap_parts")), Constants.PLAYER_CARRY_PARTS]
+		)
+	if int(inv.get("ore", -1)) != 0 or int(inv.get("parts", -1)) != 0:
+		fails.append("player ore/parts started at %s/%s" % [str(inv.get("ore")), str(inv.get("parts"))])
 
 
 func _test_copies_world_entities(fails: PackedStringArray) -> void:

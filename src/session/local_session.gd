@@ -26,6 +26,7 @@ func submit_command(cmd: InputCommand) -> void:
 	latest.aim = cmd.aim
 	latest.fire = cmd.fire
 	latest.interact = cmd.interact
+	latest.withdraw = cmd.withdraw
 	if cmd.build_kind >= 0:
 		pending_build_kind = cmd.build_kind
 		pending_build_tile = cmd.build_tile
@@ -37,7 +38,7 @@ func set_paused(p: bool) -> void:
 
 # Command / tick / pause contract:
 # 1. submit_command stores held state only. It does not enqueue and does not stamp tick.
-#    Overwrite latest.move/aim/fire/interact. Latch build_kind >= 0; a later
+#    Overwrite latest.move/aim/fire/interact/withdraw. Latch build_kind >= 0; a later
 #    build_kind < 0 must not clear the latch.
 # 2. tick is the only enqueuer. paused or a locked outcome returns immediately
 #    (no acc, no enqueue, no Sim.tick). Otherwise acc += real_delta and, while
@@ -45,7 +46,7 @@ func set_paused(p: bool) -> void:
 #    latest, stamp tick = sim.tick_index + 1, copy then clear the build latch,
 #    enqueue exactly one command, then Sim.tick (which consumes it).
 # 3. Leftover acc is kept; leftover above MAX_CATCHUP_TICKS * SIM_DT is discarded.
-# 4. fire/interact are held; build_kind is one-shot via the latch.
+# 4. fire/interact/withdraw are held; build_kind is one-shot via the latch.
 # 5. set_paused only flips the flag this method checks.
 func tick(real_delta: float) -> void:
 	if paused or sim.outcome != Types.Outcome.NONE:
