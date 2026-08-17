@@ -62,7 +62,7 @@ static func can_place(world: World, sim: Sim, kind: int, tile: Vector2i) -> bool
 				return false
 			if _deposit_at(world, Vector2i(x, y)):
 				return false
-			if Constants.ENEMY_CAMP_RECT.has_point(Vector2i(x, y)):
+			if world.in_enemy_camp_rect(Vector2i(x, y)):
 				return false
 			if _unit_overlaps_tile(world, Vector2i(x, y)):
 				return false

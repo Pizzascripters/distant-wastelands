@@ -103,9 +103,12 @@ func _test_reject_overlap(fails: PackedStringArray) -> void:
 
 func _test_reject_enemy_rect(fails: PackedStringArray) -> void:
 	var world := _world_with_depot(Constants.WALL_COST)
-	var tile := Constants.ENEMY_CAMP_RECT.position
+	var camp := World.Camp.new()
+	camp.reserved = Rect2i(40, 40, Constants.ENEMY_CAMP_RECT_SIZE, Constants.ENEMY_CAMP_RECT_SIZE)
+	world.camps.append(camp)
+	var tile := camp.reserved.position
 	if Rules.can_place(world, null, Types.BuildingKind.WALL, tile):
-		fails.append("can_place should reject ENEMY_CAMP_RECT")
+		fails.append("can_place should reject an enemy camp rect")
 
 
 func _test_reject_unaffordable(fails: PackedStringArray) -> void:
@@ -1284,7 +1287,7 @@ func _fill_buildings(world: World, count: int) -> void:
 				continue
 			if Vector2i(x, y) == _TILE:
 				continue
-			if Constants.ENEMY_CAMP_RECT.has_point(Vector2i(x, y)):
+			if world.in_enemy_camp_rect(Vector2i(x, y)):
 				continue
 			var building := Building.new()
 			building.id = world.alloc_id()

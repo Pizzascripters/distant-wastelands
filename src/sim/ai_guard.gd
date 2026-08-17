@@ -13,7 +13,7 @@ static func think(unit: Unit, sim: Sim) -> void:
 	unit.siege_target_id = 0
 	unit.interact_progress = 0.0
 
-	var home := sim.world.tile_center(Constants.ENEMY_GUARD_TILE.x, Constants.ENEMY_GUARD_TILE.y)
+	var home := _guard_home(sim.world, unit)
 	var player := sim.get_player()
 	if _living_player_within_aggro(player, home):
 		_chase(unit, player)
@@ -22,6 +22,21 @@ static func think(unit: Unit, sim: Sim) -> void:
 	else:
 		_idle(unit)
 	Combat.write_fire_intent(sim.world, unit, player)
+
+
+static func _guard_home(world: World, unit: Unit) -> Vector2:
+	var best := unit.pos
+	var best_d := INF
+	for raw in world.camps:
+		var camp := raw as World.Camp
+		if camp == null:
+			continue
+		var home := world.tile_center(camp.guard_tile.x, camp.guard_tile.y)
+		var d := unit.pos.distance_squared_to(home)
+		if d < best_d:
+			best_d = d
+			best = home
+	return best
 
 
 static func _living_player_within_aggro(player: Unit, home: Vector2) -> bool:

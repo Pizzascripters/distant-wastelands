@@ -1,5 +1,7 @@
 extends RefCounted
 
+const _ENEMY_DEPOT := Vector2i(67, 218)
+
 func run() -> PackedStringArray:
 	var fails := PackedStringArray()
 	_test_spawned_paths_to_depot(fails)
@@ -140,7 +142,7 @@ func _test_hauling_siege_goes_home(fails: PackedStringArray) -> void:
 	var ctx := _context()
 	var raider := _raider(ctx)
 	_place_depot(ctx, Types.Faction.PLAYER, Constants.PLAYER_DEPOT_TILE, 10, 10)
-	_place_depot(ctx, Types.Faction.ENEMY, Constants.ENEMY_DEPOT_TILE, 20, 20)
+	_place_depot(ctx, Types.Faction.ENEMY, _ENEMY_DEPOT, 20, 20)
 	raider.ai_state = Types.RaiderState.SIEGE
 	raider.inventory.scrap = 2
 	raider.pos = _world(ctx).tile_center(20, 52)
@@ -158,17 +160,17 @@ func _test_hauling_siege_rechecks_home(fails: PackedStringArray) -> void:
 	var raider := _raider(ctx)
 	var world := _world(ctx)
 	_place_depot(ctx, Types.Faction.PLAYER, Constants.PLAYER_DEPOT_TILE, 10, 10)
-	_place_depot(ctx, Types.Faction.ENEMY, Constants.ENEMY_DEPOT_TILE, 20, 20)
+	_place_depot(ctx, Types.Faction.ENEMY, _ENEMY_DEPOT, 20, 20)
 	var wall := _place_wall(ctx, Vector2i(5, 5))
 	_box_in(world, 5, 5)
-	_seal_building(world, Constants.ENEMY_DEPOT_TILE, 2)
+	_seal_building(world, _ENEMY_DEPOT, 2)
 	raider.ai_state = Types.RaiderState.SIEGE
 	raider.inventory.scrap = 2
 	raider.pos = world.tile_center(20, 52)
 	_pump(ctx)
 	if raider.ai_state != Types.RaiderState.SIEGE:
 		fails.append("hauling SIEGE should stay while home A* is empty, got %d" % raider.ai_state)
-	_unseal_building(world, Constants.ENEMY_DEPOT_TILE, 2)
+	_unseal_building(world, _ENEMY_DEPOT, 2)
 	var wait := int(Constants.PATH_RECALC / Constants.SIM_DT) + 2
 	for _i in wait:
 		_pump(ctx)
@@ -182,7 +184,7 @@ func _test_hauling_stuck_stays_siege(fails: PackedStringArray) -> void:
 	var ctx := _context()
 	var raider := _raider(ctx)
 	_place_depot(ctx, Types.Faction.PLAYER, Constants.PLAYER_DEPOT_TILE, 10, 10)
-	_place_depot(ctx, Types.Faction.ENEMY, Constants.ENEMY_DEPOT_TILE, 20, 20)
+	_place_depot(ctx, Types.Faction.ENEMY, _ENEMY_DEPOT, 20, 20)
 	var wall := _place_wall(ctx, Vector2i(12, 52))
 	raider.ai_state = Types.RaiderState.PATH_HOME
 	raider.inventory.scrap = 2
@@ -224,10 +226,10 @@ func _test_home_despawn_deposits_and_leftover(fails: PackedStringArray) -> void:
 	var ctx := _context()
 	var world := _world(ctx)
 	var raider := _raider(ctx)
-	var home := _place_depot(ctx, Types.Faction.ENEMY, Constants.ENEMY_DEPOT_TILE, 48, 50)
+	var home := _place_depot(ctx, Types.Faction.ENEMY, _ENEMY_DEPOT, 48, 50)
 	raider.ai_state = Types.RaiderState.PATH_HOME
 	raider.inventory.scrap = 5
-	raider.pos = world.tile_center(Constants.ENEMY_DEPOT_TILE.x - 1, Constants.ENEMY_DEPOT_TILE.y)
+	raider.pos = world.tile_center(_ENEMY_DEPOT.x - 1, _ENEMY_DEPOT.y)
 	var rid: int = raider.id
 	AiRaider.think(raider, _sim(ctx))
 	if world.units.has(rid):
@@ -241,8 +243,8 @@ func _test_home_despawn_deposits_and_leftover(fails: PackedStringArray) -> void:
 	if pile.inventory.scrap != 3:
 		fails.append("leftover loot scrap is %d, expected 3" % pile.inventory.scrap)
 	var center := Rect2(
-		Constants.ENEMY_DEPOT_TILE.x * Constants.TILE,
-		Constants.ENEMY_DEPOT_TILE.y * Constants.TILE,
+		_ENEMY_DEPOT.x * Constants.TILE,
+		_ENEMY_DEPOT.y * Constants.TILE,
 		float(2 * Constants.TILE),
 		float(2 * Constants.TILE)
 	).get_center()
@@ -254,7 +256,7 @@ func _test_loot_channel_transfers(fails: PackedStringArray) -> void:
 	var ctx := _context()
 	var raider := _raider(ctx)
 	var depot := _place_depot(ctx, Types.Faction.PLAYER, Constants.PLAYER_DEPOT_TILE, 10, 8)
-	_place_depot(ctx, Types.Faction.ENEMY, Constants.ENEMY_DEPOT_TILE, 20, 20)
+	_place_depot(ctx, Types.Faction.ENEMY, _ENEMY_DEPOT, 20, 20)
 	raider.ai_state = Types.RaiderState.LOOT
 	raider.pos = _world(ctx).tile_center(
 		Constants.PLAYER_DEPOT_TILE.x + 2, Constants.PLAYER_DEPOT_TILE.y
@@ -276,7 +278,7 @@ func _test_loot_one_resource_goes_home(fails: PackedStringArray) -> void:
 	var ctx := _context()
 	var raider := _raider(ctx)
 	var depot := _place_depot(ctx, Types.Faction.PLAYER, Constants.PLAYER_DEPOT_TILE, 10, 0)
-	_place_depot(ctx, Types.Faction.ENEMY, Constants.ENEMY_DEPOT_TILE, 20, 20)
+	_place_depot(ctx, Types.Faction.ENEMY, _ENEMY_DEPOT, 20, 20)
 	raider.ai_state = Types.RaiderState.LOOT
 	raider.pos = _world(ctx).tile_center(
 		Constants.PLAYER_DEPOT_TILE.x + 2, Constants.PLAYER_DEPOT_TILE.y

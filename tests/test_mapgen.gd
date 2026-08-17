@@ -42,37 +42,49 @@ func _test_corridor_empty(fails: PackedStringArray) -> void:
 		fails.append("occupancy size is %d, expected %d" % [world.occupancy.size(), Constants.MAP_W * Constants.MAP_H])
 	if world.chunk_generation.size() != 64:
 		fails.append("chunk_generation size is %d, expected 64" % world.chunk_generation.size())
-	for tile in _manhattan_corridor_tiles(Constants.PLAYER_SPAWN_TILE, Constants.ENEMY_DEPOT_TILE):
-		if Mapgen.is_building_footprint(tile.x, tile.y):
-			continue
-		if world.get_terrain(tile.x, tile.y) != Types.TileTerrain.EMPTY:
-			fails.append("Manhattan corridor tile (%d,%d) is not EMPTY" % [tile.x, tile.y])
-			return
+	for edge in _spanning_tree_edges(world):
+		for tile in _manhattan_corridor_tiles(edge[0], edge[1]):
+			if Mapgen.is_building_footprint(world, tile.x, tile.y):
+				continue
+			if world.get_terrain(tile.x, tile.y) != Types.TileTerrain.EMPTY:
+				fails.append("Manhattan corridor tile (%d,%d) is not EMPTY" % [tile.x, tile.y])
+				return
 
 
 func _test_camps_reserved(fails: PackedStringArray) -> void:
 	var world := Mapgen.generate(Constants.DEFAULT_SEED)
 	_assert_rect_empty_of_rocks(fails, world, Constants.PLAYER_CAMP_RECT, "player camp")
-	_assert_rect_empty_of_rocks(fails, world, Constants.ENEMY_CAMP_RECT, "enemy camp")
 	if Constants.PLAYER_SPAWN_TILE != Vector2i(23, 218):
 		fails.append("PLAYER_SPAWN_TILE is %s, expected (23, 218)" % Constants.PLAYER_SPAWN_TILE)
 	if not Constants.PLAYER_CAMP_RECT.has_point(Constants.PLAYER_SPAWN_TILE):
 		fails.append("player spawn is outside PLAYER_CAMP_RECT")
-	if not Constants.ENEMY_CAMP_RECT.has_point(Constants.ENEMY_DEPOT_TILE):
-		fails.append("enemy depot is outside ENEMY_CAMP_RECT")
 	if not Constants.PLAYER_CAMP_RECT.has_point(Constants.PLAYER_HABITAT_TILE):
 		fails.append("player habitat is outside PLAYER_CAMP_RECT")
 	if not Constants.PLAYER_CAMP_RECT.has_point(Constants.PLAYER_DEPOT_TILE):
 		fails.append("player depot is outside PLAYER_CAMP_RECT")
-	if not Constants.ENEMY_CAMP_RECT.has_point(Constants.ENEMY_HABITAT_TILE):
-		fails.append("enemy habitat is outside ENEMY_CAMP_RECT")
+	if world.camps.size() < Constants.MIN_ENEMY_CAMPS or world.camps.size() > Constants.ENEMY_CAMP_COUNT:
+		fails.append(
+			"camps.size() is %d, expected [%d, %d]"
+			% [world.camps.size(), Constants.MIN_ENEMY_CAMPS, Constants.ENEMY_CAMP_COUNT]
+		)
+	var near_n := 0
 	var spawn := Constants.PLAYER_SPAWN_TILE
-	var depot := Constants.ENEMY_DEPOT_TILE
-	var cheb := maxi(absi(depot.x - spawn.x), absi(depot.y - spawn.y))
-	if cheb < 40 or cheb > 48:
-		fails.append("near-camp depot Chebyshev is %d, expected 40-48" % cheb)
-	if depot.x <= spawn.x or depot.y > spawn.y:
-		fails.append("near-camp depot %s is not east or north-east of spawn %s" % [depot, spawn])
+	for i in world.camps.size():
+		var camp: World.Camp = world.camps[i]
+		_assert_rect_empty_of_rocks(fails, world, camp.reserved, "enemy camp %d" % i)
+		if not camp.reserved.has_point(camp.depot_tile):
+			fails.append("camp %d depot is outside reserved" % i)
+		if not camp.reserved.has_point(camp.habitat_tile):
+			fails.append("camp %d habitat is outside reserved" % i)
+		var cheb := maxi(absi(camp.depot_tile.x - spawn.x), absi(camp.depot_tile.y - spawn.y))
+		if cheb < Constants.PLAYER_SAFE_RADIUS:
+			fails.append("camp %d depot Chebyshev is %d, inside PLAYER_SAFE_RADIUS" % [i, cheb])
+		if cheb >= Constants.PLAYER_SAFE_RADIUS and cheb <= Constants.CAMP_AGGRO_TILES:
+			near_n += 1
+	if near_n < 1:
+		fails.append("expected at least one near camp in [%d, %d]" % [
+			Constants.PLAYER_SAFE_RADIUS, Constants.CAMP_AGGRO_TILES
+		])
 
 
 func _test_player_carry_caps(fails: PackedStringArray) -> void:
@@ -116,58 +128,70 @@ func _test_camp_buildings(fails: PackedStringArray) -> void:
 		fails, world, Constants.PLAYER_DEPOT_TILE, Types.BuildingKind.DEPOT,
 		Types.Faction.PLAYER, Constants.DEPOT_HP
 	)
-	_expect_building(
-		fails, world, Constants.ENEMY_HABITAT_TILE, Types.BuildingKind.HABITAT,
-		Types.Faction.ENEMY, Constants.HABITAT_HP
-	)
-	_expect_building(
-		fails, world, Constants.ENEMY_DEPOT_TILE, Types.BuildingKind.DEPOT,
-		Types.Faction.ENEMY, Constants.DEPOT_HP
-	)
-	_expect_building(
-		fails, world, Constants.ENEMY_TURRET_TILE, Types.BuildingKind.TURRET,
-		Types.Faction.ENEMY, Constants.TURRET_HP
-	)
-	var guard: Unit = null
-	for id in world.units:
-		var unit: Unit = world.units[id]
-		if unit.kind == Types.UnitKind.GUARD:
-			guard = unit
-			break
-	if guard == null:
-		fails.append("mapgen did not spawn an enemy guard")
+	if world.camps.is_empty():
+		fails.append("mapgen did not place any enemy camps")
 		return
-	var expected := world.tile_center(Constants.ENEMY_GUARD_TILE.x, Constants.ENEMY_GUARD_TILE.y)
-	if guard.pos != expected:
-		fails.append("guard pos is %s, expected %s" % [guard.pos, expected])
-	if guard.faction != Types.Faction.ENEMY:
-		fails.append("guard faction is %d, expected ENEMY" % guard.faction)
-	if guard.hp != Constants.GUARD_HP or guard.hp_max != Constants.GUARD_HP:
-		fails.append("guard hp is %d/%d, expected %d" % [guard.hp, guard.hp_max, Constants.GUARD_HP])
+	for i in world.camps.size():
+		var camp: World.Camp = world.camps[i]
+		var origin: Vector2i = camp.reserved.position
+		if camp.habitat_tile != Vector2i(origin.x + Constants.CAMP_HABITAT_OX, origin.y + Constants.CAMP_HABITAT_OY):
+			fails.append("camp %d habitat offset is %s" % [i, camp.habitat_tile - origin])
+		if camp.depot_tile != Vector2i(origin.x + Constants.CAMP_DEPOT_OX, origin.y + Constants.CAMP_DEPOT_OY):
+			fails.append("camp %d depot offset is %s" % [i, camp.depot_tile - origin])
+		if camp.turret_tile != Vector2i(origin.x + Constants.CAMP_TURRET_OX, origin.y + Constants.CAMP_TURRET_OY):
+			fails.append("camp %d turret offset is %s" % [i, camp.turret_tile - origin])
+		if camp.guard_tile != Vector2i(origin.x + Constants.CAMP_GUARD_OX, origin.y + Constants.CAMP_GUARD_OY):
+			fails.append("camp %d guard offset is %s" % [i, camp.guard_tile - origin])
+		_expect_building(
+			fails, world, camp.habitat_tile, Types.BuildingKind.HABITAT,
+			Types.Faction.ENEMY, Constants.HABITAT_HP
+		)
+		_expect_building(
+			fails, world, camp.depot_tile, Types.BuildingKind.DEPOT,
+			Types.Faction.ENEMY, Constants.DEPOT_HP
+		)
+		_expect_building(
+			fails, world, camp.turret_tile, Types.BuildingKind.TURRET,
+			Types.Faction.ENEMY, Constants.TURRET_HP
+		)
+		var expected := world.tile_center(camp.guard_tile.x, camp.guard_tile.y)
+		var guard := _guard_at(world, expected)
+		if guard == null:
+			fails.append("camp %d missing guard at %s" % [i, camp.guard_tile])
+			continue
+		if guard.faction != Types.Faction.ENEMY:
+			fails.append("camp %d guard faction is %d, expected ENEMY" % [i, guard.faction])
+		if guard.hp != Constants.GUARD_HP or guard.hp_max != Constants.GUARD_HP:
+			fails.append("camp %d guard hp is %d/%d, expected %d" % [i, guard.hp, guard.hp_max, Constants.GUARD_HP])
 
 
 func _test_starting_stocks(fails: PackedStringArray) -> void:
 	var world := Mapgen.generate(Constants.DEFAULT_SEED)
 	var player_depot := world.building_at(Constants.PLAYER_DEPOT_TILE.x, Constants.PLAYER_DEPOT_TILE.y)
-	var enemy_depot := world.building_at(Constants.ENEMY_DEPOT_TILE.x, Constants.ENEMY_DEPOT_TILE.y)
 	if player_depot == null or player_depot.kind != Types.BuildingKind.DEPOT:
 		fails.append("player depot missing at PLAYER_DEPOT_TILE")
 		return
-	if enemy_depot == null or enemy_depot.kind != Types.BuildingKind.DEPOT:
-		fails.append("enemy depot missing at ENEMY_DEPOT_TILE")
-		return
 	_expect_stock(fails, player_depot, "player depot", Constants.START_PLAYER_SCRAP, 0)
-	_expect_stock(fails, enemy_depot, "enemy depot", Constants.START_ENEMY_SCRAP, 0)
 	var player_habitat := world.building_at(Constants.PLAYER_HABITAT_TILE.x, Constants.PLAYER_HABITAT_TILE.y)
-	var enemy_habitat := world.building_at(Constants.ENEMY_HABITAT_TILE.x, Constants.ENEMY_HABITAT_TILE.y)
 	if player_habitat == null or player_habitat.kind != Types.BuildingKind.HABITAT:
 		fails.append("player habitat missing at PLAYER_HABITAT_TILE")
 		return
-	if enemy_habitat == null or enemy_habitat.kind != Types.BuildingKind.HABITAT:
-		fails.append("enemy habitat missing at ENEMY_HABITAT_TILE")
-		return
 	_expect_habitat_ice(fails, player_habitat, "player habitat", Constants.START_PLAYER_ICE)
-	_expect_habitat_ice(fails, enemy_habitat, "enemy habitat", Constants.START_ENEMY_ICE)
+	if world.camps.is_empty():
+		fails.append("starting stocks missing enemy camps")
+		return
+	for i in world.camps.size():
+		var camp: World.Camp = world.camps[i]
+		var enemy_depot := world.building_at(camp.depot_tile.x, camp.depot_tile.y)
+		if enemy_depot == null or enemy_depot.kind != Types.BuildingKind.DEPOT:
+			fails.append("enemy depot missing at camp %d" % i)
+			return
+		_expect_stock(fails, enemy_depot, "enemy depot %d" % i, Constants.START_ENEMY_SCRAP, 0)
+		var enemy_habitat := world.building_at(camp.habitat_tile.x, camp.habitat_tile.y)
+		if enemy_habitat == null or enemy_habitat.kind != Types.BuildingKind.HABITAT:
+			fails.append("enemy habitat missing at camp %d" % i)
+			return
+		_expect_habitat_ice(fails, enemy_habitat, "enemy habitat %d" % i, Constants.START_ENEMY_ICE)
 
 
 func _test_deposit_minima(fails: PackedStringArray) -> void:
@@ -224,7 +248,7 @@ func _test_cliffs_and_craters(fails: PackedStringArray) -> void:
 				if world.is_walkable(x, y):
 					fails.append("seed %d feature at (%d,%d) is walkable" % [s, x, y])
 					return
-				if Constants.PLAYER_CAMP_RECT.has_point(Vector2i(x, y)) or Constants.ENEMY_CAMP_RECT.has_point(Vector2i(x, y)):
+				if Constants.PLAYER_CAMP_RECT.has_point(Vector2i(x, y)) or world.in_enemy_camp_rect(Vector2i(x, y)):
 					fails.append("seed %d feature overlaps reserved rect at (%d,%d)" % [s, x, y])
 					return
 				if kind == Types.TileTerrain.CLIFF:
@@ -242,7 +266,7 @@ func _deposit_placement_ok(fails: PackedStringArray, world: World, deposit: Depo
 	if not world.is_walkable(tile.x, tile.y):
 		fails.append("seed %d deposit %d on non-walkable tile %s" % [seed, deposit.id, tile])
 		return false
-	if Constants.PLAYER_CAMP_RECT.has_point(tile) or Constants.ENEMY_CAMP_RECT.has_point(tile):
+	if Constants.PLAYER_CAMP_RECT.has_point(tile) or world.in_enemy_camp_rect(tile):
 		fails.append("seed %d deposit %d in reserved rect at %s" % [seed, deposit.id, tile])
 		return false
 	for other_id in world.deposits:
@@ -338,6 +362,54 @@ func _deposit_tiles(world: World) -> Array:
 		tiles.append([deposit.kind, deposit.tile.x, deposit.tile.y, deposit.remaining])
 	tiles.sort()
 	return tiles
+
+
+func _guard_at(world: World, pos: Vector2) -> Unit:
+	for id in world.units:
+		var unit: Unit = world.units[id]
+		if unit.kind == Types.UnitKind.GUARD and unit.pos == pos:
+			return unit
+	return null
+
+
+func _spanning_tree_edges(world: World) -> Array:
+	var edges: Array = []
+	var connected: Array[Vector2i] = [Constants.PLAYER_SPAWN_TILE]
+	var unused: Array[Vector2i] = []
+	for raw in world.camps:
+		var camp: World.Camp = raw
+		if camp != null:
+			unused.append(camp.depot_tile)
+	while not unused.is_empty():
+		var best_i := 0
+		var best_endpoint := connected[0]
+		var best_cheb := maxi(
+			absi(unused[0].x - connected[0].x), absi(unused[0].y - connected[0].y)
+		)
+		for i in unused.size():
+			var depot: Vector2i = unused[i]
+			for node in connected:
+				var d := maxi(absi(depot.x - node.x), absi(depot.y - node.y))
+				if d > best_cheb:
+					continue
+				var better := d < best_cheb
+				if not better:
+					better = depot.x < unused[best_i].x or (
+						depot.x == unused[best_i].x and depot.y < unused[best_i].y
+					)
+				if not better and depot == unused[best_i]:
+					better = node.x < best_endpoint.x or (
+						node.x == best_endpoint.x and node.y < best_endpoint.y
+					)
+				if better:
+					best_cheb = d
+					best_i = i
+					best_endpoint = node
+		var next: Vector2i = unused[best_i]
+		edges.append([best_endpoint, next])
+		connected.append(next)
+		unused.remove_at(best_i)
+	return edges
 
 
 func _assert_rect_empty_of_rocks(fails: PackedStringArray, world: World, rect: Rect2i, label: String) -> void:

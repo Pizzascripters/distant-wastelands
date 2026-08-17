@@ -1,6 +1,18 @@
 class_name World
 extends RefCounted
 
+class Camp extends RefCounted:
+	var reserved: Rect2i = Rect2i()
+	var habitat_tile: Vector2i = Vector2i.ZERO
+	var depot_tile: Vector2i = Vector2i.ZERO
+	var turret_tile: Vector2i = Vector2i.ZERO
+	var guard_tile: Vector2i = Vector2i.ZERO
+	var habitat_id: int = 0
+	var depot_id: int = 0
+	var next_raid_at: float = 0.0
+	var ever_aggro: bool = false
+
+
 var seed: int = 0
 var tiles: PackedByteArray = PackedByteArray()
 var tiles_generation: int = 0
@@ -11,6 +23,7 @@ var deposits: Dictionary = {}
 var loot: Dictionary = {}
 var units: Dictionary = {}
 var projectiles: Dictionary = {}
+var camps: Array = []
 var next_id: int = 1
 var spatial: SpatialIndex = SpatialIndex.new()
 var _active_anchors: Array[Vector2i] = []
@@ -168,6 +181,14 @@ func vacate(building: Building) -> void:
 			var i := index_of(x, y)
 			if occupancy[i] == building.id:
 				occupancy[i] = 0
+
+
+func in_enemy_camp_rect(tile: Vector2i) -> bool:
+	for raw in camps:
+		var camp := raw as World.Camp
+		if camp != null and camp.reserved.has_point(tile):
+			return true
+	return false
 
 
 func building_at(x: int, y: int) -> Building:
