@@ -3,6 +3,7 @@ extends Control
 
 const TEXT := Color("F2EDE6")
 const LOW_ICE := Color("E24A3B")
+const RAID_BANNER := Color("E24A3B")
 const FONT_SIZE := 16
 const MISSING := "—"
 
@@ -65,6 +66,7 @@ func apply_snapshot(snap: SimSnapshot) -> void:
 	_raid_banner.visible = banner > 0.0
 	if banner > 0.0:
 		_raid_banner.text = "Raid incoming"
+		_raid_banner.add_theme_color_override("font_color", RAID_BANNER)
 
 
 func _bind_nodes() -> bool:

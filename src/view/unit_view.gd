@@ -11,14 +11,20 @@ const NOTCH_LEN := 6.0
 const RAIDER_NOTCH_LEN := 4.0
 const OUTLINE_W := 1.5
 const GUARD_OUTLINE_W := 3.0
+const PLAYER_PATH := "res://assets/sprites/placeholder/player.png"
+const RAIDER_PATH := "res://assets/sprites/placeholder/raider.png"
+const GUARD_PATH := "res://assets/sprites/placeholder/guard.png"
 
 var _kind: int = Types.UnitKind.PLAYER
 var _aim: Vector2 = Vector2.RIGHT
 var _hp: int = -1
 var _flash_left: float = 0.0
+var _tex: Texture2D
+var _tex_kind: int = -999
 
 
 func _ready() -> void:
+	texture_filter = TEXTURE_FILTER_NEAREST
 	set_process(_flash_left > 0.0)
 
 
@@ -52,14 +58,35 @@ func _draw() -> void:
 		dir = Vector2.RIGHT
 	else:
 		dir = dir.normalized()
-	var fill := FLASH if _flash_left > 0.0 else _fill_for_kind()
-	var outline_w := GUARD_OUTLINE_W if _kind == Types.UnitKind.GUARD else OUTLINE_W
+	var tex := _texture()
+	var flash := _flash_left > 0.0
+	if tex != null:
+		var sz := Vector2(tex.get_width(), tex.get_height())
+		var modulate := FLASH if flash else Color.WHITE
+		draw_texture_rect(tex, Rect2(-sz * 0.5, sz), false, modulate)
+	else:
+		var fill := FLASH if flash else _fill_for_kind()
+		var outline_w := GUARD_OUTLINE_W if _kind == Types.UnitKind.GUARD else OUTLINE_W
+		draw_circle(Vector2.ZERO, VISUAL_RADIUS, fill)
+		draw_arc(Vector2.ZERO, VISUAL_RADIUS, 0.0, TAU, 28, OUTLINE, outline_w, true)
 	var notch_len := RAIDER_NOTCH_LEN if _kind == Types.UnitKind.RAIDER else NOTCH_LEN
-	draw_circle(Vector2.ZERO, VISUAL_RADIUS, fill)
-	draw_arc(Vector2.ZERO, VISUAL_RADIUS, 0.0, TAU, 28, OUTLINE, outline_w, true)
 	var notch_a := dir * (VISUAL_RADIUS - 2.0)
 	var notch_b := dir * (VISUAL_RADIUS + notch_len)
 	draw_line(notch_a, notch_b, OUTLINE, 2.0, true)
+
+
+func _texture() -> Texture2D:
+	if _tex_kind == _kind:
+		return _tex
+	_tex_kind = _kind
+	match _kind:
+		Types.UnitKind.RAIDER:
+			_tex = WorldView.load_png(RAIDER_PATH)
+		Types.UnitKind.GUARD:
+			_tex = WorldView.load_png(GUARD_PATH)
+		_:
+			_tex = WorldView.load_png(PLAYER_PATH)
+	return _tex
 
 
 func _fill_for_kind() -> Color:
@@ -70,4 +97,3 @@ func _fill_for_kind() -> Color:
 			return GUARD_FILL
 		_:
 			return PLAYER_FILL
-

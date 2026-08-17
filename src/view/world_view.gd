@@ -12,20 +12,26 @@ const SCRAP_H := 16.0
 const ICE_SIZE := 18.0
 const GROUND_PATH := "res://assets/sprites/tiles/ground.png"
 const ROCK_PATH := "res://assets/sprites/tiles/rock.png"
+const SCRAP_PATH := "res://assets/sprites/placeholder/scrap.png"
+const ICE_PATH := "res://assets/sprites/placeholder/ice.png"
 
 var _tiles: PackedByteArray = PackedByteArray()
 var _deposits: Array[Dictionary] = []
 var _ground_tex: Texture2D
 var _rock_tex: Texture2D
+var _scrap_tex: Texture2D
+var _ice_tex: Texture2D
 
 
 func _ready() -> void:
 	texture_filter = TEXTURE_FILTER_NEAREST
-	_ground_tex = _load_tile(GROUND_PATH)
-	_rock_tex = _load_tile(ROCK_PATH)
+	_ground_tex = load_png(GROUND_PATH)
+	_rock_tex = load_png(ROCK_PATH)
+	_scrap_tex = load_png(SCRAP_PATH)
+	_ice_tex = load_png(ICE_PATH)
 
 
-func _load_tile(path: String) -> Texture2D:
+static func load_png(path: String) -> Texture2D:
 	# FileAccess still sees the PNG after a clone; ResourceLoader remaps to
 	# .godot/imported/*.ctex, which is missing until the editor imports.
 	var bytes := FileAccess.get_file_as_bytes(path)
@@ -33,7 +39,9 @@ func _load_tile(path: String) -> Texture2D:
 		var img := Image.new()
 		if img.load_png_from_buffer(bytes) == OK:
 			return ImageTexture.create_from_image(img)
-	return load(path) as Texture2D
+	if ResourceLoader.exists(path):
+		return load(path) as Texture2D
+	return null
 
 
 func rebuild(snap: SimSnapshot) -> void:
@@ -88,6 +96,10 @@ func _draw_deposits() -> void:
 
 
 func _draw_scrap(center: Vector2) -> void:
+	if _scrap_tex != null:
+		var sz := Vector2(_scrap_tex.get_width(), _scrap_tex.get_height())
+		draw_texture(_scrap_tex, center - sz * 0.5)
+		return
 	var hw := SCRAP_W * 0.5
 	var hh := SCRAP_H * 0.5
 	draw_colored_polygon(
@@ -101,6 +113,10 @@ func _draw_scrap(center: Vector2) -> void:
 
 
 func _draw_ice(center: Vector2) -> void:
+	if _ice_tex != null:
+		var sz := Vector2(_ice_tex.get_width(), _ice_tex.get_height())
+		draw_texture(_ice_tex, center - sz * 0.5)
+		return
 	var h := ICE_SIZE * 0.5
 	draw_colored_polygon(
 		PackedVector2Array([
