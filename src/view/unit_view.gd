@@ -62,14 +62,17 @@ func _draw() -> void:
 		dir = dir.normalized()
 	var flash := _flash_left > 0.0
 	if _tex != null:
+		# Placeholder PNGs already include the aim notch along +X.
 		var sz := Vector2(_tex.get_width(), _tex.get_height())
 		var modulate := FLASH if flash else Color.WHITE
+		draw_set_transform(Vector2.ZERO, dir.angle(), Vector2.ONE)
 		draw_texture_rect(_tex, Rect2(-sz * 0.5, sz), false, modulate)
-	else:
-		var fill := FLASH if flash else _fill_for_kind()
-		var outline_w := GUARD_OUTLINE_W if _kind == Types.UnitKind.GUARD else OUTLINE_W
-		draw_circle(Vector2.ZERO, VISUAL_RADIUS, fill)
-		draw_arc(Vector2.ZERO, VISUAL_RADIUS, 0.0, TAU, 28, OUTLINE, outline_w, true)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		return
+	var fill := FLASH if flash else _fill_for_kind()
+	var outline_w := GUARD_OUTLINE_W if _kind == Types.UnitKind.GUARD else OUTLINE_W
+	draw_circle(Vector2.ZERO, VISUAL_RADIUS, fill)
+	draw_arc(Vector2.ZERO, VISUAL_RADIUS, 0.0, TAU, 28, OUTLINE, outline_w, true)
 	var notch_len := RAIDER_NOTCH_LEN if _kind == Types.UnitKind.RAIDER else NOTCH_LEN
 	var notch_a := dir * (VISUAL_RADIUS - 2.0)
 	var notch_b := dir * (VISUAL_RADIUS + notch_len)
