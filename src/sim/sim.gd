@@ -1,12 +1,17 @@
 class_name Sim
 extends RefCounted
 
+class FactionLife extends RefCounted:
+	var ice_debt_timer: float = 0.0
+	var zero_ice_timer: float = 0.0
+
 var tick_index: int = 0
 var time: float = 0.0
 var outcome: int = Types.Outcome.NONE
 var outcome_reason: int = Types.OutcomeReason.NONE
 var world: World
 var player_id: int = 0
+var life: Dictionary = {}
 var _interact_target_id: int = 0
 
 var _queue: Array[InputCommand] = []
@@ -21,6 +26,10 @@ func setup(p_seed: int) -> void:
 	_queue.clear()
 	player_id = 0
 	_interact_target_id = 0
+	life = {
+		Types.Faction.PLAYER: FactionLife.new(),
+		Types.Faction.ENEMY: FactionLife.new(),
+	}
 	for unit in world.units.values():
 		if unit.kind == Types.UnitKind.PLAYER:
 			player_id = unit.id
@@ -40,6 +49,7 @@ func tick() -> void:
 	time = float(tick_index) * Constants.SIM_DT
 
 	_decrement_cooldowns()
+	Rules.tick_life_support(self)
 
 	var cmd: InputCommand = null
 	if not _queue.is_empty():
@@ -57,6 +67,10 @@ func tick() -> void:
 	_resolve_melee()
 	_interact_target_id = Rules.resolve_interact(world, get_player(), cmd, _interact_target_id)
 	_process_deaths_and_respawn()
+	var result := Rules.evaluate_outcome(self)
+	if result.x != Types.Outcome.NONE:
+		outcome = result.x
+		outcome_reason = result.y
 
 
 func snapshot() -> SimSnapshot:
