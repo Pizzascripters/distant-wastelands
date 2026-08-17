@@ -45,6 +45,7 @@ func run() -> PackedStringArray:
 	_test_place_habitat_and_depot(fails)
 	_test_last_pad_recovery(fails)
 	_test_last_depot_zero_scrap_spills_floor(fails)
+	_test_radar_cost_and_lock(fails)
 	return fails
 
 
@@ -796,6 +797,8 @@ func _test_locked_buildings_not_placeable(fails: PackedStringArray) -> void:
 		fails.append("Farm should start locked")
 	if Research.building_unlocked(sim, Types.BuildingKind.GATE):
 		fails.append("Gate should start locked")
+	if Research.building_unlocked(sim, Types.BuildingKind.RADAR):
+		fails.append("Radar should start locked")
 	if Research.building_unlocked(sim, Types.BuildingKind.MEDBAY):
 		fails.append("Medbay should start locked")
 	if Rules.can_place(world, sim, Types.BuildingKind.FARM, _TILE):
@@ -814,6 +817,8 @@ func _test_locked_buildings_not_placeable(fails: PackedStringArray) -> void:
 	Research.mark_complete(sim, Types.TechKind.METALLURGY)
 	if not Research.building_unlocked(sim, Types.BuildingKind.GATE):
 		fails.append("Metallurgy should unlock Gate")
+	if not Research.building_unlocked(sim, Types.BuildingKind.RADAR):
+		fails.append("Metallurgy should unlock Radar")
 	if not Research.workshop_unlocked(sim):
 		fails.append("Metallurgy should unlock the workshop recipe flag")
 	Research.mark_complete(sim, Types.TechKind.FIELD_MEDICINE)
@@ -1221,6 +1226,32 @@ func _test_last_depot_zero_scrap_spills_floor(fails: PackedStringArray) -> void:
 	Combat.process_deaths(world)
 	if world.loot.size() != before:
 		fails.append("non-last 0-scrap Depot should not spill LAST_DEPOT_SCRAP")
+
+
+func _test_radar_cost_and_lock(fails: PackedStringArray) -> void:
+	var price := Rules.cost(Types.BuildingKind.RADAR)
+	if (
+		int(price.get(Types.ResourceKind.SCRAP, -1)) != Constants.RADAR_COST_SCRAP
+		or int(price.get(Types.ResourceKind.PARTS, -1)) != Constants.RADAR_COST_PARTS
+		or price.size() != 2
+	):
+		fails.append("Radar cost should be 10 Scrap + 4 Parts")
+	if World.footprint_span(Types.BuildingKind.RADAR) != 2:
+		fails.append("Radar footprint_span should be 2")
+	var world := _world_with_depot(Constants.RADAR_COST_SCRAP)
+	var depot := world.building_at(2, 2)
+	depot.inventory.add(Types.ResourceKind.PARTS, Constants.RADAR_COST_PARTS)
+	var sim := Sim.new()
+	sim.world = world
+	if Rules.can_place(world, sim, Types.BuildingKind.RADAR, _TILE):
+		fails.append("Radar should stay locked until Metallurgy")
+	Research.mark_complete(sim, Types.TechKind.METALLURGY)
+	if not Rules.can_place(world, sim, Types.BuildingKind.RADAR, _TILE):
+		fails.append("Radar should place after Metallurgy with a full pool")
+	depot.inventory.remove(Types.ResourceKind.PARTS, depot.inventory.parts)
+	depot.inventory.add(Types.ResourceKind.PARTS, Constants.RADAR_COST_PARTS - 1)
+	if Rules.can_place(world, sim, Types.BuildingKind.RADAR, _TILE):
+		fails.append("Radar should reject a short Parts pool")
 
 
 func _never_aggro_camp(sim: Sim) -> World.Camp:

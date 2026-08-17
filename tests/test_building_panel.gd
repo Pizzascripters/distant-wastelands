@@ -12,6 +12,7 @@ func run() -> PackedStringArray:
 	_test_lab_panel_ignores_late_build_keys(fails)
 	_test_medbay_heal_hint(fails)
 	_test_farm_workshop_gate_fields(fails)
+	_test_radar_reveal_hint(fails)
 	return fails
 
 
@@ -463,6 +464,35 @@ func _test_farm_workshop_gate_fields(fails: PackedStringArray) -> void:
 		fails.append("gate panel should hide farm stock")
 	if shop != null and shop.visible:
 		fails.append("gate panel should hide the workshop recipe")
+	panel.free()
+
+
+func _test_radar_reveal_hint(fails: PackedStringArray) -> void:
+	var panel := BuildingPanel.new()
+	panel.open_building({
+		"id": 30,
+		"kind": Types.BuildingKind.RADAR,
+		"faction": Types.Faction.PLAYER,
+		"hp": 40,
+		"hp_max": Constants.RADAR_HP,
+		"origin_tile": Vector2i(16, 16),
+	})
+	var hint := panel.find_child("RadarHint", true, false) as Label
+	if hint == null or not hint.visible:
+		fails.append("Radar panel should show a reveal hint")
+	elif hint.text != "Map reveal 48 tiles":
+		fails.append("Radar hint is %s" % hint.text)
+	var hp := panel.find_child("HpValue", true, false) as Label
+	if hp == null or hp.text != "40 / %d" % Constants.RADAR_HP:
+		fails.append("Radar HP text is %s" % (hp.text if hp != null else "missing"))
+	var icon := panel.find_child("Icon", true, false) as TextureRect
+	var radar_tex := WorldView.load_png("res://assets/sprites/placeholder/radar_player.png")
+	if icon == null or icon.texture == null or radar_tex == null:
+		fails.append("Radar panel should use the radar sprite")
+	if panel.find_child("HealHint", true, false) != null:
+		var heal := panel.find_child("HealHint", true, false) as Label
+		if heal != null and heal.visible:
+			fails.append("Radar panel should hide the Medbay heal hint")
 	panel.free()
 
 

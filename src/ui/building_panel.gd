@@ -18,6 +18,7 @@ const _LAB := "res://assets/sprites/placeholder/lab_player.png"
 const _FARM := "res://assets/sprites/placeholder/farm_player.png"
 const _MEDBAY := "res://assets/sprites/placeholder/medbay_player.png"
 const _GATE := "res://assets/sprites/placeholder/gate_player.png"
+const _RADAR := "res://assets/sprites/placeholder/radar_player.png"
 const _SCRAP := "res://assets/sprites/placeholder/scrap.png"
 const _ICE := "res://assets/sprites/placeholder/ice.png"
 const _ORE := "res://assets/sprites/placeholder/ore.png"
@@ -47,6 +48,7 @@ var _workshop_lock: Label
 var _farm_box: VBoxContainer
 var _farm_stock: Label
 var _heal_hint: Label
+var _radar_hint: Label
 var _plain: StyleBoxFlat
 var _selected: StyleBoxFlat
 
@@ -164,6 +166,8 @@ func apply_record(rec: Dictionary) -> void:
 			_workshop_lock.visible = (_techs_done & (1 << Types.TechKind.METALLURGY)) == 0
 	if _heal_hint != null:
 		_heal_hint.visible = _kind == Types.BuildingKind.MEDBAY
+	if _radar_hint != null:
+		_radar_hint.visible = _kind == Types.BuildingKind.RADAR
 
 
 static func find_building(snap: SimSnapshot, id: int) -> Dictionary:
@@ -294,6 +298,10 @@ func _ensure_ui() -> void:
 	_heal_hint.name = "HealHint"
 	_heal_hint.visible = false
 	stats.add_child(_heal_hint)
+	_radar_hint = _label("Map reveal 48 tiles")
+	_radar_hint.name = "RadarHint"
+	_radar_hint.visible = false
+	stats.add_child(_radar_hint)
 	main.add_child(stats)
 	panel.add_child(main)
 	add_child(panel)
@@ -573,6 +581,8 @@ func _icon_path(kind: int) -> String:
 			return _MEDBAY
 		Types.BuildingKind.GATE:
 			return _GATE
+		Types.BuildingKind.RADAR:
+			return _RADAR
 		_:
 			return _WALL
 

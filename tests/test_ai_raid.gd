@@ -21,6 +21,7 @@ func run() -> PackedStringArray:
 	_test_boxed_in_by_workshop_while_hauling(fails)
 	_test_hauling_includes_food(fails)
 	_test_hauling_smashes_farm(fails)
+	_test_hauling_smashes_radar(fails)
 	_test_first_raid_without_ore_survivable(fails)
 	_test_loots_nearest_player_depot(fails)
 	_test_walks_home_to_home_depot_id(fails)
@@ -340,6 +341,31 @@ func _test_hauling_smashes_farm(fails: PackedStringArray) -> void:
 		fails.append("hauling smash must not hit the player Depot")
 
 
+func _test_hauling_smashes_radar(fails: PackedStringArray) -> void:
+	var sim := _ready_sim()
+	_banish_player(sim)
+	var tile := _AWAKE
+	sim.world.set_terrain(tile.x, tile.y, Types.TileTerrain.EMPTY)
+	var radar := _place_radar(sim, Vector2i(tile.x + 1, tile.y))
+	if radar == null:
+		fails.append("could not place a Radar for smash test")
+		return
+	var raider := _inject_raider(sim, sim.world.tile_center(tile.x, tile.y))
+	raider.inventory.food = 1
+	raider.ai_state = Types.RaiderState.SIEGE
+	raider.stuck_timer = Constants.RAIDER_STUCK_TIME
+	var hp0 := radar.hp
+	_tick(sim, 6)
+	if not sim.world.units.has(raider.id):
+		fails.append("hauling raider next to a Radar was deleted")
+		return
+	if radar.hp >= hp0:
+		fails.append("hauling raider did not smash the Radar")
+	var depot := _living(sim.world, Types.Faction.PLAYER, Types.BuildingKind.DEPOT)
+	if depot != null and depot.hp < Constants.DEPOT_HP:
+		fails.append("hauling smash must not hit the player Depot")
+
+
 func _test_boxed_in_by_workshop_while_hauling(fails: PackedStringArray) -> void:
 	var sim := _ready_sim()
 	_banish_player(sim)
@@ -642,6 +668,29 @@ func _place_farm(sim: Sim, tile: Vector2i) -> Building:
 	building.origin_tile = tile
 	building.hp = Constants.FARM_HP
 	building.hp_max = Constants.FARM_HP
+	sim.world.buildings[building.id] = building
+	sim.world.occupy(building)
+	return building
+
+
+func _place_radar(sim: Sim, tile: Vector2i) -> Building:
+	for dy in 2:
+		for dx in 2:
+			var at := Vector2i(tile.x + dx, tile.y + dy)
+			if not sim.world.in_bounds(at.x, at.y):
+				return null
+			sim.world.set_terrain(at.x, at.y, Types.TileTerrain.EMPTY)
+			var occupant := sim.world.building_at(at.x, at.y)
+			if occupant != null:
+				sim.world.vacate(occupant)
+				sim.world.buildings.erase(occupant.id)
+	var building := Building.new()
+	building.id = sim.world.alloc_id()
+	building.kind = Types.BuildingKind.RADAR
+	building.faction = Types.Faction.PLAYER
+	building.origin_tile = tile
+	building.hp = Constants.RADAR_HP
+	building.hp_max = Constants.RADAR_HP
 	sim.world.buildings[building.id] = building
 	sim.world.occupy(building)
 	return building

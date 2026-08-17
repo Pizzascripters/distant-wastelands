@@ -10,6 +10,7 @@ func run() -> PackedStringArray:
 	_test_undiscovered_cliff_is_fog(fails)
 	_test_discovered_crater_color(fails)
 	_test_player_habitat_plots_on_fog(fails)
+	_test_player_radar_plots_on_fog(fails)
 	_test_enemy_hidden_without_radar(fails)
 	_test_radar_reveals_enemies(fails)
 	_test_enemy_turret_is_1x1(fails)
@@ -86,6 +87,26 @@ func _test_player_habitat_plots_on_fog(fails: PackedStringArray) -> void:
 		fails.append("fog around an undiscovered Habitat should stay blank")
 
 
+func _test_player_radar_plots_on_fog(fails: PackedStringArray) -> void:
+	var tiles := _blank_tiles()
+	var discovered := PackedByteArray()
+	discovered.resize(_MAP * _MAP)
+	discovered.fill(0)
+	var radar := {
+		"id": 11,
+		"kind": Types.BuildingKind.RADAR,
+		"faction": Types.Faction.PLAYER,
+		"hp": Constants.RADAR_HP,
+		"origin_tile": Vector2i(6, 6),
+	}
+	var colors := MapOverlay.paint_model(tiles, discovered, _MAP, _MAP, [radar])
+	for dy in 2:
+		for dx in 2:
+			if colors[_idx(6 + dx, 6 + dy)] != MapOverlay.PLAYER_PAD:
+				fails.append("player Radar should plot on undiscovered tiles")
+				return
+
+
 func _test_enemy_hidden_without_radar(fails: PackedStringArray) -> void:
 	var tiles := _blank_tiles()
 	var discovered := _all_discovered()
@@ -116,7 +137,7 @@ func _test_radar_reveals_enemies(fails: PackedStringArray) -> void:
 	var discovered := _all_discovered()
 	var radar := {
 		"id": 4,
-		"kind": MapOverlay.RADAR_KIND,
+		"kind": Types.BuildingKind.RADAR,
 		"faction": Types.Faction.PLAYER,
 		"hp": 50,
 		"origin_tile": Vector2i(0, 0),
@@ -162,7 +183,7 @@ func _test_enemy_turret_is_1x1(fails: PackedStringArray) -> void:
 	var discovered := _all_discovered()
 	var radar := {
 		"id": 8,
-		"kind": MapOverlay.RADAR_KIND,
+		"kind": Types.BuildingKind.RADAR,
 		"faction": Types.Faction.PLAYER,
 		"hp": 50,
 		"origin_tile": Vector2i(0, 0),
@@ -188,7 +209,7 @@ func _test_radar_does_not_recolor_terrain(fails: PackedStringArray) -> void:
 	tiles[_idx(7, 6)] = Types.TileTerrain.CLIFF
 	var radar := {
 		"id": 10,
-		"kind": MapOverlay.RADAR_KIND,
+		"kind": Types.BuildingKind.RADAR,
 		"faction": Types.Faction.PLAYER,
 		"hp": 50,
 		"origin_tile": Vector2i(0, 0),

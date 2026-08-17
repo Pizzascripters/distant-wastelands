@@ -48,6 +48,7 @@ func _test_placeholder_pngs_load(fails: PackedStringArray) -> void:
 		"res://assets/sprites/placeholder/farm_player.png",
 		"res://assets/sprites/placeholder/medbay_player.png",
 		"res://assets/sprites/placeholder/gate_player.png",
+		"res://assets/sprites/placeholder/radar_player.png",
 	]:
 		var tex := WorldView.load_png(path)
 		if tex == null:

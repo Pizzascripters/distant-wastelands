@@ -216,6 +216,8 @@ func _test_completion_unlocks(fails: PackedStringArray) -> void:
 		fails.append("Metallurgy should unlock the workshop recipe flag")
 	if not Research.building_unlocked(sim, Types.BuildingKind.GATE):
 		fails.append("Metallurgy should unlock Gate")
+	if not Research.building_unlocked(sim, Types.BuildingKind.RADAR):
+		fails.append("Metallurgy should unlock Radar")
 	if depot != null:
 		depot.inventory.add(Types.ResourceKind.SCRAP, Constants.TECH_FIELD_MED_SCRAP)
 	var habitat := _player_habitat(sim)

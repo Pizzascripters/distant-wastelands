@@ -11,8 +11,8 @@ const RADAR_BLIP := Color("C23B22")
 const PLAYER_MARK := Color("F2EDE6")
 const FRAME := Color(0, 0, 0, 0.80)
 const PX_PER_TILE := 2
-const RADAR_RANGE_TILES := 48
-const RADAR_KIND := 9
+const RADAR_RANGE_TILES := Constants.RADAR_RANGE_TILES
+const RADAR_KIND := Types.BuildingKind.RADAR
 
 var _tex: ImageTexture
 var _player_tile := Vector2i(-1, -1)
