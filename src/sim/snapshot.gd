@@ -7,6 +7,7 @@ var outcome: int = Types.Outcome.NONE
 var outcome_reason: int = Types.OutcomeReason.NONE
 var tiles: PackedByteArray = PackedByteArray()
 var tiles_generation: int = 0
+var chunk_generation: PackedInt32Array = PackedInt32Array()
 var units: Array[Dictionary] = []
 var buildings: Array[Dictionary] = []
 var deposits: Array[Dictionary] = []

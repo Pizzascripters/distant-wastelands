@@ -1,33 +1,24 @@
 class_name Constants
 
-const MAP_W := 64
-const MAP_H := 64
+const MAP_W := 256
+const MAP_H := 256
 const TILE := 32
 const SIM_HZ := 20
 const SIM_DT := 0.05
 const MAX_CATCHUP_TICKS := 4
 const DEFAULT_SEED := 1
+const TERRAIN_CHUNK_TILES := 32
+const CORRIDOR_WIDTH := 3
 
-const PLAYER_CAMP_RECT := Rect2i(2, 46, 14, 16)
-const ENEMY_CAMP_RECT := Rect2i(48, 2, 14, 16)
-const PLAYER_HABITAT_TILE := Vector2i(6, 52)
-const PLAYER_DEPOT_TILE := Vector2i(9, 52)
-const PLAYER_SPAWN_TILE := Vector2i(8, 55)
-const ENEMY_HABITAT_TILE := Vector2i(54, 6)
-const ENEMY_DEPOT_TILE := Vector2i(51, 6)
-const ENEMY_TURRET_TILE := Vector2i(48, 10)
-const ENEMY_GUARD_TILE := Vector2i(50, 9)
-
-const CORRIDOR_H_X0 := 11
-const CORRIDOR_H_X1 := 51
-const CORRIDOR_H_Y0 := 51
-const CORRIDOR_H_Y1 := 53
-const CORRIDOR_V_X0 := 50
-const CORRIDOR_V_X1 := 52
-const CORRIDOR_V_Y0 := 8
-const CORRIDOR_V_Y1 := 51
-const CORRIDOR_CENTER_X := 51
-const CORRIDOR_CENTER_Y := 52
+const PLAYER_CAMP_RECT := Rect2i(18, 210, 20, 20)
+const ENEMY_CAMP_RECT := Rect2i(61, 216, 14, 14)
+const PLAYER_HABITAT_TILE := Vector2i(22, 216)
+const PLAYER_DEPOT_TILE := Vector2i(24, 216)
+const PLAYER_SPAWN_TILE := Vector2i(23, 218)
+const ENEMY_HABITAT_TILE := Vector2i(63, 218)
+const ENEMY_DEPOT_TILE := Vector2i(67, 218)
+const ENEMY_TURRET_TILE := Vector2i(63, 222)
+const ENEMY_GUARD_TILE := Vector2i(67, 222)
 
 const DEPOSIT_PLACE_ATTEMPTS := 200
 const DEPOSIT_MIN_SEP := 2

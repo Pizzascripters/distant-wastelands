@@ -43,7 +43,9 @@ func _test_loot_channel(fails: PackedStringArray) -> void:
 		return
 	var scrap0 := depot.inventory.scrap
 	var ice0 := depot.inventory.ice
-	var raider := _inject_raider(sim, sim.world.tile_center(8, 52))
+	var raider := _inject_raider(sim, sim.world.tile_center(
+		Constants.PLAYER_DEPOT_TILE.x + 2, Constants.PLAYER_DEPOT_TILE.y
+	))
 	_tick(sim, _ticks_for(Constants.RAIDER_LOOT_CHANNEL))
 	if raider.inventory.scrap <= 0 and raider.inventory.ice <= 0:
 		fails.append("raider adjacent for 3s did not increase carry")
@@ -95,7 +97,9 @@ func _test_siege_commits_to_depot(fails: PackedStringArray) -> void:
 	_tick(sim, 1)
 	if raider.ai_state != Types.RaiderState.SIEGE:
 		fails.append("non-hauling raider left SIEGE after walls died, got %d" % raider.ai_state)
-	raider.pos = sim.world.tile_center(8, 52)
+	raider.pos = sim.world.tile_center(
+		Constants.PLAYER_DEPOT_TILE.x + 2, Constants.PLAYER_DEPOT_TILE.y
+	)
 	raider.weapon_cooldown = 0.0
 	var depot := _living(sim.world, Types.Faction.PLAYER, Types.BuildingKind.DEPOT)
 	if depot == null:
@@ -145,7 +149,9 @@ func _test_hauling_leaves_siege_for_home(fails: PackedStringArray) -> void:
 	var sim := _ready_sim()
 	_banish_player(sim)
 	var depot := _living(sim.world, Types.Faction.PLAYER, Types.BuildingKind.DEPOT)
-	var raider := _inject_raider(sim, sim.world.tile_center(8, 52))
+	var raider := _inject_raider(sim, sim.world.tile_center(
+		Constants.PLAYER_DEPOT_TILE.x + 2, Constants.PLAYER_DEPOT_TILE.y
+	))
 	raider.ai_state = Types.RaiderState.SIEGE
 	raider.inventory.scrap = 1
 	var hp0 := depot.hp if depot != null else 0
@@ -301,7 +307,7 @@ func _test_first_raid_without_ore_survivable(fails: PackedStringArray) -> void:
 	if depot.inventory.ore != 0 or depot.inventory.parts != 0 or sim.techs_done != 0:
 		fails.append("turret placement spent ore/parts or unlocked tech")
 	_banish_player(sim)
-	var stand := sim.world.tile_center(depot.origin_tile.x - 1, depot.origin_tile.y)
+	var stand := sim.world.tile_center(depot.origin_tile.x + 2, depot.origin_tile.y)
 	for _i in Constants.WAVE_BASE:
 		_inject_raider(sim, stand)
 	var habitat_hp0 := habitat.hp

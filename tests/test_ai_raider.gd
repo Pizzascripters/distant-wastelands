@@ -61,7 +61,9 @@ func _test_adjacent_depot_loots(fails: PackedStringArray) -> void:
 	var ctx := _context()
 	var raider := _raider(ctx)
 	_place_depot(ctx, Types.Faction.PLAYER, Constants.PLAYER_DEPOT_TILE, 10, 10)
-	raider.pos = _world(ctx).tile_center(8, 52)
+	raider.pos = _world(ctx).tile_center(
+		Constants.PLAYER_DEPOT_TILE.x + 2, Constants.PLAYER_DEPOT_TILE.y
+	)
 	AiRaider.think(raider, _sim(ctx))
 	if raider.ai_state != Types.RaiderState.LOOT:
 		fails.append("adjacent depot should enter LOOT, got %d" % raider.ai_state)
@@ -225,7 +227,7 @@ func _test_home_despawn_deposits_and_leftover(fails: PackedStringArray) -> void:
 	var home := _place_depot(ctx, Types.Faction.ENEMY, Constants.ENEMY_DEPOT_TILE, 48, 50)
 	raider.ai_state = Types.RaiderState.PATH_HOME
 	raider.inventory.scrap = 5
-	raider.pos = world.tile_center(50, 6)
+	raider.pos = world.tile_center(Constants.ENEMY_DEPOT_TILE.x - 1, Constants.ENEMY_DEPOT_TILE.y)
 	var rid: int = raider.id
 	AiRaider.think(raider, _sim(ctx))
 	if world.units.has(rid):
@@ -254,7 +256,9 @@ func _test_loot_channel_transfers(fails: PackedStringArray) -> void:
 	var depot := _place_depot(ctx, Types.Faction.PLAYER, Constants.PLAYER_DEPOT_TILE, 10, 8)
 	_place_depot(ctx, Types.Faction.ENEMY, Constants.ENEMY_DEPOT_TILE, 20, 20)
 	raider.ai_state = Types.RaiderState.LOOT
-	raider.pos = _world(ctx).tile_center(8, 52)
+	raider.pos = _world(ctx).tile_center(
+		Constants.PLAYER_DEPOT_TILE.x + 2, Constants.PLAYER_DEPOT_TILE.y
+	)
 	var ticks := int(Constants.RAIDER_LOOT_CHANNEL / Constants.SIM_DT)
 	for _i in ticks:
 		AiRaider.think(raider, _sim(ctx))
@@ -274,7 +278,9 @@ func _test_loot_one_resource_goes_home(fails: PackedStringArray) -> void:
 	var depot := _place_depot(ctx, Types.Faction.PLAYER, Constants.PLAYER_DEPOT_TILE, 10, 0)
 	_place_depot(ctx, Types.Faction.ENEMY, Constants.ENEMY_DEPOT_TILE, 20, 20)
 	raider.ai_state = Types.RaiderState.LOOT
-	raider.pos = _world(ctx).tile_center(8, 52)
+	raider.pos = _world(ctx).tile_center(
+		Constants.PLAYER_DEPOT_TILE.x + 2, Constants.PLAYER_DEPOT_TILE.y
+	)
 	var ticks := int(Constants.RAIDER_LOOT_CHANNEL / Constants.SIM_DT)
 	for _i in ticks:
 		AiRaider.think(raider, _sim(ctx))
@@ -295,7 +301,9 @@ func _test_loot_depot_died(fails: PackedStringArray) -> void:
 	var depot := _place_depot(ctx, Types.Faction.PLAYER, Constants.PLAYER_DEPOT_TILE, 10, 10)
 	_place_habitat(ctx, Types.Faction.PLAYER, Constants.PLAYER_HABITAT_TILE)
 	raider.ai_state = Types.RaiderState.LOOT
-	raider.pos = _world(ctx).tile_center(11, 52)
+	raider.pos = _world(ctx).tile_center(
+		Constants.PLAYER_DEPOT_TILE.x + 2, Constants.PLAYER_DEPOT_TILE.y
+	)
 	depot.hp = 0
 	AiRaider.think(raider, _sim(ctx))
 	if raider.ai_state != Types.RaiderState.PATH_TO_HABITAT:

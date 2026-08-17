@@ -1,6 +1,7 @@
 class_name WorldView
 extends Node2D
 
+const TERRAIN_CHUNK_TILES := 32
 const GRID := Color("7A4024")
 const GROUND_FILL := Color("8A4B2A")
 const ROCK_FILL := Color("3A241C")
@@ -27,13 +28,25 @@ var _scrap_tex: Texture2D
 var _ice_tex: Texture2D
 var _ore_tex: Texture2D
 var _textures_ready: bool = false
-var _terrain_tex: ImageTexture
+var _chunk_tex: Array = []
+var _chunk_gen: PackedInt32Array = PackedInt32Array()
+var _chunk_rebuilds: PackedInt32Array = PackedInt32Array()
+var _tiles_generation: int = -1
+var _last_visible: Rect2i = Rect2i()
 var _overlay_redraws: int = 0
 
 
 func _ready() -> void:
 	texture_filter = TEXTURE_FILTER_NEAREST
+	set_process(true)
 	_ensure_textures()
+
+
+func _process(_delta: float) -> void:
+	var vis := _visible_chunk_rect()
+	if vis != _last_visible:
+		_last_visible = vis
+		queue_redraw()
 
 
 static func load_png(path: String) -> Texture2D:
@@ -50,11 +63,38 @@ static func load_png(path: String) -> Texture2D:
 
 
 func rebuild(snap: SimSnapshot) -> void:
-	_tiles = snap.tiles
 	_ensure_textures()
-	_rebuild_terrain_cache()
+	_ensure_chunk_arrays()
+	apply_tiles(snap)
 	apply_deposits(snap)
 	queue_redraw()
+
+
+func apply_tiles(snap: SimSnapshot) -> void:
+	if snap == null:
+		return
+	_tiles = snap.tiles
+	_ensure_chunk_arrays()
+	var n := _chunk_count()
+	var gens := snap.chunk_generation
+	var rebuilt := false
+	if gens.size() == n:
+		for i in n:
+			if gens[i] == _chunk_gen[i]:
+				continue
+			if _chunk_tex[i] != null or _chunk_has_content(i):
+				_rebuild_chunk(i)
+				rebuilt = true
+			_chunk_gen[i] = gens[i]
+	elif snap.tiles_generation != _tiles_generation:
+		for i in n:
+			if _chunk_tex[i] != null or _chunk_has_content(i):
+				_rebuild_chunk(i)
+				rebuilt = true
+			_chunk_gen[i] = -1
+	_tiles_generation = snap.tiles_generation
+	if rebuilt:
+		queue_redraw()
 
 
 func apply_deposits(snap: SimSnapshot) -> void:
@@ -93,34 +133,136 @@ func _ensure_textures() -> void:
 	_textures_ready = true
 
 
-func _rebuild_terrain_cache() -> void:
+func _chunk_n() -> int:
+	return int(Constants.MAP_W / TERRAIN_CHUNK_TILES)
+
+
+func _chunk_count() -> int:
+	var n := _chunk_n()
+	return n * n
+
+
+func _ensure_chunk_arrays() -> void:
+	var n := _chunk_count()
+	if _chunk_tex.size() == n and _chunk_gen.size() == n and _chunk_rebuilds.size() == n:
+		return
+	_chunk_tex.resize(n)
+	_chunk_gen.resize(n)
+	_chunk_gen.fill(-1)
+	_chunk_rebuilds.resize(n)
+	_chunk_rebuilds.fill(0)
+
+
+func _chunk_has_content(ci: int) -> bool:
+	if _tiles.is_empty():
+		return false
+	var n := _chunk_n()
+	var cts := TERRAIN_CHUNK_TILES
+	var cx := ci % n
+	var cy := int(ci / n)
+	var x0 := cx * cts
+	var y0 := cy * cts
+	for y in range(y0, y0 + cts):
+		for x in range(x0, x0 + cts):
+			if x >= Constants.MAP_W or y >= Constants.MAP_H:
+				continue
+			var i := y * Constants.MAP_W + x
+			if i >= _tiles.size():
+				continue
+			if _tiles[i] != Types.TileTerrain.EMPTY:
+				return true
+	return false
+
+
+func _rebuild_chunk(ci: int) -> void:
+	_ensure_chunk_arrays()
+	var n := _chunk_n()
+	if ci < 0 or ci >= n * n:
+		return
+	var cts := TERRAIN_CHUNK_TILES
 	var tile := Constants.TILE
-	var w := Constants.MAP_W * tile
-	var h := Constants.MAP_H * tile
-	var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	var cx := ci % n
+	var cy := int(ci / n)
+	var px := cts * tile
+	var img := Image.create(px, px, false, Image.FORMAT_RGBA8)
 	var ground_src := _tile_image(_ground_tex, tile)
+	var x0 := cx * cts
+	var y0 := cy * cts
 	if ground_src != null:
-		for y in Constants.MAP_H:
-			for x in Constants.MAP_W:
-				img.blit_rect(ground_src, Rect2i(0, 0, tile, tile), Vector2i(x * tile, y * tile))
+		for y in range(y0, y0 + cts):
+			for x in range(x0, x0 + cts):
+				img.blit_rect(
+					ground_src,
+					Rect2i(0, 0, tile, tile),
+					Vector2i((x - x0) * tile, (y - y0) * tile)
+				)
 	else:
 		img.fill(GROUND_FILL)
-	for i in Constants.MAP_W + 1:
-		img.fill_rect(Rect2i(mini(i * tile, w - 1), 0, 1, h), GRID)
-	for j in Constants.MAP_H + 1:
-		img.fill_rect(Rect2i(0, mini(j * tile, h - 1), w, 1), GRID)
+	for i in cts + 1:
+		img.fill_rect(Rect2i(mini(i * tile, px - 1), 0, 1, px), GRID)
+		img.fill_rect(Rect2i(0, mini(i * tile, px - 1), px, 1), GRID)
 	if not _tiles.is_empty():
 		var rock_src := _tile_image(_rock_tex, tile)
-		for y in Constants.MAP_H:
-			for x in Constants.MAP_W:
-				if _tiles[y * Constants.MAP_W + x] != Types.TileTerrain.ROCK:
+		for y in range(y0, y0 + cts):
+			for x in range(x0, x0 + cts):
+				var ti := y * Constants.MAP_W + x
+				if ti >= _tiles.size() or _tiles[ti] != Types.TileTerrain.ROCK:
 					continue
-				var origin := Vector2i(x * tile, y * tile)
+				var origin := Vector2i((x - x0) * tile, (y - y0) * tile)
 				if rock_src != null:
 					img.blit_rect(rock_src, Rect2i(0, 0, tile, tile), origin)
 				else:
 					_stamp_primitive_rock(img, origin, tile)
-	_terrain_tex = ImageTexture.create_from_image(img)
+	_chunk_tex[ci] = ImageTexture.create_from_image(img)
+	_chunk_rebuilds[ci] += 1
+
+
+func _visible_chunk_rect() -> Rect2i:
+	var n := _chunk_n()
+	var all := Rect2i(0, 0, n, n)
+	if not is_inside_tree():
+		return all
+	var vp := get_viewport()
+	if vp == null:
+		return all
+	var xf := get_canvas_transform()
+	var inv := xf.affine_inverse()
+	var vr := vp.get_visible_rect()
+	var corners: Array[Vector2] = [
+		inv * vr.position,
+		inv * Vector2(vr.end.x, vr.position.y),
+		inv * vr.end,
+		inv * Vector2(vr.position.x, vr.end.y),
+	]
+	var min_x := corners[0].x
+	var min_y := corners[0].y
+	var max_x := corners[0].x
+	var max_y := corners[0].y
+	for c in corners:
+		min_x = minf(min_x, c.x)
+		min_y = minf(min_y, c.y)
+		max_x = maxf(max_x, c.x)
+		max_y = maxf(max_y, c.y)
+	var chunk_px := float(TERRAIN_CHUNK_TILES * Constants.TILE)
+	var x0 := clampi(int(floor(min_x / chunk_px)) - 1, 0, n - 1)
+	var y0 := clampi(int(floor(min_y / chunk_px)) - 1, 0, n - 1)
+	var x1 := clampi(int(floor(max_x / chunk_px)) + 1, 0, n - 1)
+	var y1 := clampi(int(floor(max_y / chunk_px)) + 1, 0, n - 1)
+	return Rect2i(x0, y0, x1 - x0 + 1, y1 - y0 + 1)
+
+
+func _ensure_visible_chunks(vis: Rect2i) -> void:
+	var n := _chunk_n()
+	var gens_ok := _chunk_gen.size() == n * n
+	for cy in range(vis.position.y, vis.end.y):
+		for cx in range(vis.position.x, vis.end.x):
+			var ci := cy * n + cx
+			if ci < 0 or ci >= _chunk_tex.size():
+				continue
+			if _chunk_tex[ci] == null:
+				_rebuild_chunk(ci)
+				if gens_ok:
+					_chunk_gen[ci] = _tiles_generation if _chunk_gen[ci] < 0 else _chunk_gen[ci]
 
 
 func _tile_image(tex: Texture2D, tile: int) -> Image:
@@ -155,14 +297,46 @@ func _stamp_primitive_rock(img: Image, origin: Vector2i, tile: int) -> void:
 
 
 func _draw() -> void:
-	if _terrain_tex != null:
-		draw_texture(_terrain_tex, Vector2.ZERO)
-	_draw_deposits()
+	_ensure_chunk_arrays()
+	var vis := _visible_chunk_rect()
+	_last_visible = vis
+	_ensure_visible_chunks(vis)
+	var n := _chunk_n()
+	var chunk_px := float(TERRAIN_CHUNK_TILES * Constants.TILE)
+	for cy in range(vis.position.y, vis.end.y):
+		for cx in range(vis.position.x, vis.end.x):
+			var ci := cy * n + cx
+			if ci < 0 or ci >= _chunk_tex.size():
+				continue
+			var tex: ImageTexture = _chunk_tex[ci]
+			if tex == null:
+				continue
+			draw_texture(tex, Vector2(float(cx) * chunk_px, float(cy) * chunk_px))
+	_draw_deposits(vis)
 
 
-func _draw_deposits() -> void:
+func _deposit_chunk(rec: Dictionary) -> Vector2i:
+	if rec.has("tile"):
+		var tile: Vector2i = rec["tile"]
+		return Vector2i(
+			int(tile.x / TERRAIN_CHUNK_TILES),
+			int(tile.y / TERRAIN_CHUNK_TILES)
+		)
+	var pos: Vector2 = rec.get("pos", Vector2.ZERO)
+	var t := Constants.TILE
+	return Vector2i(
+		int(floor(pos.x / float(t)) / TERRAIN_CHUNK_TILES),
+		int(floor(pos.y / float(t)) / TERRAIN_CHUNK_TILES)
+	)
+
+
+func _draw_deposits(vis: Rect2i = Rect2i()) -> void:
+	if vis.size == Vector2i.ZERO:
+		vis = _visible_chunk_rect()
 	for rec in _deposits:
 		if int(rec.get("remaining", 0)) <= 0:
+			continue
+		if not vis.has_point(_deposit_chunk(rec)):
 			continue
 		var center: Vector2 = rec.get("pos", Vector2.ZERO)
 		var kind: int = rec.get("kind", Types.ResourceKind.SCRAP)

@@ -359,7 +359,19 @@ func _player_depot(world: World) -> Building:
 
 
 func _stand_beside(unit: Unit, world: World, building: Building) -> void:
-	var tile := Vector2i(building.origin_tile.x - 1, building.origin_tile.y)
+	var span := world.footprint_span(building.kind)
+	var o := building.origin_tile
+	var candidates: Array[Vector2i] = [
+		Vector2i(o.x + span, o.y),
+		Vector2i(o.x, o.y + span),
+		Vector2i(o.x - 1, o.y),
+		Vector2i(o.x, o.y - 1),
+	]
+	var tile := Vector2i(o.x + span, o.y)
+	for cand in candidates:
+		if world.is_walkable(cand.x, cand.y):
+			tile = cand
+			break
 	unit.pos = world.tile_center(tile.x, tile.y)
 	unit.vel = Vector2.ZERO
 

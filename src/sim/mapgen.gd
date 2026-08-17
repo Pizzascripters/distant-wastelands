@@ -24,7 +24,7 @@ static func generate(p_seed: int) -> World:
 
 	_place_player_camp(world)
 	_place_enemy_camp(world)
-	_carve_corridor(world)
+	_carve_manhattan(world, Constants.PLAYER_SPAWN_TILE, Constants.ENEMY_DEPOT_TILE)
 	_place_deposits(world, rng)
 
 	var connected := validate_connectivity(world)
@@ -70,15 +70,35 @@ static func is_building_footprint(x: int, y: int) -> bool:
 	return t == Constants.ENEMY_TURRET_TILE
 
 
-static func _carve_corridor(world: World) -> void:
-	for y in range(Constants.CORRIDOR_H_Y0, Constants.CORRIDOR_H_Y1 + 1):
-		for x in range(Constants.CORRIDOR_H_X0, Constants.CORRIDOR_H_X1 + 1):
-			if world.in_bounds(x, y) and not is_building_footprint(x, y):
-				world.set_terrain(x, y, Types.TileTerrain.EMPTY)
-	for y in range(Constants.CORRIDOR_V_Y0, Constants.CORRIDOR_V_Y1 + 1):
-		for x in range(Constants.CORRIDOR_V_X0, Constants.CORRIDOR_V_X1 + 1):
-			if world.in_bounds(x, y) and not is_building_footprint(x, y):
-				world.set_terrain(x, y, Types.TileTerrain.EMPTY)
+static func _carve_manhattan(world: World, a: Vector2i, b: Vector2i) -> void:
+	var p := a
+	var dir_h := Vector2i(signi(b.x - a.x), 0)
+	var dir_v := Vector2i(0, signi(b.y - a.y))
+	if dir_h != Vector2i.ZERO:
+		_paint_corridor_step(world, p, dir_h)
+		while p.x != b.x:
+			p.x += dir_h.x
+			_paint_corridor_step(world, p, dir_h)
+	if dir_v != Vector2i.ZERO:
+		if dir_h == Vector2i.ZERO:
+			_paint_corridor_step(world, p, dir_v)
+		while p.y != b.y:
+			p.y += dir_v.y
+			_paint_corridor_step(world, p, dir_v)
+	if dir_h == Vector2i.ZERO and dir_v == Vector2i.ZERO:
+		_paint_corridor_step(world, p, Vector2i(1, 0))
+
+
+static func _paint_corridor_step(world: World, tile: Vector2i, along: Vector2i) -> void:
+	var perp := Vector2i(-along.y, along.x)
+	var half := int(Constants.CORRIDOR_WIDTH / 2)
+	for k in range(-half, half + 1):
+		var t: Vector2i = tile + perp * k
+		if not world.in_bounds(t.x, t.y):
+			continue
+		if is_building_footprint(t.x, t.y):
+			continue
+		world.set_terrain(t.x, t.y, Types.TileTerrain.EMPTY)
 
 
 static func _in_reserved_rect(x: int, y: int) -> bool:
@@ -299,8 +319,6 @@ static func _can_place_deposit(world: World, x: int, y: int) -> bool:
 	if not world.is_walkable(x, y):
 		return false
 	if _in_reserved_rect(x, y):
-		return false
-	if x == Constants.CORRIDOR_CENTER_X or y == Constants.CORRIDOR_CENTER_Y:
 		return false
 	var tile := Vector2i(x, y)
 	for other in world.deposits.values():

@@ -343,9 +343,19 @@ func _player_depot(sim: Sim) -> Building:
 
 
 func _stand_beside(unit: Unit, world: World, building: Building) -> void:
-	var tile := Vector2i(building.origin_tile.x - 1, building.origin_tile.y)
-	if not world.in_bounds(tile.x, tile.y) or not world.is_walkable(tile.x, tile.y):
-		tile = Vector2i(building.origin_tile.x, building.origin_tile.y - 1)
+	var span := world.footprint_span(building.kind)
+	var o := building.origin_tile
+	var candidates: Array[Vector2i] = [
+		Vector2i(o.x + span, o.y),
+		Vector2i(o.x, o.y + span),
+		Vector2i(o.x - 1, o.y),
+		Vector2i(o.x, o.y - 1),
+	]
+	var tile := Vector2i(o.x + span, o.y)
+	for cand in candidates:
+		if world.is_walkable(cand.x, cand.y):
+			tile = cand
+			break
 	unit.pos = world.tile_center(tile.x, tile.y)
 	unit.vel = Vector2.ZERO
 

@@ -5,7 +5,6 @@ const LERP_K := 8.0
 const ZOOM_MIN := 0.75
 const ZOOM_MAX := 2.0
 const ZOOM_STEP := 0.1
-const WORLD := 2048.0
 
 var _zoom_scalar := 1.0
 
@@ -43,13 +42,18 @@ func _set_zoom_scalar(z: float) -> void:
 	_clamp_to_world()
 
 
+func _world_px() -> float:
+	return float(Constants.MAP_W * Constants.TILE)
+
+
 func _clamp_to_world() -> void:
+	var world_px := _world_px()
 	var half := get_viewport_rect().size / (2.0 * _zoom_scalar)
-	if half.x * 2.0 >= WORLD:
-		position.x = WORLD * 0.5
+	if half.x * 2.0 >= world_px:
+		position.x = world_px * 0.5
 	else:
-		position.x = clampf(position.x, half.x, WORLD - half.x)
-	if half.y * 2.0 >= WORLD:
-		position.y = WORLD * 0.5
+		position.x = clampf(position.x, half.x, world_px - half.x)
+	if half.y * 2.0 >= world_px:
+		position.y = world_px * 0.5
 	else:
-		position.y = clampf(position.y, half.y, WORLD - half.y)
+		position.y = clampf(position.y, half.y, world_px - half.y)

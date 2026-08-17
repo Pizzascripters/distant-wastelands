@@ -56,6 +56,11 @@ func _ready() -> void:
 	_gather_bar = GatherBar.new()
 	add_child(_gather_bar)
 	_camera = CameraCtrl.new()
+	var world_px := Constants.MAP_W * Constants.TILE
+	_camera.limit_left = 0
+	_camera.limit_top = 0
+	_camera.limit_right = world_px
+	_camera.limit_bottom = world_px
 	add_child(_camera)
 	_mount_ui()
 	var snap := _session.get_snapshot()
@@ -476,6 +481,7 @@ func _session_sim() -> Sim:
 
 
 func _sync_views(snap: SimSnapshot) -> void:
+	_world_view.apply_tiles(snap)
 	_world_view.apply_deposits(snap)
 	_sync_records(snap.buildings, _building_views, _buildings_root, BuildingView)
 	_sync_records(snap.loot, _loot_views, _loot_root, LootView)

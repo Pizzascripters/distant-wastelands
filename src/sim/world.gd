@@ -4,8 +4,9 @@ extends RefCounted
 var seed: int = 0
 var tiles: PackedByteArray = PackedByteArray()
 var tiles_generation: int = 0
+var chunk_generation: PackedInt32Array = PackedInt32Array()
 var buildings: Dictionary = {}
-var occupancy: Array[int] = []
+var occupancy: PackedInt32Array = PackedInt32Array()
 var deposits: Dictionary = {}
 var loot: Dictionary = {}
 var units: Dictionary = {}
@@ -19,6 +20,8 @@ func _init() -> void:
 	tiles.fill(Types.TileTerrain.EMPTY)
 	occupancy.resize(n)
 	occupancy.fill(0)
+	chunk_generation.resize(terrain_chunk_count())
+	chunk_generation.fill(0)
 
 
 func index_of(x: int, y: int) -> int:
@@ -35,6 +38,22 @@ func get_terrain(x: int, y: int) -> int:
 	return tiles[index_of(x, y)]
 
 
+func terrain_chunk_n() -> int:
+	return int(Constants.MAP_W / Constants.TERRAIN_CHUNK_TILES)
+
+
+func terrain_chunk_count() -> int:
+	var n := terrain_chunk_n()
+	return n * n
+
+
+func terrain_chunk_index(x: int, y: int) -> int:
+	var n := terrain_chunk_n()
+	var cx := int(x / Constants.TERRAIN_CHUNK_TILES)
+	var cy := int(y / Constants.TERRAIN_CHUNK_TILES)
+	return cy * n + cx
+
+
 func set_terrain(x: int, y: int, terrain: int) -> void:
 	if not in_bounds(x, y):
 		return
@@ -43,6 +62,8 @@ func set_terrain(x: int, y: int, terrain: int) -> void:
 		return
 	tiles[i] = terrain
 	tiles_generation += 1
+	var ci := terrain_chunk_index(x, y)
+	chunk_generation[ci] += 1
 
 
 func is_walkable(x: int, y: int) -> bool:
