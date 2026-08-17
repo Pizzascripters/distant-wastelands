@@ -24,6 +24,8 @@ var stuck_last_pos: Vector2 = Vector2.ZERO
 var siege_target_id: int = 0
 var home_depot_id: int = 0
 var home_pos: Vector2 = Vector2.ZERO
+var task_depot_id: int = 0
+var task_habitat_id: int = 0
 
 
 static func inventory_for(unit_kind: int) -> Inventory:

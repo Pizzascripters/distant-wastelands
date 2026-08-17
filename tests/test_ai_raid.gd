@@ -22,6 +22,11 @@ func run() -> PackedStringArray:
 	_test_hauling_includes_food(fails)
 	_test_hauling_smashes_farm(fails)
 	_test_first_raid_without_ore_survivable(fails)
+	_test_loots_nearest_player_depot(fails)
+	_test_walks_home_to_home_depot_id(fails)
+	_test_smash_retargets_nearest_pad(fails)
+	_test_habitat_kill_does_not_end_sitting(fails)
+	_test_guard_leashes_to_home_pos(fails)
 	return fails
 
 
@@ -401,6 +406,143 @@ func _test_first_raid_without_ore_survivable(fails: PackedStringArray) -> void:
 		fails.append("open-road first raid should loot and leave")
 
 
+func _test_loots_nearest_player_depot(fails: PackedStringArray) -> void:
+	var sim := _ready_sim()
+	_banish_player(sim)
+	var starter := _living(sim.world, Types.Faction.PLAYER, Types.BuildingKind.DEPOT)
+	if starter == null:
+		fails.append("nearest-depot raid missing starter depot")
+		return
+	var near_tile := Vector2i(28, 216)
+	var near := _place_depot(sim, Types.Faction.PLAYER, near_tile)
+	if near == null:
+		fails.append("could not place a nearer player depot")
+		return
+	sim.world.set_terrain(near_tile.x + 2, near_tile.y, Types.TileTerrain.EMPTY)
+	var stand := sim.world.tile_center(near.origin_tile.x + 2, near.origin_tile.y)
+	var raider := _inject_raider(sim, stand)
+	var scrap0 := near.inventory.scrap
+	_tick(sim, _ticks_for(Constants.RAIDER_LOOT_CHANNEL))
+	if raider.task_depot_id != near.id:
+		fails.append(
+			"task_depot_id is %d, expected nearest depot %d (not starter %d)"
+			% [raider.task_depot_id, near.id, starter.id]
+		)
+	if near.inventory.scrap >= scrap0:
+		fails.append("raider did not loot the nearest living player depot")
+	if starter.inventory.scrap < Constants.START_PLAYER_SCRAP:
+		fails.append("raider looted the far starter depot instead of the nearest")
+
+
+func _test_walks_home_to_home_depot_id(fails: PackedStringArray) -> void:
+	var sim := _ready_sim()
+	_banish_player(sim)
+	var home := _living(sim.world, Types.Faction.ENEMY, Types.BuildingKind.DEPOT)
+	var decoy := _other_enemy_depot(sim, home)
+	if home == null or decoy == null:
+		fails.append("home-depot walk test needs two enemy depots")
+		return
+	var raider := _inject_raider(sim, sim.world.tile_center(
+		decoy.origin_tile.x - 1, decoy.origin_tile.y
+	))
+	raider.home_depot_id = home.id
+	raider.ai_state = Types.RaiderState.PATH_HOME
+	raider.inventory.scrap = 2
+	var decoy_scrap := decoy.inventory.scrap
+	_tick(sim, 1)
+	if not sim.world.units.has(raider.id):
+		fails.append("raider despawned at a decoy depot instead of home_depot_id")
+		return
+	if raider.ai_state != Types.RaiderState.PATH_HOME:
+		fails.append("raider should PATH_HOME to home_depot_id, got %d" % raider.ai_state)
+	if decoy.inventory.scrap != decoy_scrap:
+		fails.append("decoy depot stock changed while raider walked to home_depot_id")
+
+
+func _test_smash_retargets_nearest_pad(fails: PackedStringArray) -> void:
+	var sim := _ready_sim()
+	_banish_player(sim)
+	var starter := _living(sim.world, Types.Faction.PLAYER, Types.BuildingKind.DEPOT)
+	var near := _place_depot(sim, Types.Faction.PLAYER, Vector2i(_AWAKE.x + 3, _AWAKE.y))
+	if starter == null or near == null:
+		fails.append("smash retarget missing player depots")
+		return
+	var walls := _box_with_walls(sim, _AWAKE)
+	var raider := _inject_raider(sim, sim.world.tile_center(_AWAKE.x, _AWAKE.y))
+	_tick(sim, 2)
+	if raider.ai_state != Types.RaiderState.SIEGE:
+		fails.append("boxed raider should SIEGE, got %d" % raider.ai_state)
+	for wall in walls:
+		wall.hp = 0
+	_tick(sim, 1)
+	if raider.siege_target_id != near.id:
+		fails.append(
+			"after walls die, SIEGE should target nearest depot %d, got %d"
+			% [near.id, raider.siege_target_id]
+		)
+	near.hp = 0
+	_tick(sim, 1)
+	if raider.siege_target_id == near.id:
+		fails.append("SIEGE kept a dead depot as smash target")
+	if raider.siege_target_id != starter.id:
+		fails.append(
+			"after nearest depot dies, SIEGE should retarget remaining depot %d, got %d"
+			% [starter.id, raider.siege_target_id]
+		)
+	if raider.ai_state != Types.RaiderState.SIEGE:
+		fails.append("smash retarget left SIEGE, got %d" % raider.ai_state)
+
+
+func _test_habitat_kill_does_not_end_sitting(fails: PackedStringArray) -> void:
+	var sim := _ready_sim()
+	_banish_player(sim)
+	var habitat := _living(sim.world, Types.Faction.PLAYER, Types.BuildingKind.HABITAT)
+	if habitat == null:
+		fails.append("habitat-kill sitting test missing player habitat")
+		return
+	var raider := _inject_raider(sim, sim.world.tile_center(
+		habitat.origin_tile.x + 2, habitat.origin_tile.y
+	))
+	raider.ai_state = Types.RaiderState.ATTACK_HABITAT
+	raider.task_habitat_id = habitat.id
+	habitat.hp = 0
+	_tick(sim, 1)
+	if sim.outcome != Types.Outcome.NONE:
+		fails.append("killing the tasked player Habitat set outcome %d" % sim.outcome)
+	if not sim.world.units.has(raider.id):
+		fails.append("killing a Habitat despawned the raider")
+
+
+func _test_guard_leashes_to_home_pos(fails: PackedStringArray) -> void:
+	var sim := _ready_sim()
+	var guard := _first_guard(sim)
+	if guard == null:
+		fails.append("guard leash test missing a guard")
+		return
+	if guard.home_pos == Vector2.ZERO:
+		fails.append("guard spawn should set home_pos")
+		return
+	var home := guard.home_pos
+	var player := sim.get_player()
+	if player == null:
+		fails.append("guard leash test missing player")
+		return
+	var away := _offset_from(sim.world, home, 250.0)
+	player.pos = away
+	var displaced := _offset_from(sim.world, home, 96.0)
+	var disp_tile := sim.world.world_to_tile(displaced)
+	sim.world.set_terrain(disp_tile.x, disp_tile.y, Types.TileTerrain.EMPTY)
+	guard.pos = displaced
+	_tick(sim, 3)
+	if guard.pos.distance_to(home) <= Constants.GUARD_LEASH:
+		return
+	var toward_home := home - guard.pos
+	if guard.vel == Vector2.ZERO:
+		fails.append("displaced guard should path toward home_pos")
+	elif guard.vel.dot(toward_home) <= 0.0:
+		fails.append("displaced guard vel %s is not toward home_pos" % guard.vel)
+
+
 func _ready_sim() -> Sim:
 	var sim := Sim.new()
 	sim.setup(Constants.DEFAULT_SEED)
@@ -436,6 +578,10 @@ func _inject_raider(sim: Sim, pos: Vector2) -> Unit:
 	raider.ai_state = Types.RaiderState.SPAWNED
 	raider.inventory = Unit.inventory_for(Types.UnitKind.RAIDER)
 	raider.stuck_last_pos = pos
+	var home := _living(sim.world, Types.Faction.ENEMY, Types.BuildingKind.DEPOT)
+	if home != null:
+		raider.home_depot_id = home.id
+	raider.home_pos = pos
 	sim.world.units[raider.id] = raider
 	return raider
 
@@ -512,6 +658,62 @@ func _place_workshop(sim: Sim, tile: Vector2i) -> Building:
 	sim.world.buildings[building.id] = building
 	sim.world.occupy(building)
 	return building
+
+
+func _place_depot(sim: Sim, faction: int, tile: Vector2i) -> Building:
+	for dy in 2:
+		for dx in 2:
+			var at := Vector2i(tile.x + dx, tile.y + dy)
+			if not sim.world.in_bounds(at.x, at.y):
+				return null
+			sim.world.set_terrain(at.x, at.y, Types.TileTerrain.EMPTY)
+			var occupant := sim.world.building_at(at.x, at.y)
+			if occupant != null:
+				sim.world.vacate(occupant)
+				sim.world.buildings.erase(occupant.id)
+	var building := Building.new()
+	building.id = sim.world.alloc_id()
+	building.kind = Types.BuildingKind.DEPOT
+	building.faction = faction
+	building.origin_tile = tile
+	building.hp = Constants.DEPOT_HP
+	building.hp_max = Constants.DEPOT_HP
+	building.inventory = Building.inventory_for(Types.BuildingKind.DEPOT)
+	building.inventory.add(Types.ResourceKind.SCRAP, 10)
+	sim.world.buildings[building.id] = building
+	sim.world.occupy(building)
+	return building
+
+
+func _other_enemy_depot(sim: Sim, skip: Building) -> Building:
+	for building in sim.world.buildings.values():
+		if building.kind != Types.BuildingKind.DEPOT or building.faction != Types.Faction.ENEMY:
+			continue
+		if building.hp <= 0:
+			continue
+		if skip != null and building.id == skip.id:
+			continue
+		return building
+	return null
+
+
+func _first_guard(sim: Sim) -> Unit:
+	for unit in sim.world.units.values():
+		if unit.kind == Types.UnitKind.GUARD:
+			return unit
+	return null
+
+
+func _offset_from(world: World, origin: Vector2, dist: float) -> Vector2:
+	var dirs: Array[Vector2] = [
+		Vector2(1, 0), Vector2(-1, 0), Vector2(0, 1), Vector2(0, -1)
+	]
+	for d in dirs:
+		var pos := origin + d * dist
+		var tile := world.world_to_tile(pos)
+		if world.in_bounds(tile.x, tile.y):
+			return pos
+	return origin
 
 
 func _place_wall(sim: Sim, tile: Vector2i) -> Building:

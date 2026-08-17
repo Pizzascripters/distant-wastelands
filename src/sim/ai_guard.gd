@@ -25,6 +25,8 @@ static func think(unit: Unit, sim: Sim) -> void:
 
 
 static func _guard_home(world: World, unit: Unit) -> Vector2:
+	if unit.home_pos != Vector2.ZERO:
+		return unit.home_pos
 	var best := unit.pos
 	var best_d := INF
 	for raw in world.camps:
@@ -36,6 +38,7 @@ static func _guard_home(world: World, unit: Unit) -> Vector2:
 		if d < best_d:
 			best_d = d
 			best = home
+	unit.home_pos = best
 	return best
 
 
