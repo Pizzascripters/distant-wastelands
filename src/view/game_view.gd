@@ -368,7 +368,7 @@ func _update_inspect(snap: SimSnapshot) -> void:
 
 
 func _command_withdraw(shift_held: bool) -> bool:
-	return shift_held or (_building_panel != null and _building_panel.withdraw_active())
+	return shift_held
 
 
 func _apply_world_click(cmd: InputCommand, fire_held: bool, fire_just: bool, blocked: bool) -> void:
