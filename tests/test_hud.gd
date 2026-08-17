@@ -13,6 +13,14 @@ func run() -> PackedStringArray:
 		fails.append("HUD must not use name-first resource strings: %s" % labels)
 	if labels.find("60 / 60") < 0:
 		fails.append("placeholder O2 60 / 60 missing in: %s" % labels)
+	if labels.find("HP") < 0:
+		fails.append("HP label missing in: %s" % labels)
+	if labels.find("50 / 50") < 0:
+		fails.append("placeholder HP 50 / 50 missing in: %s" % labels)
+	var o2_row := hud.find_child("O2", true, false)
+	var hp_row := hud.find_child("HP", true, false)
+	if o2_row == null or hp_row == null or hp_row.get_index() <= o2_row.get_index():
+		fails.append("HP row should sit under the O2 row")
 
 	var carry := _counts(hud, "Carry")
 	var depot := _counts(hud, "Depot")
@@ -27,6 +35,9 @@ func run() -> PackedStringArray:
 	var snap := SimSnapshot.new()
 	snap.units = [{
 		"kind": Types.UnitKind.PLAYER,
+		"hp": 50,
+		"hp_max": 50,
+		"alive": true,
 		"inventory": {"scrap": 3, "ice": 1, "ore": 2, "parts": 4},
 	}]
 	snap.buildings = [{
@@ -67,6 +78,21 @@ func run() -> PackedStringArray:
 	elif countdown.text != "18":
 		fails.append("countdown is %s, expected 18" % countdown.text)
 
+	_assert_hp(hud, fails, 50, 50, Color("E07A5F"), 1.0)
+	snap.units[0]["hp"] = 25
+	hud.apply_snapshot(snap)
+	_assert_hp(hud, fails, 25, 50, Color("E2C044"), 0.5)
+	snap.units[0]["hp"] = 10
+	hud.apply_snapshot(snap)
+	_assert_hp(hud, fails, 10, 50, Color("E24A3B"), 0.2)
+	snap.units[0]["hp"] = 0
+	hud.apply_snapshot(snap)
+	_assert_hp(hud, fails, 0, 50, Color("E24A3B"), 0.0)
+	snap.units[0]["hp"] = 30
+	snap.units[0]["alive"] = false
+	hud.apply_snapshot(snap)
+	_assert_hp(hud, fails, 0, 50, Color("E24A3B"), 0.0)
+
 	var bar := BuildBar.new()
 	bar.selected_kind = Types.BuildingKind.WALL
 	var bar_text := _all_label_text(bar)
@@ -81,6 +107,28 @@ func run() -> PackedStringArray:
 
 	hud.free()
 	return fails
+
+
+func _assert_hp(
+	hud: Hud,
+	fails: PackedStringArray,
+	hp: int,
+	hp_max: int,
+	fill_color: Color,
+	ratio: float
+) -> void:
+	var fill := hud.find_child("HPFill", true, false) as ColorRect
+	var value := hud.find_child("HPValue", true, false) as Label
+	var expected := "%d / %d" % [hp, hp_max]
+	if value == null or value.text != expected:
+		fails.append("HP text is %s, expected %s" % [value.text if value != null else "missing", expected])
+	if fill == null:
+		fails.append("HP fill missing")
+		return
+	if fill.color != fill_color:
+		fails.append("HP fill color is %s, expected %s at %s" % [str(fill.color), str(fill_color), expected])
+	if not is_equal_approx(fill.anchor_right, ratio):
+		fails.append("HP fill ratio is %s, expected %s" % [str(fill.anchor_right), str(ratio)])
 
 
 func _count_label(hud: Hud, group: String, kind: String) -> Label:
