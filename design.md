@@ -87,7 +87,7 @@ Do **not** implement any of the following. They are listed so later work has a p
 | Tech tree | **Small bush:** Hydroponics, Metallurgy, Field Medicine in parallel; **Ballistics** behind Metallurgy (costs Parts). One selected research on `Sim`. Lab is scrap-only and start-unlocked. Workshop is start-placeable; **the Parts recipe is locked until Metallurgy**. Hydroponics unlocks the **Farm**. | Research can begin without a prior tech. Early raid still works with start scrap (Wall + Turret). Start Food covers the Hydroponics + Farm race. |
 | Oxygen | **60 s** full charge. Instant refill to max while adjacent to a living player **Habitat or Depot**. At 0: **1 HP every 5 ticks** (`PLAYER_O2_HP_PER_PULSE` / `PLAYER_O2_PULSE_TICKS`). | Habitat-or-Depot adjacency keeps the dump / turret stand off the suffocation clock. Off-pad gather drains; coming home to dump refills. 60 s is the **raid-out** budget. The Farm does **not** refill O2. |
 | Hunger | Player auto-eats **1 Food from carry** every `FOOD_EAT_PERIOD` (15 s). Missing that meal is **`PLAYER_LOSE` / `HUNGER`** — not a combat death, not a respawn. Start carry is `START_PLAYER_FOOD` (24) = **6 minutes** to research Hydroponics and place a Farm. | Food is the mobile life-support. Later maps should not require defending one Habitat for food; a Farm you place is the source. O2 stays camp-tethered in this version. |
-| Workshop | Player-present, **one recipe**, consume **Scrap+Ore from player carry**, produce Parts into carry. No queue. No depot-adjacent crafting. **Own-depot `E` dumps; `Shift+E` (or the depot panel Withdraw toggle) pulls back.** | A workbench, not a factory. Hauling ingredients to the bench is the logistics. Withdraw exists so a dump does not permanently trap Ore/Parts/Ice in the depot. |
+| Workshop | Player-present, **one recipe**, consume **Scrap+Ore from player carry**, produce Parts into carry. No queue. No depot-adjacent crafting. **Own-depot `E` dumps; `Shift+E` pulls back.** | A workbench, not a factory. Hauling ingredients to the bench is the logistics. Withdraw exists so a dump does not permanently trap Ore/Parts/Ice in the depot. There is no Deposit/Withdraw control on the inspect panel. |
 | Interact resolve | **Nearest valid target by distance-to-AABB.** Equal distances use the priority list (depot, loot, deposit, workshop, lab, farm). | Depot-first made a camp Lab/Workshop unusable inside the depot’s 24 px halo. Closer bench/lab/farm wins. |
 | Medbay | **2 HP/s** while adjacent. Costs scrap + ice (not Parts). | Parallel to the ore path. Slower than an empty-handed respawn, better when you are carrying Ore/Parts/Ice you do not want to drop. |
 | Gate | Solid to raiders/guards and to **all** projectiles (like a Wall). **Not** solid to the player. Costs scrap + Parts. | Player-only door in a wall line. First-integrate only, ignore tiles of a **friendly Gate the shooter’s circle overlaps** — not `floor(muzzle / TILE)`. A neighboring wall still eats the shot. |
@@ -471,12 +471,7 @@ Habitat and Medbay are **not** interact targets. Oxygen refill and Medbay heal a
 
 **Deposit (own depot, default).** Default own-depot `E` is still **dump**: player → depot. Each tick while resolved and `cmd.withdraw == false`: `interact_progress += SIM_DT`. Whenever `interact_progress >= TRANSFER_PERIOD`, subtract `TRANSFER_PERIOD` and transfer up to `TRANSFER_BATCH` of each depot haulable in order **Scrap, Ice, Ore, Parts** (player → depot, limited by source and dest free space). **Food is not a depot resource** and is never transferred. **First transfer occurs after one full `TRANSFER_PERIOD`**, not on the press frame.
 
-**Withdraw (own depot).** Own-depot transfer reverses when `cmd.withdraw == true`. Same cadence, same `TRANSFER_BATCH`, same Scrap → Ice → Ore → Parts order, opposite direction (depot → player), limited by depot stock and carry caps. Food is never withdrawn because the depot never holds it. `cmd.withdraw` is held state. The view sets it when:
-
-- `withdraw` (Left or Right Shift) is held together with `interact`, **or**
-- the inspected **player Depot** panel’s Deposit/Withdraw toggle is **Withdraw** (toggle defaults to Deposit each time that panel opens).
-
-Shift and the toggle OR together; either is enough. Switching direction mid-channel resets `interact_progress`. There is no per-kind filter in v0.1 — withdraw is the full bag, same as deposit. Withdraw pulls **leftover / dumped** stock. It is **not** a refund of Metallurgy’s 6 Ore (that payment is consumed). After paying the tech, craft still needs a later 2 Ore in carry (second gather trip, or ore dumped and not spent).
+**Withdraw (own depot).** Own-depot transfer reverses when `cmd.withdraw == true`. Same cadence, same `TRANSFER_BATCH`, same Scrap → Ice → Ore → Parts order, opposite direction (depot → player), limited by depot stock and carry caps. Food is never withdrawn because the depot never holds it. `cmd.withdraw` is held state. The view sets it **only** when `withdraw` (Left or Right Shift) is held together with `interact`. The depot inspect panel has **no** Deposit/Withdraw buttons and does **not** set `cmd.withdraw`. Switching direction mid-channel resets `interact_progress`. There is no per-kind filter in v0.1 — withdraw is the full bag, same as deposit. Withdraw pulls **leftover / dumped** stock. It is **not** a refund of Metallurgy’s 6 Ore (that payment is consumed). After paying the tech, craft still needs a later 2 Ore in carry (second gather trip, or ore dumped and not spent).
 
 **Steal (enemy depot).** Same cadence and batch as deposit, opposite direction (depot → player). Same order: Scrap, then Ice, then Ore, then Parts, each up to `TRANSFER_BATCH`. Food is never stolen from a depot. `withdraw` is **ignored** on an enemy depot (steal is already depot → player). This is the primary “steal supplies” action.
 
@@ -983,14 +978,14 @@ Inspecting a living **player** building opens a panel (bottom-center or next to 
 - Kind-appropriate stats (cost is not repeated unless useful; range on turrets; recipe on workshop).
 - **HP bar** (`hp / hp_max`) — this is where Habitat and Depot HP live.
 - Kind state:
-  - Depot: four resource icons + counts / caps (Scrap, Ice, Ore, Parts — no Food), plus a **Deposit / Withdraw** toggle. Default **Deposit** each time the panel opens. While Withdraw is selected, held `E` sets `cmd.withdraw` (see Player interaction). The toggle is view state; it is not a sim field.
+  - Depot: four resource icons + counts / caps (Scrap, Ice, Ore, Parts — no Food). **No** Deposit/Withdraw buttons or toggle. Transfer direction is keyboard-only (`E` dump, `Shift+E` withdraw).
   - Farm: Food stock / `FARM_FOOD_CAP`, growing or full.
   - Lab: four tech icons; selected highlight; progress bar `research_progress / duration`; completed techs marked; Ballistics disabled until Metallurgy; LMB or keys 1–4 select.
   - Workshop: recipe `3 scrap-icon + 2 ore-icon → 1 parts-icon`; locked hint if Metallurgy is incomplete.
   - Medbay: one-line heal hint (`+2 HP/s while adjacent`).
   - Gate / Wall / Turret: HP (turret also shows current range, 160 or 224).
 - Closing the panel: `F` (toggle), `Q` when not in build mode, RMB on empty ground / a non-player building, selecting a different building, player death, pause, end screen, or the building dying.
-- Inspect is **view-only**. It does not add a sim command. Research selection and the depot Withdraw toggle (via `cmd.withdraw`) are the only panel actions that affect `InputCommand`.
+- Inspect is **view-only**. It does not add a sim command. Research selection is the only panel action that affects `InputCommand`. The depot panel does not set `cmd.withdraw`.
 
 **Player HP / O2** are HUD, not the building panel.
 
@@ -1681,7 +1676,7 @@ Required cases (baseline cases stay; new cases are marked ★):
 | `test_medbay.gd` ★ | 10 ticks adjacent to one Medbay → +1 HP; two Medbays still +1 per `MEDBAY_HEAL_PERIOD`; walking away resets `medbay_heal_acc`; `hp <= 0` skips heal |
 | `test_perf.gd` ★ | `WAVE_CAP` simultaneous path requests complete at most `MAX_PATHS_PER_TICK` per tick; a pending path is not treated as SIEGE-empty. Does **not** assert wall-clock ms. |
 | `test_snapshot.gd` | five-resource inventory copied; `player_o2`, carry Food, and research fields present ★ |
-| `test_building_panel.gd` ★ | panel model (pure logic if extracted) maps depot/farm/lab/workshop/medbay/gate to the specified fields; **depot inspect is four stocks (no Food) ★**; HUD snapshot helpers do not read Habitat/Depot HP into HUD strings; pointer-over-panel must not set `cmd.fire` |
+| `test_building_panel.gd` ★ | panel model (pure logic if extracted) maps depot/farm/lab/workshop/medbay/gate to the specified fields; **depot inspect is four stocks (no Food) ★**; depot panel has **no** Deposit/Withdraw buttons and `withdraw_active()` is always false; HUD snapshot helpers do not read Habitat/Depot HP into HUD strings; pointer-over-panel must not set `cmd.fire` |
 
 Tests construct `Sim` / `Inventory` / `World` directly. They must not create a `game.tscn` tree.
 
@@ -1693,7 +1688,7 @@ Play on default seed `1`, default window 1280×720.
 2. New Game spawns the player in the SW camp; Habitat and Depot are visible with teal stripes. HUD shows **icons** for carry (scrap, ice, ore, parts, food) and depot (scrap, ice, ore, parts — **no food**), carry Food at 24, an O2 bar at full, a player HP bar at `50 / 50`, and **no** Habitat HP / Depot HP numbers.
 3. WASD moves; mouse-aim notch follows the cursor; wheel zooms and clamps.
 4. Holding E on a scrap, ice, or ore pile **while standing still** increments carry by 1/s; a short bar fills above the pile during the channel and hides when walking or the pile is gone; walking cancels the channel; the pile empties and disappears.
-5. Holding E on the player depot (stand next to it) moves Scrap, Ice, Ore, and Parts into the HUD depot counts in batches of 5 after 0.2 s. **Carry Food does not move.** **Shift+E** (or the depot panel Withdraw toggle + E) pulls leftover dumped stock back out. After dumping extra ore you can withdraw it and craft. Metallurgy’s 6 Ore payment is consumed and cannot be withdrawn.
+5. Holding E on the player depot (stand next to it) moves Scrap, Ice, Ore, and Parts into the HUD depot counts in batches of 5 after 0.2 s. **Carry Food does not move.** **Shift+E** pulls leftover dumped stock back out. The depot inspect panel has no Deposit/Withdraw buttons. After dumping extra ore you can withdraw it and craft. Metallurgy’s 6 Ore payment is consumed and cannot be withdrawn.
 6. 1 then click on a valid tile spends 5 scrap and places a wall (icon on the build bar, not the word “Wall”); invalid tiles flash red and spend nothing.
 7. 2 then click places a turret for 15 scrap. The turret fires at a raider during the first wave without further input; its barrel tracks the target.
 8. LMB fires teal projectiles that kill a raider in several hits. Hits flash the target. LMB never opens inspect.
@@ -1903,3 +1898,9 @@ Same-file work is serial: **PR 1 then PR 3a** on `sim.gd` / `ai_raider.gd` / `sn
 - **Files:** `tests/run.gd` (confirm every new script is listed), any leftover `test_*.gd` gaps, `src/ui/debug_overlay.gd` (ore/parts/o2/research/`sim_ms`), placeholder PNG fill-ins
 - **Depends on:** PR 1–13, PR 7b, and PR 10b
 - **What:** Close checklist holes (icon parseability, first-raid-without-ore, O2 telegraph, player HP bar, withdraw, F3 fields). No new rules. If a number in this document is wrong in play, change **this document** in a follow-up — do not silently retune.
+
+### PR 15 — Remove depot panel transfer buttons
+
+- **Files:** `src/ui/building_panel.gd`, `src/view/game_view.gd` (`_command_withdraw` is Shift only), `tests/test_building_panel.gd`
+- **Depends on:** PR 5
+- **What:** Delete the depot inspect panel’s Deposit and Withdraw buttons. `cmd.withdraw` is set only by the `withdraw` action (Shift held with E). Panel inspect stays view-only except Lab research selection. Existing Shift+E withdraw tests stay green.
