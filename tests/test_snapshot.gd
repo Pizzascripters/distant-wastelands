@@ -13,6 +13,9 @@ func run() -> PackedStringArray:
 	_test_oxygen_and_hunger_flags(fails)
 	_test_tiles_recopy_on_generation(fails)
 	_test_last_tick_usec_to_sim_ms(fails)
+	_test_carry_food_and_research(fails)
+	_test_depot_pools(fails)
+	_test_discovered_cache(fails)
 	return fails
 
 
@@ -41,6 +44,16 @@ func _test_defaults_and_player_inventory(fails: PackedStringArray) -> void:
 		fails.append("snapshot must not carry depot ice-empty flags")
 	if snap.habitat_ice_pool != Constants.START_PLAYER_ICE:
 		fails.append("habitat_ice_pool is %d, expected %d" % [snap.habitat_ice_pool, Constants.START_PLAYER_ICE])
+	if snap.depot_scrap_pool != Constants.START_PLAYER_SCRAP:
+		fails.append(
+			"depot_scrap_pool is %d, expected %d"
+			% [snap.depot_scrap_pool, Constants.START_PLAYER_SCRAP]
+		)
+	if snap.depot_ore_pool != 0 or snap.depot_parts_pool != 0:
+		fails.append(
+			"depot ore/parts pools started at %d/%d"
+			% [snap.depot_ore_pool, snap.depot_parts_pool]
+		)
 	if snap.oxygen_failed:
 		fails.append("oxygen_failed should start false")
 	if snap.hunger_starving:
@@ -69,6 +82,8 @@ func _test_defaults_and_player_inventory(fails: PackedStringArray) -> void:
 		)
 	if int(inv.get("ore", -1)) != 0 or int(inv.get("parts", -1)) != 0:
 		fails.append("player ore/parts started at %s/%s" % [str(inv.get("ore")), str(inv.get("parts"))])
+	if int(inv.get("food", -1)) != Constants.START_PLAYER_FOOD:
+		fails.append("player food started at %s" % str(inv.get("food")))
 
 
 func _test_copies_world_entities(fails: PackedStringArray) -> void:
@@ -332,6 +347,91 @@ func _test_last_tick_usec_to_sim_ms(fails: PackedStringArray) -> void:
 		)
 
 
+func _test_carry_food_and_research(fails: PackedStringArray) -> void:
+	var sim := Sim.new()
+	sim.setup(Constants.DEFAULT_SEED)
+	var player := sim.get_player()
+	if player == null or player.inventory == null:
+		fails.append("setup missing player inventory")
+		return
+	player.inventory.remove(Types.ResourceKind.FOOD, player.inventory.food)
+	player.inventory.add(Types.ResourceKind.FOOD, 7)
+	sim.research_selected = Types.TechKind.HYDROPONICS
+	sim.research_progress = 1.25
+	sim.research_paid = true
+	sim.techs_done = 1 << Types.TechKind.HYDROPONICS
+	var snap := sim.snapshot()
+	var rec := _player_rec(snap)
+	var inv: Variant = rec.get("inventory", {})
+	if not inv is Dictionary or int(inv.get("food", -1)) != 7:
+		fails.append("snapshot carry food is %s, expected 7" % str(inv.get("food") if inv is Dictionary else inv))
+	if snap.research_selected != Types.TechKind.HYDROPONICS:
+		fails.append("research_selected is %d" % snap.research_selected)
+	if not is_equal_approx(snap.research_progress, 1.25):
+		fails.append("research_progress is %s" % str(snap.research_progress))
+	if not snap.research_paid:
+		fails.append("research_paid should be true")
+	if snap.techs_done != (1 << Types.TechKind.HYDROPONICS):
+		fails.append("techs_done is %d" % snap.techs_done)
+
+
+func _test_depot_pools(fails: PackedStringArray) -> void:
+	var sim := Sim.new()
+	sim.setup(Constants.DEFAULT_SEED)
+	var depot := _player_depot(sim)
+	if depot == null or depot.inventory == null:
+		fails.append("generated map missing player depot")
+		return
+	depot.inventory.add(Types.ResourceKind.ORE, 4)
+	depot.inventory.add(Types.ResourceKind.PARTS, 2)
+	var extra := Building.new()
+	extra.id = sim.world.alloc_id()
+	extra.kind = Types.BuildingKind.DEPOT
+	extra.faction = Types.Faction.PLAYER
+	extra.origin_tile = Vector2i(30, 30)
+	extra.hp = Constants.DEPOT_HP
+	extra.hp_max = Constants.DEPOT_HP
+	extra.inventory = Building.inventory_for(Types.BuildingKind.DEPOT)
+	extra.inventory.add(Types.ResourceKind.SCRAP, 6)
+	extra.inventory.add(Types.ResourceKind.ORE, 1)
+	sim.world.buildings[extra.id] = extra
+	var snap := sim.snapshot()
+	if snap.depot_scrap_pool != Constants.START_PLAYER_SCRAP + 6:
+		fails.append(
+			"depot_scrap_pool is %d, expected %d"
+			% [snap.depot_scrap_pool, Constants.START_PLAYER_SCRAP + 6]
+		)
+	if snap.depot_ore_pool != 5:
+		fails.append("depot_ore_pool is %d, expected 5" % snap.depot_ore_pool)
+	if snap.depot_parts_pool != 2:
+		fails.append("depot_parts_pool is %d, expected 2" % snap.depot_parts_pool)
+	depot.hp = 0
+	var dead := sim.snapshot()
+	if dead.depot_scrap_pool != 6 or dead.depot_ore_pool != 1 or dead.depot_parts_pool != 0:
+		fails.append(
+			"dead depot still contributed pools %d/%d/%d"
+			% [dead.depot_scrap_pool, dead.depot_ore_pool, dead.depot_parts_pool]
+		)
+
+
+func _test_discovered_cache(fails: PackedStringArray) -> void:
+	var sim := Sim.new()
+	sim.setup(Constants.DEFAULT_SEED)
+	var first := sim.snapshot()
+	if first.discovered.size() != Constants.MAP_W * Constants.MAP_H:
+		fails.append("snapshot.discovered size is %d" % first.discovered.size())
+	if first.discovered_generation != sim.world.discovered_generation:
+		fails.append("snapshot.discovered_generation should match the world")
+	var spawn := Constants.PLAYER_SPAWN_TILE
+	if first.discovered[sim.world.index_of(spawn.x, spawn.y)] != 1:
+		fails.append("snapshot.discovered missed the spawn tile")
+	var second := sim.snapshot()
+	if second.discovered != first.discovered:
+		fails.append("unchanged discovered_generation should reuse the cached discovered buffer")
+	if second.discovered_generation != first.discovered_generation:
+		fails.append("unchanged discovered_generation should keep the same generation")
+
+
 func _player_rec(snap: SimSnapshot) -> Dictionary:
 	for rec in snap.units:
 		if rec.get("kind", -1) == Types.UnitKind.PLAYER:
@@ -349,5 +449,12 @@ func _rec_by_id(records: Array, id: int) -> Dictionary:
 func _player_habitat(sim: Sim) -> Building:
 	for building in sim.world.buildings.values():
 		if building.kind == Types.BuildingKind.HABITAT and building.faction == Types.Faction.PLAYER:
+			return building
+	return null
+
+
+func _player_depot(sim: Sim) -> Building:
+	for building in sim.world.buildings.values():
+		if building.kind == Types.BuildingKind.DEPOT and building.faction == Types.Faction.PLAYER:
 			return building
 	return null

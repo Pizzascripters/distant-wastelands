@@ -49,6 +49,8 @@ func _test_placeholder_pngs_load(fails: PackedStringArray) -> void:
 		"res://assets/sprites/placeholder/medbay_player.png",
 		"res://assets/sprites/placeholder/gate_player.png",
 		"res://assets/sprites/placeholder/radar_player.png",
+		"res://assets/sprites/tiles/cliff.png",
+		"res://assets/sprites/tiles/crater.png",
 	]:
 		var tex := WorldView.load_png(path)
 		if tex == null:
@@ -59,6 +61,20 @@ func _test_placeholder_pngs_load(fails: PackedStringArray) -> void:
 				"placeholder %s is %dx%d, expected a readable icon"
 				% [path.get_file(), tex.get_width(), tex.get_height()]
 			)
+	_expect_tile_png(fails, "res://assets/sprites/tiles/cliff.png", 32, 32)
+	_expect_tile_png(fails, "res://assets/sprites/tiles/crater.png", 32, 32)
+	_expect_tile_png(fails, "res://assets/sprites/placeholder/radar_player.png", 64, 64)
+
+
+func _expect_tile_png(fails: PackedStringArray, path: String, w: int, h: int) -> void:
+	var tex := WorldView.load_png(path)
+	if tex == null:
+		return
+	if tex.get_width() != w or tex.get_height() != h:
+		fails.append(
+			"%s is %dx%d, expected %dx%d"
+			% [path.get_file(), tex.get_width(), tex.get_height(), w, h]
+		)
 
 
 func _blank_snap() -> SimSnapshot:
