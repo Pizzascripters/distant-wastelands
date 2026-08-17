@@ -10,6 +10,7 @@ func run() -> PackedStringArray:
 	_test_farm_not_depot(fails)
 	_test_eats_one_per_period(fails)
 	_test_missed_meal_loses(fails)
+	_test_depot_dump_leaves_carry_food(fails)
 	return fails
 
 
@@ -155,6 +156,33 @@ func _test_missed_meal_loses(fails: PackedStringArray) -> void:
 		fails.append("hunger lose should stay locked")
 	if player.alive != alive and player.alive:
 		fails.append("hunger lose should not respawn")
+
+
+func _test_depot_dump_leaves_carry_food(fails: PackedStringArray) -> void:
+	var sim := _quiet()
+	var player := sim.get_player()
+	var depot := _player_depot(sim.world)
+	if player == null or depot == null or player.inventory == null or depot.inventory == null:
+		fails.append("dump test missing player or depot")
+		return
+	if depot.inventory.cap_food != 0 or Constants.DEPOT_CAP_FOOD != 0:
+		fails.append(
+			"depot cap_food is %d / DEPOT_CAP_FOOD %d, expected 0"
+			% [depot.inventory.cap_food, Constants.DEPOT_CAP_FOOD]
+		)
+	var start := player.inventory.food
+	if start <= 0:
+		fails.append("start carry food is %d, expected dinner" % start)
+		return
+	player.inventory.add(Types.ResourceKind.SCRAP, 5)
+	_stand_beside(player, sim.world, depot)
+	_hold_interact(sim, 4)
+	if player.inventory.food != start:
+		fails.append("depot dump changed carry food %d -> %d" % [start, player.inventory.food])
+	if depot.inventory.food != 0:
+		fails.append("depot stored food %d" % depot.inventory.food)
+	if player.inventory.scrap != 0:
+		fails.append("dump should still move scrap, leftover %d" % player.inventory.scrap)
 
 
 func _quiet() -> Sim:

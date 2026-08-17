@@ -135,6 +135,13 @@ const _HAULABLES: Array[int] = [
 	Types.ResourceKind.FOOD,
 ]
 
+const _DEPOT_HAULABLES: Array[int] = [
+	Types.ResourceKind.SCRAP,
+	Types.ResourceKind.ICE,
+	Types.ResourceKind.ORE,
+	Types.ResourceKind.PARTS,
+]
+
 const _PRI_DEPOT := 0
 const _PRI_LOOT := 1
 const _PRI_DEPOSIT := 2
@@ -404,7 +411,7 @@ static func _tick_depot_transfer(unit: Unit, depot: Building, withdrawing: bool)
 		dest = unit.inventory
 	while unit.interact_progress >= Constants.TRANSFER_PERIOD:
 		unit.interact_progress -= Constants.TRANSFER_PERIOD
-		for kind in _HAULABLES:
+		for kind in _DEPOT_HAULABLES:
 			_move_up_to(src, dest, kind, Constants.TRANSFER_BATCH)
 
 

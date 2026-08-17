@@ -32,6 +32,7 @@ func run() -> PackedStringArray:
 	_test_place_farm_after_hydroponics(fails)
 	_test_farm_harvest_transfer(fails)
 	_test_hunger_lose(fails)
+	_test_depot_skips_food(fails)
 	return fails
 
 
@@ -738,6 +739,65 @@ func _test_hunger_lose(fails: PackedStringArray) -> void:
 	_tick_idle(sim, _ticks_for(Constants.FOOD_EAT_PERIOD))
 	if sim.outcome != Types.Outcome.PLAYER_LOSE or sim.outcome_reason != Types.OutcomeReason.HUNGER:
 		fails.append("missed meal outcome is %d/%d" % [sim.outcome, sim.outcome_reason])
+
+
+func _test_depot_skips_food(fails: PackedStringArray) -> void:
+	var sim := Sim.new()
+	sim.setup(Constants.DEFAULT_SEED)
+	if sim.director != null:
+		sim.director.next_wave_at = 1.0e9
+	var player := sim.get_player()
+	var depot := _player_depot(sim.world)
+	if player == null or depot == null:
+		fails.append("food-skip setup missing player or depot")
+		return
+	var carry_food := player.inventory.food
+	player.inventory.add(Types.ResourceKind.SCRAP, 5)
+	_stand_beside(player, sim.world, depot)
+	_hold_interact(sim, 4)
+	if player.inventory.food != carry_food:
+		fails.append("own-depot dump moved food %d -> %d" % [carry_food, player.inventory.food])
+	if depot.inventory.food != 0:
+		fails.append("own-depot dump stored food %d" % depot.inventory.food)
+	depot.inventory.food = 8
+	_hold_withdraw(sim, 4)
+	if player.inventory.food != carry_food:
+		fails.append("own-depot withdraw moved food to carry %d" % player.inventory.food)
+	if depot.inventory.food != 8:
+		fails.append("own-depot withdraw pulled food from depot")
+
+	var world := World.new()
+	var enemy := Building.new()
+	enemy.id = world.alloc_id()
+	enemy.kind = Types.BuildingKind.DEPOT
+	enemy.faction = Types.Faction.ENEMY
+	enemy.origin_tile = Vector2i(2, 2)
+	enemy.hp = Constants.DEPOT_HP
+	enemy.hp_max = Constants.DEPOT_HP
+	enemy.inventory = Inventory.new(
+		Constants.DEPOT_CAP_SCRAP,
+		Constants.DEPOT_CAP_ICE,
+		Constants.DEPOT_CAP_ORE,
+		Constants.DEPOT_CAP_PARTS,
+		Constants.DEPOT_CAP_FOOD
+	)
+	enemy.inventory.add(Types.ResourceKind.SCRAP, 9)
+	enemy.inventory.food = 6
+	world.buildings[enemy.id] = enemy
+	world.occupy(enemy)
+	var thief := _player_at(world, world.tile_center(1, 2))
+	thief.inventory.add(Types.ResourceKind.FOOD, 3)
+	var cmd := _interact_cmd()
+	var last := 0
+	var ticks := int(Constants.TRANSFER_PERIOD / Constants.SIM_DT)
+	for _i in ticks:
+		last = Rules.resolve_interact(world, thief, cmd, last)
+	if thief.inventory.food != 3:
+		fails.append("steal moved food to carry %d" % thief.inventory.food)
+	if enemy.inventory.food != 6:
+		fails.append("steal took food from enemy depot")
+	if thief.inventory.scrap != Constants.TRANSFER_BATCH:
+		fails.append("steal should still move scrap, got %d" % thief.inventory.scrap)
 
 
 func _tick_idle(sim: Sim, ticks: int) -> void:

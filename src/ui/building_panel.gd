@@ -146,7 +146,7 @@ func apply_record(rec: Dictionary) -> void:
 	_depot_box.visible = is_depot
 	if is_depot:
 		var inv := _inventory_from(rec.get("inventory", {}))
-		for key in ["scrap", "ice", "ore", "parts", "food"]:
+		for key in ["scrap", "ice", "ore", "parts"]:
 			var lab: Label = _depot_counts[key]
 			lab.text = "%d / %d" % [int(inv[key]), int(inv["cap_%s" % key])]
 	if _farm_box != null:
@@ -338,7 +338,6 @@ func _make_depot_box() -> VBoxContainer:
 		["ice", _ICE],
 		["ore", _ORE],
 		["parts", _PARTS],
-		["food", _FOOD],
 	]:
 		var icon := TextureRect.new()
 		icon.name = "%sIcon" % (spec[0] as String).capitalize()

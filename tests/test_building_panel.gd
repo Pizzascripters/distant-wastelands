@@ -53,15 +53,15 @@ func _test_depot_toggle_defaults_and_withdraw(fails: PackedStringArray) -> void:
 		"Ice": panel.find_child("IceCount", true, false) as Label,
 		"Ore": panel.find_child("OreCount", true, false) as Label,
 		"Parts": panel.find_child("PartsCount", true, false) as Label,
-		"Food": panel.find_child("FoodCount", true, false) as Label,
 	}
 	var want := {
 		"Scrap": "15 / %d" % Constants.DEPOT_CAP_SCRAP,
 		"Ice": "4 / %d" % Constants.DEPOT_CAP_ICE,
 		"Ore": "2 / %d" % Constants.DEPOT_CAP_ORE,
 		"Parts": "1 / %d" % Constants.DEPOT_CAP_PARTS,
-		"Food": "3 / %d" % Constants.DEPOT_CAP_FOOD,
 	}
+	if panel.find_child("FoodCount", true, false) != null:
+		fails.append("depot inspect must not show Food")
 	for key in want.keys():
 		var lab: Label = stocks[key]
 		if lab == null or lab.text != want[key]:

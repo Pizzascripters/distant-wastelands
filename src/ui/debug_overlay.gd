@@ -145,8 +145,8 @@ func _depot_line(snap: SimSnapshot, faction: int) -> String:
 	if rec.is_empty():
 		return MISSING
 	var inv := _inventory_from(rec.get("inventory", {}))
-	return "scrap %d  ice %d  ore %d  parts %d  food %d" % [
-		inv["scrap"], inv["ice"], inv["ore"], inv["parts"], inv["food"]
+	return "scrap %d  ice %d  ore %d  parts %d" % [
+		inv["scrap"], inv["ice"], inv["ore"], inv["parts"]
 	]
 
 
