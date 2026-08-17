@@ -73,6 +73,7 @@ func _refresh() -> void:
 		"outcome  %s" % _outcome_name(snap.outcome),
 		"player depot  %s" % _depot_line(snap, Types.Faction.PLAYER),
 		"enemy depot  %s" % _depot_line(snap, Types.Faction.ENEMY),
+		"o2  %.2f" % _float_field(snap, "player_o2", Constants.PLAYER_O2_MAX),
 		"next wave  %.2f" % _float_field(snap, "next_wave_at", 0.0),
 	]))
 

@@ -9,6 +9,7 @@ func run() -> PackedStringArray:
 	_test_player_respawn_timer(fails)
 	_test_gather_channel_defaults(fails)
 	_test_gather_channel_while_mining(fails)
+	_test_player_o2_copied(fails)
 	return fails
 
 
@@ -23,6 +24,12 @@ func _test_defaults_and_player_inventory(fails: PackedStringArray) -> void:
 		)
 	if snap.player_respawn_timer != 0.0:
 		fails.append("player_respawn_timer is %s, expected 0" % str(snap.player_respawn_timer))
+	if not is_equal_approx(snap.player_o2, Constants.PLAYER_O2_MAX):
+		fails.append("player_o2 is %s, expected %s" % [str(snap.player_o2), str(Constants.PLAYER_O2_MAX)])
+	if not is_equal_approx(snap.player_o2_max, Constants.PLAYER_O2_MAX):
+		fails.append(
+			"player_o2_max is %s, expected %s" % [str(snap.player_o2_max), str(Constants.PLAYER_O2_MAX)]
+		)
 	if snap.player_zero_ice_timer != 0.0 or snap.enemy_zero_ice_timer != 0.0:
 		fails.append(
 			"zero_ice timers were %s/%s, expected 0/0"
@@ -226,6 +233,19 @@ func _test_gather_channel_while_mining(fails: PackedStringArray) -> void:
 			"walking should hide gather bar, got %d/%s"
 			% [cleared.gather_deposit_id, str(cleared.gather_progress)]
 		)
+
+
+func _test_player_o2_copied(fails: PackedStringArray) -> void:
+	var sim := Sim.new()
+	sim.setup(Constants.DEFAULT_SEED)
+	var player := sim.get_player()
+	player.o2 = 17.5
+	var snap := sim.snapshot()
+	player.o2 = 3.0
+	if not is_equal_approx(snap.player_o2, 17.5):
+		fails.append("snapshot player_o2 is %s, expected 17.5" % str(snap.player_o2))
+	if not is_equal_approx(snap.player_o2_max, Constants.PLAYER_O2_MAX):
+		fails.append("snapshot player_o2_max is %s" % str(snap.player_o2_max))
 
 
 func _player_rec(snap: SimSnapshot) -> Dictionary:
