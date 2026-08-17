@@ -144,7 +144,8 @@ func _test_suffocation_pulse(fails: PackedStringArray) -> void:
 func _test_lethal_pulse_not_healed(fails: PackedStringArray) -> void:
 	var sim := _sim_quiet()
 	var player := sim.get_player()
-	player.pos = _far_pos()
+	var medbay := _inject_building(sim, Types.BuildingKind.MEDBAY, Vector2i(21, 20), Constants.MEDBAY_HP)
+	player.pos = _adjacent_pos(sim, medbay)
 	player.o2 = 0.0
 	player.hp = 1
 	sim.tick_index = Constants.PLAYER_O2_PULSE_TICKS - 1
@@ -249,6 +250,8 @@ func _far_pos() -> Vector2:
 
 
 func _inject_building(sim: Sim, kind: int, tile: Vector2i, hp: int) -> Building:
+	sim.world.set_terrain(tile.x, tile.y, Types.TileTerrain.EMPTY)
+	sim.world.set_terrain(tile.x + 1, tile.y, Types.TileTerrain.EMPTY)
 	var building := Building.new()
 	building.id = sim.world.alloc_id()
 	building.kind = kind

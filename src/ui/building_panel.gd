@@ -15,6 +15,7 @@ const _WALL := "res://assets/sprites/placeholder/wall_player.png"
 const _TURRET := "res://assets/sprites/placeholder/turret_player.png"
 const _WORKSHOP := "res://assets/sprites/placeholder/workshop_player.png"
 const _LAB := "res://assets/sprites/placeholder/lab_player.png"
+const _MEDBAY := "res://assets/sprites/placeholder/medbay_player.png"
 const _SCRAP := "res://assets/sprites/placeholder/scrap.png"
 const _ICE := "res://assets/sprites/placeholder/ice.png"
 const _ORE := "res://assets/sprites/placeholder/ore.png"
@@ -42,6 +43,7 @@ var _lab_fill: ColorRect
 var _lab_progress: Label
 var _workshop_box: VBoxContainer
 var _workshop_lock: Label
+var _heal_hint: Label
 var _plain: StyleBoxFlat
 var _selected: StyleBoxFlat
 
@@ -150,6 +152,8 @@ func apply_record(rec: Dictionary) -> void:
 		_workshop_box.visible = _kind == Types.BuildingKind.WORKSHOP
 		if _workshop_box.visible:
 			_workshop_lock.visible = (_techs_done & (1 << Types.TechKind.METALLURGY)) == 0
+	if _heal_hint != null:
+		_heal_hint.visible = _kind == Types.BuildingKind.MEDBAY
 	_refresh_toggle()
 
 
@@ -273,6 +277,10 @@ func _ensure_ui() -> void:
 	stats.add_child(_lab_box)
 	_workshop_box = _make_workshop_box()
 	stats.add_child(_workshop_box)
+	_heal_hint = _label("+2 HP/s while adjacent")
+	_heal_hint.name = "HealHint"
+	_heal_hint.visible = false
+	stats.add_child(_heal_hint)
 	main.add_child(stats)
 	panel.add_child(main)
 	add_child(panel)
@@ -519,6 +527,8 @@ func _icon_path(kind: int) -> String:
 			return _WORKSHOP
 		Types.BuildingKind.LAB:
 			return _LAB
+		Types.BuildingKind.MEDBAY:
+			return _MEDBAY
 		_:
 			return _WALL
 

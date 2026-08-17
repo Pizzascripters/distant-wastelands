@@ -13,6 +13,7 @@ const _WALL_PATH := "res://assets/sprites/placeholder/wall_player.png"
 const _TURRET_PATH := "res://assets/sprites/placeholder/turret_player.png"
 const _WORKSHOP_PATH := "res://assets/sprites/placeholder/workshop_player.png"
 const _LAB_PATH := "res://assets/sprites/placeholder/lab_player.png"
+const _MEDBAY_PATH := "res://assets/sprites/placeholder/medbay_player.png"
 const _SCRAP_PATH := "res://assets/sprites/placeholder/scrap.png"
 const _ICE_PATH := "res://assets/sprites/placeholder/ice.png"
 const _PARTS_PATH := "res://assets/sprites/placeholder/parts.png"
@@ -98,9 +99,9 @@ func _ensure_ui() -> void:
 		[_SCRAP_PATH, 4],
 		[_PARTS_PATH, 2],
 	]))
-	_entries.append(_entry(col, Types.BuildingKind.MEDBAY, "7", "", [
-		[_SCRAP_PATH, 10],
-		[_ICE_PATH, 4],
+	_entries.append(_entry(col, Types.BuildingKind.MEDBAY, "7", _MEDBAY_PATH, [
+		[_SCRAP_PATH, Constants.MEDBAY_COST_SCRAP],
+		[_ICE_PATH, Constants.MEDBAY_COST_ICE],
 	]))
 
 
