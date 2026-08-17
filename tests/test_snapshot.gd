@@ -16,10 +16,10 @@ func _test_defaults_and_player_inventory(fails: PackedStringArray) -> void:
 	var sim := Sim.new()
 	sim.setup(Constants.DEFAULT_SEED)
 	var snap := sim.snapshot()
-	if snap.next_wave_at != 0.0 or snap.wave_index != 0 or snap.banner_timer != 0.0:
+	if snap.next_wave_at != Constants.FIRST_WAVE_AT or snap.wave_index != 0 or snap.banner_timer != 0.0:
 		fails.append(
-			"director fields were %s/%d/%s, expected 0/0/0"
-			% [str(snap.next_wave_at), snap.wave_index, str(snap.banner_timer)]
+			"director fields were %s/%d/%s, expected %s/0/0"
+			% [str(snap.next_wave_at), snap.wave_index, str(snap.banner_timer), str(Constants.FIRST_WAVE_AT)]
 		)
 	if snap.player_respawn_timer != 0.0:
 		fails.append("player_respawn_timer is %s, expected 0" % str(snap.player_respawn_timer))

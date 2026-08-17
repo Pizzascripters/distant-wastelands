@@ -11,6 +11,7 @@ var outcome: int = Types.Outcome.NONE
 var outcome_reason: int = Types.OutcomeReason.NONE
 var world: World
 var player_id: int = 0
+var director: Director
 var life: Dictionary = {}
 var _interact_target_id: int = 0
 
@@ -26,6 +27,7 @@ func setup(p_seed: int) -> void:
 	_queue.clear()
 	player_id = 0
 	_interact_target_id = 0
+	director = Director.new()
 	life = {
 		Types.Faction.PLAYER: FactionLife.new(),
 		Types.Faction.ENEMY: FactionLife.new(),
@@ -57,11 +59,15 @@ func tick() -> void:
 	_queue.clear()
 	_apply_player_command(cmd)
 
+	if director != null:
+		director.maybe_spawn(self)
+	_think_ai()
 	_fire_turrets()
 
 	for unit in world.units.values():
 		if unit.alive:
 			_integrate_unit(unit)
+			_update_stuck(unit)
 
 	_integrate_projectiles()
 	_resolve_melee()
@@ -313,6 +319,33 @@ func _decrement_cooldowns() -> void:
 		building.fire_cooldown = maxf(0.0, building.fire_cooldown - Constants.SIM_DT)
 	for proj in world.projectiles.values():
 		proj.life = maxf(0.0, proj.life - Constants.SIM_DT)
+	if director != null:
+		director.banner_timer = maxf(0.0, director.banner_timer - Constants.SIM_DT)
+
+
+func _think_ai() -> void:
+	var ids: Array = world.units.keys()
+	ids.sort()
+	for id in ids:
+		var unit: Unit = world.units.get(id)
+		if unit == null or not unit.alive:
+			continue
+		match unit.kind:
+			Types.UnitKind.RAIDER:
+				AiRaider.think(unit, self)
+			Types.UnitKind.GUARD:
+				AiGuard.think(unit, self)
+
+
+func _update_stuck(unit: Unit) -> void:
+	if unit.kind != Types.UnitKind.RAIDER and unit.kind != Types.UnitKind.GUARD:
+		return
+	var moved := unit.pos.distance_to(unit.stuck_last_pos)
+	if unit.vel.length() > 0.0 and moved < Constants.RAIDER_STUCK_SPEED * Constants.SIM_DT:
+		unit.stuck_timer += Constants.SIM_DT
+	else:
+		unit.stuck_timer = 0.0
+	unit.stuck_last_pos = unit.pos
 
 
 func _fire_turrets() -> void:
