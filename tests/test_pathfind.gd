@@ -5,6 +5,7 @@ func run() -> PackedStringArray:
 	_test_empty_map(fails)
 	_test_boxed_in(fails)
 	_test_no_diagonal_cut(fails)
+	_test_no_diagonal_cut_cliffs(fails)
 	_test_any_picks_nearer_goal(fails)
 	_test_any_empty_when_all_boxed(fails)
 	_test_gate_blocks_astar(fails)
@@ -47,6 +48,18 @@ func _test_no_diagonal_cut(fails: PackedStringArray) -> void:
 	var path := Pathfind.find_path(world, Vector2i(1, 1), Vector2i(2, 2))
 	if not path.is_empty():
 		fails.append("A* cut a diagonal through two corner rocks")
+
+
+func _test_no_diagonal_cut_cliffs(fails: PackedStringArray) -> void:
+	var world := World.new()
+	for y in Constants.MAP_H:
+		for x in Constants.MAP_W:
+			world.set_terrain(x, y, Types.TileTerrain.CLIFF)
+	world.set_terrain(1, 1, Types.TileTerrain.EMPTY)
+	world.set_terrain(2, 2, Types.TileTerrain.EMPTY)
+	var path := Pathfind.find_path(world, Vector2i(1, 1), Vector2i(2, 2))
+	if not path.is_empty():
+		fails.append("A* cut a diagonal through two corner cliffs")
 
 
 func _test_any_picks_nearer_goal(fails: PackedStringArray) -> void:

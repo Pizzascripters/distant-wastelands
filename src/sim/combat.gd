@@ -296,7 +296,10 @@ static func _lowest_index_solid_tile(world: World, proj: Projectile) -> Vector2i
 	var best_index := 0x7fffffff
 	for y in range(min_ty, max_ty + 1):
 		for x in range(min_tx, max_tx + 1):
-			if not world.in_bounds(x, y) or world.is_walkable(x, y):
+			if not world.in_bounds(x, y):
+				continue
+			var occupied: int = world.occupancy[world.index_of(x, y)]
+			if not World.is_solid_terrain(world.get_terrain(x, y)) and occupied == 0:
 				continue
 			if proj.ignore_gate_id > 0:
 				var bid: int = world.occupancy[world.index_of(x, y)]

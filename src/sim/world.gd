@@ -66,6 +66,14 @@ func set_terrain(x: int, y: int, terrain: int) -> void:
 	chunk_generation[ci] += 1
 
 
+static func is_solid_terrain(terrain: int) -> bool:
+	return (
+		terrain == Types.TileTerrain.ROCK
+		or terrain == Types.TileTerrain.CLIFF
+		or terrain == Types.TileTerrain.CRATER
+	)
+
+
 func is_walkable(x: int, y: int) -> bool:
 	if not in_bounds(x, y):
 		return false
@@ -80,7 +88,7 @@ func is_solid(x: int, y: int) -> bool:
 func blocks_movement(x: int, y: int, unit: Unit) -> bool:
 	if not in_bounds(x, y):
 		return true
-	if tiles[index_of(x, y)] == Types.TileTerrain.ROCK:
+	if is_solid_terrain(tiles[index_of(x, y)]):
 		return true
 	var building := building_at(x, y)
 	if building == null:

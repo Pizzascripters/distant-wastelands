@@ -6,6 +6,8 @@ const _TILE := Vector2i(10, 10)
 func run() -> PackedStringArray:
 	var fails := PackedStringArray()
 	_test_reject_rock(fails)
+	_test_reject_cliff(fails)
+	_test_reject_crater(fails)
 	_test_reject_overlap(fails)
 	_test_reject_enemy_rect(fails)
 	_test_reject_unaffordable(fails)
@@ -46,6 +48,24 @@ func _test_reject_rock(fails: PackedStringArray) -> void:
 		fails.append("can_place should reject a rock tile")
 	if Rules.try_place(world, null, Types.BuildingKind.WALL, _TILE):
 		fails.append("try_place should reject a rock tile")
+
+
+func _test_reject_cliff(fails: PackedStringArray) -> void:
+	var world := _world_with_depot(Constants.WALL_COST)
+	world.set_terrain(_TILE.x, _TILE.y, Types.TileTerrain.CLIFF)
+	if Rules.can_place(world, null, Types.BuildingKind.WALL, _TILE):
+		fails.append("can_place should reject a cliff tile")
+	if Rules.try_place(world, null, Types.BuildingKind.WALL, _TILE):
+		fails.append("try_place should reject a cliff tile")
+
+
+func _test_reject_crater(fails: PackedStringArray) -> void:
+	var world := _world_with_depot(Constants.WALL_COST)
+	world.set_terrain(_TILE.x, _TILE.y, Types.TileTerrain.CRATER)
+	if Rules.can_place(world, null, Types.BuildingKind.WALL, _TILE):
+		fails.append("can_place should reject a crater tile")
+	if Rules.try_place(world, null, Types.BuildingKind.WALL, _TILE):
+		fails.append("try_place should reject a crater tile")
 
 
 func _test_reject_overlap(fails: PackedStringArray) -> void:
