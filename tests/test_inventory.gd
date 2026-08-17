@@ -13,6 +13,8 @@ func run() -> PackedStringArray:
 	_test_four_arg_rejects_food(fails)
 	_test_five_arg_bags_accept_food(fails)
 	_test_depot_rejects_food(fails)
+	_test_depot_rejects_ice(fails)
+	_test_habitat_accepts_ice_only(fails)
 	return fails
 
 
@@ -224,3 +226,45 @@ func _test_depot_rejects_food(fails: PackedStringArray) -> void:
 		fails.append("depot accepted food leftover/food %d/%d" % [leftover, depot.food])
 	if depot.can_add(Types.ResourceKind.FOOD, 1):
 		fails.append("depot can_add food 1 should be false")
+
+
+func _test_depot_rejects_ice(fails: PackedStringArray) -> void:
+	if Constants.DEPOT_CAP_ICE != 0:
+		fails.append("DEPOT_CAP_ICE is %d, expected 0" % Constants.DEPOT_CAP_ICE)
+	var depot := Inventory.new(
+		Constants.DEPOT_CAP_SCRAP,
+		Constants.DEPOT_CAP_ICE,
+		Constants.DEPOT_CAP_ORE,
+		Constants.DEPOT_CAP_PARTS,
+		Constants.DEPOT_CAP_FOOD
+	)
+	if depot.cap_ice != 0:
+		fails.append("depot cap_ice is %d, expected 0" % depot.cap_ice)
+	var leftover := depot.add(Types.ResourceKind.ICE, 6)
+	if leftover != 6 or depot.ice != 0:
+		fails.append("depot accepted ice leftover/ice %d/%d" % [leftover, depot.ice])
+	if depot.can_add(Types.ResourceKind.ICE, 1):
+		fails.append("depot can_add ice 1 should be false")
+
+
+func _test_habitat_accepts_ice_only(fails: PackedStringArray) -> void:
+	if Constants.HABITAT_CAP_ICE != 50:
+		fails.append("HABITAT_CAP_ICE is %d, expected 50" % Constants.HABITAT_CAP_ICE)
+	var habitat := Building.inventory_for(Types.BuildingKind.HABITAT)
+	if habitat.cap_ice != Constants.HABITAT_CAP_ICE:
+		fails.append("habitat cap_ice is %d, expected %d" % [habitat.cap_ice, Constants.HABITAT_CAP_ICE])
+	if habitat.cap_scrap != 0 or habitat.cap_ore != 0 or habitat.cap_parts != 0 or habitat.cap_food != 0:
+		fails.append(
+			"habitat extra caps %d/%d/%d/%d, expected 0"
+			% [habitat.cap_scrap, habitat.cap_ore, habitat.cap_parts, habitat.cap_food]
+		)
+	if habitat.add(Types.ResourceKind.ICE, 8) != 0 or habitat.ice != 8:
+		fails.append("habitat rejected ice")
+	if habitat.add(Types.ResourceKind.SCRAP, 1) != 1 or habitat.scrap != 0:
+		fails.append("habitat accepted scrap")
+	if habitat.add(Types.ResourceKind.ORE, 1) != 1 or habitat.ore != 0:
+		fails.append("habitat accepted ore")
+	if habitat.add(Types.ResourceKind.PARTS, 1) != 1 or habitat.parts != 0:
+		fails.append("habitat accepted parts")
+	if habitat.add(Types.ResourceKind.FOOD, 1) != 1 or habitat.food != 0:
+		fails.append("habitat accepted food")

@@ -377,7 +377,6 @@ static func _transfer_loot(unit: Unit, depot: Building) -> void:
 		return
 	for kind in [
 		Types.ResourceKind.SCRAP,
-		Types.ResourceKind.ICE,
 		Types.ResourceKind.ORE,
 		Types.ResourceKind.PARTS,
 	]:
@@ -532,7 +531,6 @@ static func _can_loot_more(unit: Unit, depot: Building) -> bool:
 		return false
 	for kind in [
 		Types.ResourceKind.SCRAP,
-		Types.ResourceKind.ICE,
 		Types.ResourceKind.ORE,
 		Types.ResourceKind.PARTS,
 	]:

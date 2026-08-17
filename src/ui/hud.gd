@@ -24,6 +24,7 @@ const _PARTS_PATH := "res://assets/sprites/placeholder/parts.png"
 const _FOOD_PATH := "res://assets/sprites/placeholder/food.png"
 
 var _carry: Dictionary = {}
+var _colony: Dictionary = {}
 var _depot: Dictionary = {}
 var _o2_track: ColorRect
 var _o2_fill: ColorRect
@@ -52,13 +53,18 @@ func apply_snapshot(snap: SimSnapshot) -> void:
 	var carry := _player_inventory(snap)
 	_set_counts(_carry, carry, false)
 
+	var habitat_exists := not _player_building(snap, Types.BuildingKind.HABITAT).is_empty()
+	var colony_ice := _colony_ice(snap)
+	if not habitat_exists:
+		_set_missing(_colony)
+	else:
+		_set_counts(_colony, {"ice": colony_ice}, colony_ice <= 5)
+
 	var depot := _player_building(snap, Types.BuildingKind.DEPOT)
 	if depot.is_empty():
 		_set_missing(_depot)
 	else:
-		var depot_inv := _inventory_from(depot.get("inventory", {}))
-		var depot_ice: int = depot_inv["ice"]
-		_set_counts(_depot, depot_inv, depot_ice <= 5)
+		_set_counts(_depot, _inventory_from(depot.get("inventory", {})), false)
 
 	_apply_o2(snap)
 	_apply_hp(snap)
@@ -91,8 +97,10 @@ func _ensure_ui() -> void:
 	vbox.mouse_filter = MOUSE_FILTER_IGNORE
 	vbox.add_theme_constant_override("separation", 4)
 	_carry = _resource_row("Carry", true)
+	_colony = _colony_row()
 	_depot = _resource_row("Depot", false)
 	vbox.add_child(_carry["row"])
+	vbox.add_child(_colony["row"])
 	vbox.add_child(_depot["row"])
 	vbox.add_child(_make_o2_row())
 	vbox.add_child(_make_hp_row())
@@ -117,12 +125,17 @@ func _resource_row(title: String, include_food: bool) -> Dictionary:
 	var slots := {}
 	var kinds: Array = [
 		["scrap", _SCRAP_PATH],
-		["ice", _ICE_PATH],
 		["ore", _ORE_PATH],
 		["parts", _PARTS_PATH],
 	]
 	if include_food:
-		kinds.append(["food", _FOOD_PATH])
+		kinds = [
+			["scrap", _SCRAP_PATH],
+			["ice", _ICE_PATH],
+			["ore", _ORE_PATH],
+			["parts", _PARTS_PATH],
+			["food", _FOOD_PATH],
+		]
 	for kind in kinds:
 		var icon := TextureRect.new()
 		icon.name = "%sIcon" % kind[0].capitalize()
@@ -141,6 +154,30 @@ func _resource_row(title: String, include_food: bool) -> Dictionary:
 		row.add_child(count)
 		slots[kind[0]] = count
 	return {"row": row, "counts": slots}
+
+
+func _colony_row() -> Dictionary:
+	var row := HBoxContainer.new()
+	row.name = "Colony"
+	row.mouse_filter = MOUSE_FILTER_IGNORE
+	row.add_theme_constant_override("separation", 6)
+	row.add_child(_label("Ice"))
+	var icon := TextureRect.new()
+	icon.name = "IceIcon"
+	icon.custom_minimum_size = Vector2(ICON_PX, ICON_PX)
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.texture_filter = TEXTURE_FILTER_NEAREST
+	icon.mouse_filter = MOUSE_FILTER_IGNORE
+	var tex := WorldView.load_png(_ICE_PATH)
+	if tex != null:
+		icon.texture = tex
+	var count := _label("0")
+	count.name = "IceCount"
+	count.custom_minimum_size = Vector2(28, 0)
+	row.add_child(icon)
+	row.add_child(count)
+	return {"row": row, "counts": {"ice": count}}
 
 
 func _make_o2_row() -> HBoxContainer:
@@ -287,6 +324,31 @@ func _player_unit(snap: SimSnapshot) -> Dictionary:
 		if rec.get("kind", -1) == Types.UnitKind.PLAYER:
 			return rec
 	return {}
+
+
+func _colony_ice(snap: SimSnapshot) -> int:
+	var total := 0
+	var saw := false
+	if "buildings" in snap:
+		var buildings: Variant = snap.get("buildings")
+		if buildings != null:
+			for rec in buildings:
+				if not rec is Dictionary:
+					continue
+				if rec.get("kind", -1) != Types.BuildingKind.HABITAT:
+					continue
+				if rec.get("faction", -1) != Types.Faction.PLAYER:
+					continue
+				if rec.has("hp") and int(rec["hp"]) <= 0:
+					continue
+				saw = true
+				var inv := _inventory_from(rec.get("inventory", {}))
+				total += int(inv.get("ice", 0))
+	if saw:
+		return total
+	if "habitat_ice_pool" in snap:
+		return int(snap.habitat_ice_pool)
+	return 0
 
 
 func _player_building(snap: SimSnapshot, kind: int) -> Dictionary:

@@ -5,7 +5,7 @@ func run() -> PackedStringArray:
 	_test_defaults_and_player_inventory(fails)
 	_test_copies_world_entities(fails)
 	_test_inventory_is_copied(fails)
-	_test_living_depot_ice_empty(fails)
+	_test_habitat_ice_pool(fails)
 	_test_player_respawn_timer(fails)
 	_test_gather_channel_defaults(fails)
 	_test_gather_channel_while_mining(fails)
@@ -33,11 +33,12 @@ func _test_defaults_and_player_inventory(fails: PackedStringArray) -> void:
 		fails.append(
 			"player_o2_max is %s, expected %s" % [str(snap.player_o2_max), str(Constants.PLAYER_O2_MAX)]
 		)
-	if snap.player_zero_ice_timer != 0.0 or snap.enemy_zero_ice_timer != 0.0:
-		fails.append(
-			"zero_ice timers were %s/%s, expected 0/0"
-			% [str(snap.player_zero_ice_timer), str(snap.enemy_zero_ice_timer)]
-		)
+	if "player_zero_ice_timer" in snap or "enemy_zero_ice_timer" in snap:
+		fails.append("snapshot must not carry zero_ice timers")
+	if "player_living_depot_ice_empty" in snap or "enemy_living_depot_ice_empty" in snap:
+		fails.append("snapshot must not carry depot ice-empty flags")
+	if snap.habitat_ice_pool != Constants.START_PLAYER_ICE:
+		fails.append("habitat_ice_pool is %d, expected %d" % [snap.habitat_ice_pool, Constants.START_PLAYER_ICE])
 	if snap.oxygen_failed:
 		fails.append("oxygen_failed should start false")
 	if snap.hunger_starving:
@@ -79,7 +80,7 @@ func _test_copies_world_entities(fails: PackedStringArray) -> void:
 	depot.hp = Constants.DEPOT_HP
 	depot.hp_max = Constants.DEPOT_HP
 	depot.aim = Vector2.UP
-	depot.inventory = Inventory.new(Constants.DEPOT_CAP_SCRAP, Constants.DEPOT_CAP_ICE)
+	depot.inventory = Building.inventory_for(Types.BuildingKind.DEPOT)
 	depot.inventory.add(Types.ResourceKind.SCRAP, 7)
 	depot.inventory.add(Types.ResourceKind.ICE, 4)
 	sim.world.buildings[depot.id] = depot
@@ -117,8 +118,8 @@ func _test_copies_world_entities(fails: PackedStringArray) -> void:
 		if rec.get("aim", Vector2.ZERO) != Vector2.UP:
 			fails.append("building aim %s, expected UP" % str(rec.get("aim")))
 		var binv: Variant = rec.get("inventory", {})
-		if not binv is Dictionary or int(binv.get("scrap", 0)) != 7 or int(binv.get("ice", 0)) != 4:
-			fails.append("building inventory %s, expected scrap 7 ice 4" % str(binv))
+		if not binv is Dictionary or int(binv.get("scrap", 0)) != 7 or int(binv.get("ice", 0)) != 0:
+			fails.append("building inventory %s, expected scrap 7 ice 0" % str(binv))
 		if not binv is Dictionary or int(binv.get("cap_scrap", 0)) != Constants.DEPOT_CAP_SCRAP:
 			fails.append("depot cap_scrap %s" % str(binv.get("cap_scrap") if binv is Dictionary else binv))
 	var drec := _rec_by_id(snap.deposits, deposit.id)
@@ -165,26 +166,27 @@ func _test_inventory_is_copied(fails: PackedStringArray) -> void:
 		fails.append("snapshot inventory mutated with sim; scrap %s, expected 3" % str(inv.get("scrap") if inv is Dictionary else inv))
 
 
-func _test_living_depot_ice_empty(fails: PackedStringArray) -> void:
+func _test_habitat_ice_pool(fails: PackedStringArray) -> void:
 	var sim := Sim.new()
 	sim.setup(Constants.DEFAULT_SEED)
-	_clear_depots(sim)
-	var player_depot := _make_depot(sim, Types.Faction.PLAYER, Constants.PLAYER_DEPOT_TILE, 0)
-	sim.world.buildings[player_depot.id] = player_depot
-	var enemy_depot := _make_depot(sim, Types.Faction.ENEMY, Constants.ENEMY_DEPOT_TILE, 4)
-	sim.world.buildings[enemy_depot.id] = enemy_depot
+	var habitat := _player_habitat(sim)
+	if habitat == null or habitat.inventory == null:
+		fails.append("generated map missing player habitat")
+		return
 	var snap := sim.snapshot()
-	if not snap.player_living_depot_ice_empty:
-		fails.append("player living depot with 0 ice should set ice-empty")
-	if snap.enemy_living_depot_ice_empty:
-		fails.append("enemy living depot with ice 4 should not set ice-empty")
-	player_depot.hp = 0
-	enemy_depot.inventory.remove(Types.ResourceKind.ICE, 4)
+	if snap.habitat_ice_pool != habitat.inventory.ice:
+		fails.append(
+			"habitat_ice_pool is %d, expected %d"
+			% [snap.habitat_ice_pool, habitat.inventory.ice]
+		)
+	habitat.inventory.remove(Types.ResourceKind.ICE, habitat.inventory.ice)
+	var empty := sim.snapshot()
+	if empty.habitat_ice_pool != 0:
+		fails.append("empty habitat_ice_pool is %d" % empty.habitat_ice_pool)
+	habitat.hp = 0
 	var dead := sim.snapshot()
-	if dead.player_living_depot_ice_empty:
-		fails.append("dead player depot should not set ice-empty")
-	if not dead.enemy_living_depot_ice_empty:
-		fails.append("living enemy depot with 0 ice should set ice-empty")
+	if dead.habitat_ice_pool != 0:
+		fails.append("dead habitat still contributed ice pool %d" % dead.habitat_ice_pool)
 
 
 func _test_player_respawn_timer(fails: PackedStringArray) -> void:
@@ -342,24 +344,8 @@ func _rec_by_id(records: Array, id: int) -> Dictionary:
 	return {}
 
 
-func _clear_depots(sim: Sim) -> void:
-	var remove: Array = []
+func _player_habitat(sim: Sim) -> Building:
 	for building in sim.world.buildings.values():
-		if building.kind == Types.BuildingKind.DEPOT:
-			remove.append(building.id)
-	for id in remove:
-		sim.world.buildings.erase(id)
-
-
-func _make_depot(sim: Sim, faction: int, tile: Vector2i, ice: int) -> Building:
-	var depot := Building.new()
-	depot.id = sim.world.alloc_id()
-	depot.kind = Types.BuildingKind.DEPOT
-	depot.faction = faction
-	depot.origin_tile = tile
-	depot.hp = Constants.DEPOT_HP
-	depot.hp_max = Constants.DEPOT_HP
-	depot.inventory = Inventory.new(Constants.DEPOT_CAP_SCRAP, Constants.DEPOT_CAP_ICE)
-	if ice > 0:
-		depot.inventory.add(Types.ResourceKind.ICE, ice)
-	return depot
+		if building.kind == Types.BuildingKind.HABITAT and building.faction == Types.Faction.PLAYER:
+			return building
+	return null

@@ -5,7 +5,7 @@ func run() -> PackedStringArray:
 	var fails := PackedStringArray()
 	_test_starts_at_max(fails)
 	_test_habitat_refill(fails)
-	_test_habitat_refills_regardless_of_ice(fails)
+	_test_zero_ice_habitat_does_not_refill(fails)
 	_test_depot_does_not_refill(fails)
 	_test_farm_does_not_refill(fails)
 	_test_drain_away_from_camp(fails)
@@ -46,7 +46,7 @@ func _test_habitat_refill(fails: PackedStringArray) -> void:
 		fails.append("habitat adjacency left o2 at %s" % str(player.o2))
 
 
-func _test_habitat_refills_regardless_of_ice(fails: PackedStringArray) -> void:
+func _test_zero_ice_habitat_does_not_refill(fails: PackedStringArray) -> void:
 	var sim := _sim_quiet()
 	var player := sim.get_player()
 	var habitat := _player_building(sim, Types.BuildingKind.HABITAT)
@@ -55,13 +55,17 @@ func _test_habitat_refills_regardless_of_ice(fails: PackedStringArray) -> void:
 		return
 	if habitat.inventory != null:
 		habitat.inventory.remove(Types.ResourceKind.ICE, habitat.inventory.ice)
+	if Rules.habitat_gives_o2(habitat):
+		fails.append("0-ice habitat should not give O2")
 	player.o2 = 8.0
 	player.pos = _adjacent_pos(sim, habitat)
 	sim.tick()
-	if not is_equal_approx(player.o2, Constants.PLAYER_O2_MAX):
-		fails.append("0-ice habitat left o2 at %s" % str(player.o2))
+	if not is_equal_approx(player.o2, 8.0 - Constants.SIM_DT):
+		fails.append("0-ice habitat refilled o2 to %s" % str(player.o2))
+	if habitat.inventory != null:
+		habitat.inventory.add(Types.ResourceKind.ICE, 1)
 	if not Rules.habitat_gives_o2(habitat):
-		fails.append("living player Habitat should give O2 regardless of ice")
+		fails.append("stocked habitat should give O2")
 
 
 func _test_depot_does_not_refill(fails: PackedStringArray) -> void:

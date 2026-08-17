@@ -264,10 +264,10 @@ func _test_loot_channel_transfers(fails: PackedStringArray) -> void:
 		AiRaider.think(raider, _sim(ctx))
 	if raider.inventory.scrap != Constants.RAIDER_CARRY_SCRAP:
 		fails.append("loot carry scrap is %d, expected %d" % [raider.inventory.scrap, Constants.RAIDER_CARRY_SCRAP])
-	if raider.inventory.ice != Constants.RAIDER_CARRY_ICE:
-		fails.append("loot carry ice is %d, expected %d" % [raider.inventory.ice, Constants.RAIDER_CARRY_ICE])
-	if depot.inventory.scrap != 5 or depot.inventory.ice != 5:
-		fails.append("depot after loot is %d/%d, expected 5/5" % [depot.inventory.scrap, depot.inventory.ice])
+	if raider.inventory.ice != 0:
+		fails.append("loot carry ice is %d, expected 0" % raider.inventory.ice)
+	if depot.inventory.scrap != 5 or depot.inventory.ice != 0:
+		fails.append("depot after loot is %d/%d, expected 5/0" % [depot.inventory.scrap, depot.inventory.ice])
 	if raider.ai_state != Types.RaiderState.PATH_HOME:
 		fails.append("full carry after loot should PATH_HOME, got %d" % raider.ai_state)
 
@@ -395,7 +395,7 @@ func _place_depot(ctx: Dictionary, faction: int, origin: Vector2i, scrap: int, i
 	building.origin_tile = origin
 	building.hp = Constants.DEPOT_HP
 	building.hp_max = Constants.DEPOT_HP
-	building.inventory = Inventory.new(Constants.DEPOT_CAP_SCRAP, Constants.DEPOT_CAP_ICE)
+	building.inventory = Building.inventory_for(Types.BuildingKind.DEPOT)
 	building.inventory.add(Types.ResourceKind.SCRAP, scrap)
 	building.inventory.add(Types.ResourceKind.ICE, ice)
 	world.occupy(building)

@@ -57,6 +57,15 @@ static func building_unlocked_bits(techs_done: int, building_kind: int) -> bool:
 			return false
 
 
+static func try_pay(sim: Sim, kind: int) -> bool:
+	if sim == null or sim.world == null:
+		return false
+	var price := cost(kind)
+	if price.is_empty():
+		return false
+	return Rules.pay_player(sim.world, price)
+
+
 static func workshop_unlocked(sim: Sim) -> bool:
 	return sim != null and sim.tech_complete(Types.TechKind.METALLURGY)
 

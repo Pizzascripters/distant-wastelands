@@ -176,13 +176,14 @@ static func _depot_footprint_tiles() -> Array[Vector2i]:
 
 
 static func _place_player_camp(world: World) -> void:
-	_spawn_building(
+	var habitat := _spawn_building(
 		world,
 		Types.BuildingKind.HABITAT,
 		Types.Faction.PLAYER,
 		Constants.PLAYER_HABITAT_TILE,
 		Constants.HABITAT_HP
 	)
+	habitat.inventory.add(Types.ResourceKind.ICE, Constants.START_PLAYER_ICE)
 	var depot := _spawn_building(
 		world,
 		Types.BuildingKind.DEPOT,
@@ -191,7 +192,6 @@ static func _place_player_camp(world: World) -> void:
 		Constants.DEPOT_HP
 	)
 	depot.inventory.add(Types.ResourceKind.SCRAP, Constants.START_PLAYER_SCRAP)
-	depot.inventory.add(Types.ResourceKind.ICE, Constants.START_PLAYER_ICE)
 	depot.inventory.add(Types.ResourceKind.ORE, Constants.START_PLAYER_ORE)
 	depot.inventory.add(Types.ResourceKind.PARTS, Constants.START_PLAYER_PARTS)
 	var player := _spawn_unit(
@@ -206,13 +206,14 @@ static func _place_player_camp(world: World) -> void:
 
 
 static func _place_enemy_camp(world: World) -> void:
-	_spawn_building(
+	var habitat := _spawn_building(
 		world,
 		Types.BuildingKind.HABITAT,
 		Types.Faction.ENEMY,
 		Constants.ENEMY_HABITAT_TILE,
 		Constants.HABITAT_HP
 	)
+	habitat.inventory.add(Types.ResourceKind.ICE, Constants.START_ENEMY_ICE)
 	var depot := _spawn_building(
 		world,
 		Types.BuildingKind.DEPOT,
@@ -221,7 +222,6 @@ static func _place_enemy_camp(world: World) -> void:
 		Constants.DEPOT_HP
 	)
 	depot.inventory.add(Types.ResourceKind.SCRAP, Constants.START_ENEMY_SCRAP)
-	depot.inventory.add(Types.ResourceKind.ICE, Constants.START_ENEMY_ICE)
 	depot.inventory.add(Types.ResourceKind.ORE, Constants.START_ENEMY_ORE)
 	depot.inventory.add(Types.ResourceKind.PARTS, Constants.START_ENEMY_PARTS)
 	_spawn_building(
@@ -252,14 +252,8 @@ static func _spawn_building(
 	building.hp = hp
 	building.hp_max = hp
 	building.aim = Vector2(1, 0)
-	if kind == Types.BuildingKind.DEPOT:
-		building.inventory = Inventory.new(
-			Constants.DEPOT_CAP_SCRAP,
-			Constants.DEPOT_CAP_ICE,
-			Constants.DEPOT_CAP_ORE,
-			Constants.DEPOT_CAP_PARTS,
-			0
-		)
+	building.inventory = Building.inventory_for(kind)
+	building.ice_debt_timer = 0.0
 	world.buildings[building.id] = building
 	world.occupy(building)
 	return building

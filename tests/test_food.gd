@@ -339,7 +339,6 @@ func _place_farm(sim: Sim) -> Building:
 	if depot == null or depot.inventory == null:
 		return null
 	depot.inventory.add(Types.ResourceKind.SCRAP, Constants.FARM_COST_SCRAP)
-	depot.inventory.add(Types.ResourceKind.ICE, Constants.FARM_COST_ICE)
 	var tile := Vector2i(14, 50)
 	if not Rules.try_place(sim.world, sim, Types.BuildingKind.FARM, tile):
 		for y in range(46, 62):

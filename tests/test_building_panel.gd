@@ -41,6 +41,12 @@ func _test_panel_icon_hp_and_depot(fails: PackedStringArray) -> void:
 	var depot_box := panel.find_child("DepotBox", true, false) as Control
 	if depot_box == null or depot_box.visible:
 		fails.append("habitat panel should hide depot stocks")
+	var habitat_box := panel.find_child("HabitatBox", true, false) as Control
+	if habitat_box == null or not habitat_box.visible:
+		fails.append("habitat panel should show Ice stock")
+	var hint := panel.find_child("HabitatHint", true, false) as Label
+	if hint == null or hint.text != "O2 refill while Ice > 0":
+		fails.append("habitat hint is %s" % (hint.text if hint != null else "missing"))
 	panel.free()
 
 
@@ -50,13 +56,11 @@ func _test_depot_stocks_and_no_transfer_buttons(fails: PackedStringArray) -> voi
 	panel.open_building(depot)
 	var stocks := {
 		"Scrap": panel.find_child("ScrapCount", true, false) as Label,
-		"Ice": panel.find_child("IceCount", true, false) as Label,
 		"Ore": panel.find_child("OreCount", true, false) as Label,
 		"Parts": panel.find_child("PartsCount", true, false) as Label,
 	}
 	var want := {
 		"Scrap": "15 / %d" % Constants.DEPOT_CAP_SCRAP,
-		"Ice": "4 / %d" % Constants.DEPOT_CAP_ICE,
 		"Ore": "2 / %d" % Constants.DEPOT_CAP_ORE,
 		"Parts": "1 / %d" % Constants.DEPOT_CAP_PARTS,
 	}
@@ -64,6 +68,14 @@ func _test_depot_stocks_and_no_transfer_buttons(fails: PackedStringArray) -> voi
 		var lab: Label = stocks[key]
 		if lab == null or lab.text != want[key]:
 			fails.append("%s stock is %s, expected %s" % [key, lab.text if lab != null else "missing", want[key]])
+	var depot_box := panel.find_child("DepotBox", true, false) as Control
+	if depot_box != null and depot_box.find_child("IceCount", true, false) != null:
+		fails.append("depot inspect must not show Ice")
+	if depot_box != null and depot_box.find_child("IceIcon", true, false) != null:
+		fails.append("depot inspect should not show an Ice icon")
+	var habitat_box := panel.find_child("HabitatBox", true, false) as Control
+	if habitat_box != null and habitat_box.visible:
+		fails.append("depot inspect should hide habitat Ice")
 	if panel.find_child("FoodCount", true, false) != null:
 		fails.append("depot inspect must not show Food")
 	if panel.find_child("FoodIcon", true, false) != null:
@@ -86,10 +98,17 @@ func _test_depot_stocks_and_no_transfer_buttons(fails: PackedStringArray) -> voi
 		"faction": Types.Faction.PLAYER,
 		"hp": 10,
 		"hp_max": Constants.HABITAT_HP,
+		"inventory": {
+			"ice": 9,
+			"cap_ice": Constants.HABITAT_CAP_ICE,
+		},
 	}
 	panel.open_building(habitat)
 	if panel.withdraw_active():
 		fails.append("non-depot panel should not arm withdraw")
+	var ice_lab := panel.find_child("IceCount", true, false) as Label
+	if ice_lab == null or ice_lab.text != "9 / %d" % Constants.HABITAT_CAP_ICE:
+		fails.append("habitat ice is %s" % (ice_lab.text if ice_lab != null else "missing"))
 	panel.free()
 
 

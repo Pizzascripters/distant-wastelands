@@ -36,6 +36,8 @@ var _hp_fill: ColorRect
 var _hp_value: Label
 var _depot_box: VBoxContainer
 var _depot_counts: Dictionary = {}
+var _habitat_box: VBoxContainer
+var _habitat_ice: Label
 var _lab_box: VBoxContainer
 var _tech_btns: Array[Button] = []
 var _lab_fill: ColorRect
@@ -134,9 +136,17 @@ func apply_record(rec: Dictionary) -> void:
 	_depot_box.visible = is_depot
 	if is_depot:
 		var inv := _inventory_from(rec.get("inventory", {}))
-		for key in ["scrap", "ice", "ore", "parts"]:
+		for key in ["scrap", "ore", "parts"]:
 			var lab: Label = _depot_counts[key]
 			lab.text = "%d / %d" % [int(inv[key]), int(inv["cap_%s" % key])]
+	if _habitat_box != null:
+		_habitat_box.visible = _kind == Types.BuildingKind.HABITAT
+		if _habitat_box.visible:
+			var hab_inv := _inventory_from(rec.get("inventory", {}))
+			var ice_cap := int(hab_inv["cap_ice"])
+			if ice_cap <= 0:
+				ice_cap = Constants.HABITAT_CAP_ICE
+			_habitat_ice.text = "%d / %d" % [int(hab_inv["ice"]), ice_cap]
 	if _farm_box != null:
 		_farm_box.visible = _kind == Types.BuildingKind.FARM
 		if _farm_box.visible:
@@ -272,6 +282,8 @@ func _ensure_ui() -> void:
 	stats.add_child(_make_hp_row())
 	_depot_box = _make_depot_box()
 	stats.add_child(_depot_box)
+	_habitat_box = _make_habitat_box()
+	stats.add_child(_habitat_box)
 	_lab_box = _make_lab_box()
 	stats.add_child(_lab_box)
 	_workshop_box = _make_workshop_box()
@@ -322,7 +334,6 @@ func _make_depot_box() -> VBoxContainer:
 	row.add_theme_constant_override("separation", 6)
 	for spec in [
 		["scrap", _SCRAP],
-		["ice", _ICE],
 		["ore", _ORE],
 		["parts", _PARTS],
 	]:
@@ -342,6 +353,37 @@ func _make_depot_box() -> VBoxContainer:
 		row.add_child(count)
 		_depot_counts[spec[0]] = count
 	box.add_child(row)
+	return box
+
+
+func _make_habitat_box() -> VBoxContainer:
+	var box := VBoxContainer.new()
+	box.name = "HabitatBox"
+	box.mouse_filter = MOUSE_FILTER_IGNORE
+	box.add_theme_constant_override("separation", 4)
+	box.visible = false
+	var row := HBoxContainer.new()
+	row.name = "HabitatIce"
+	row.mouse_filter = MOUSE_FILTER_IGNORE
+	row.add_theme_constant_override("separation", 6)
+	var icon := TextureRect.new()
+	icon.name = "IceIcon"
+	icon.custom_minimum_size = Vector2(RES_ICON_PX, RES_ICON_PX)
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.texture_filter = TEXTURE_FILTER_NEAREST
+	icon.mouse_filter = MOUSE_FILTER_IGNORE
+	var tex := WorldView.load_png(_ICE)
+	if tex != null:
+		icon.texture = tex
+	_habitat_ice = _label("0 / 0")
+	_habitat_ice.name = "IceCount"
+	row.add_child(icon)
+	row.add_child(_habitat_ice)
+	box.add_child(row)
+	var hint := _label("O2 refill while Ice > 0")
+	hint.name = "HabitatHint"
+	box.add_child(hint)
 	return box
 
 

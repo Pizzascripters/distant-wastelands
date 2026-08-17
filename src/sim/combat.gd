@@ -249,6 +249,8 @@ static func process_unit_death(world: World, unit: Unit) -> void:
 static func process_building_death(world: World, building: Building) -> void:
 	if building.kind == Types.BuildingKind.DEPOT:
 		_spill_depot(world, building)
+	elif building.kind == Types.BuildingKind.HABITAT:
+		_spill_habitat(world, building)
 	_vacate_footprint(world, building)
 	var buildings = world.get("buildings")
 	if buildings is Dictionary:
@@ -359,7 +361,7 @@ static func _melee_cooldown(unit: Unit) -> float:
 static func _spill_depot(world: World, depot: Building) -> void:
 	var inv: Inventory = depot.inventory
 	if inv == null or (
-		inv.scrap <= 0 and inv.ice <= 0 and inv.ore <= 0 and inv.parts <= 0 and inv.food <= 0
+		inv.scrap <= 0 and inv.ore <= 0 and inv.parts <= 0 and inv.food <= 0
 	):
 		return
 	var pile := Loot.new()
@@ -367,14 +369,25 @@ static func _spill_depot(world: World, depot: Building) -> void:
 	pile.pos = _footprint_aabb(depot).get_center()
 	if inv.scrap > 0:
 		pile.inventory.add(Types.ResourceKind.SCRAP, inv.scrap)
-	if inv.ice > 0:
-		pile.inventory.add(Types.ResourceKind.ICE, inv.ice)
 	if inv.ore > 0:
 		pile.inventory.add(Types.ResourceKind.ORE, inv.ore)
 	if inv.parts > 0:
 		pile.inventory.add(Types.ResourceKind.PARTS, inv.parts)
 	if inv.food > 0:
 		pile.inventory.add(Types.ResourceKind.FOOD, inv.food)
+	var piles = world.get("loot")
+	if piles is Dictionary:
+		piles[pile.id] = pile
+
+
+static func _spill_habitat(world: World, habitat: Building) -> void:
+	var inv: Inventory = habitat.inventory
+	if inv == null or inv.ice <= 0:
+		return
+	var pile := Loot.new()
+	pile.id = world.alloc_id()
+	pile.pos = _footprint_aabb(habitat).get_center()
+	pile.inventory.add(Types.ResourceKind.ICE, inv.ice)
 	var piles = world.get("loot")
 	if piles is Dictionary:
 		piles[pile.id] = pile

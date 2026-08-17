@@ -47,22 +47,22 @@ func _test_select_and_ignore_rules(fails: PackedStringArray) -> void:
 
 func _test_lab_advances_only_while_still(fails: PackedStringArray) -> void:
 	var sim := _fresh()
-	var depot := _player_depot(sim)
+	var habitat := _player_habitat(sim)
 	var lab := _place_lab(sim)
 	var player := sim.get_player()
-	if depot == null or lab == null or player == null:
-		fails.append("lab channel setup missing depot/lab/player")
+	if habitat == null or lab == null or player == null:
+		fails.append("lab channel setup missing habitat/lab/player")
 		return
 	_stand_beside(player, sim.world, lab)
 	Research.select(sim, Types.TechKind.HYDROPONICS)
-	var ice_before := depot.inventory.ice
+	var ice_before := habitat.inventory.ice
 	_hold_interact(sim, 5)
 	if not sim.research_paid:
 		fails.append("standing still at the lab should pay on first progress")
-	if depot.inventory.ice != ice_before - Constants.TECH_HYDROPONICS_ICE:
+	if habitat.inventory.ice != ice_before - Constants.TECH_HYDROPONICS_ICE:
 		fails.append(
 			"hydroponics paid ice %d, expected %d"
-			% [depot.inventory.ice, ice_before - Constants.TECH_HYDROPONICS_ICE]
+			% [habitat.inventory.ice, ice_before - Constants.TECH_HYDROPONICS_ICE]
 		)
 	var expected := 5.0 * Constants.SIM_DT
 	if not is_equal_approx(sim.research_progress, expected):
@@ -101,63 +101,63 @@ func _test_walk_pauses_without_reset(fails: PackedStringArray) -> void:
 
 func _test_payment_on_first_progress_tick(fails: PackedStringArray) -> void:
 	var sim := _fresh()
-	var depot := _player_depot(sim)
+	var habitat := _player_habitat(sim)
 	var lab := _place_lab(sim)
 	var player := sim.get_player()
-	if depot == null or lab == null or player == null:
-		fails.append("payment test missing depot/lab/player")
+	if habitat == null or lab == null or player == null:
+		fails.append("payment test missing habitat/lab/player")
 		return
 	_stand_beside(player, sim.world, lab)
-	var ice_before := depot.inventory.ice
+	var ice_before := habitat.inventory.ice
 	Research.select(sim, Types.TechKind.HYDROPONICS)
 	sim.tick()
-	if depot.inventory.ice != ice_before or sim.research_paid or sim.research_progress != 0.0:
+	if habitat.inventory.ice != ice_before or sim.research_paid or sim.research_progress != 0.0:
 		fails.append("select without channeling should not pay")
 	_hold_interact(sim, 1)
 	if not sim.research_paid:
 		fails.append("first lab channel tick should set research_paid")
-	if depot.inventory.ice != ice_before - Constants.TECH_HYDROPONICS_ICE:
+	if habitat.inventory.ice != ice_before - Constants.TECH_HYDROPONICS_ICE:
 		fails.append("first progress tick should deduct the full tech cost")
 	if not is_equal_approx(sim.research_progress, Constants.SIM_DT):
 		fails.append("first paid tick should increment progress by SIM_DT")
-	var ice_after := depot.inventory.ice
+	var ice_after := habitat.inventory.ice
 	_hold_interact(sim, 3)
-	if depot.inventory.ice != ice_after:
+	if habitat.inventory.ice != ice_after:
 		fails.append("later lab ticks should not charge again")
 
 
 func _test_cannot_pay_blocks_progress(fails: PackedStringArray) -> void:
 	var sim := _fresh()
-	var depot := _player_depot(sim)
+	var habitat := _player_habitat(sim)
 	var lab := _place_lab(sim)
 	var player := sim.get_player()
-	if depot == null or lab == null or player == null:
+	if habitat == null or lab == null or player == null:
 		fails.append("unaffordable research setup failed")
 		return
-	if depot.inventory.ice > 0:
-		depot.inventory.remove(Types.ResourceKind.ICE, depot.inventory.ice)
+	if habitat.inventory.ice > 0:
+		habitat.inventory.remove(Types.ResourceKind.ICE, habitat.inventory.ice)
 	_stand_beside(player, sim.world, lab)
 	Research.select(sim, Types.TechKind.HYDROPONICS)
 	_hold_interact(sim, 8)
 	if sim.research_paid or sim.research_progress != 0.0:
 		fails.append("unaffordable research should not increment")
-	if depot.inventory.ice != 0:
-		fails.append("unaffordable research should not change depot ice")
+	if habitat.inventory.ice != 0:
+		fails.append("unaffordable research should not change habitat ice")
 
 
 func _test_switch_discards_without_refund(fails: PackedStringArray) -> void:
 	var sim := _fresh()
-	var depot := _player_depot(sim)
+	var habitat := _player_habitat(sim)
 	var lab := _place_lab(sim)
 	var player := sim.get_player()
-	if depot == null or lab == null or player == null:
-		fails.append("switch test missing depot/lab/player")
+	if habitat == null or lab == null or player == null:
+		fails.append("switch test missing habitat/lab/player")
 		return
 	_stand_beside(player, sim.world, lab)
-	var ice_before := depot.inventory.ice
+	var ice_before := habitat.inventory.ice
 	Research.select(sim, Types.TechKind.HYDROPONICS)
 	_hold_interact(sim, 4)
-	var after_pay := depot.inventory.ice
+	var after_pay := habitat.inventory.ice
 	if after_pay != ice_before - Constants.TECH_HYDROPONICS_ICE:
 		fails.append("expected hydroponics payment before switch")
 		return
@@ -166,8 +166,8 @@ func _test_switch_discards_without_refund(fails: PackedStringArray) -> void:
 		fails.append("switch should select Field Medicine")
 	if sim.research_progress != 0.0 or sim.research_paid:
 		fails.append("switch should discard paid incomplete progress")
-	if depot.inventory.ice != after_pay:
-		fails.append("switch refunded ice %d -> %d" % [after_pay, depot.inventory.ice])
+	if habitat.inventory.ice != after_pay:
+		fails.append("switch refunded ice %d -> %d" % [after_pay, habitat.inventory.ice])
 
 
 func _test_completion_unlocks(fails: PackedStringArray) -> void:
@@ -204,8 +204,10 @@ func _test_completion_unlocks(fails: PackedStringArray) -> void:
 	if not Research.building_unlocked(sim, Types.BuildingKind.GATE):
 		fails.append("Metallurgy should unlock Gate")
 	if depot != null:
-		depot.inventory.add(Types.ResourceKind.ICE, Constants.TECH_FIELD_MED_ICE)
 		depot.inventory.add(Types.ResourceKind.SCRAP, Constants.TECH_FIELD_MED_SCRAP)
+	var habitat := _player_habitat(sim)
+	if habitat != null:
+		habitat.inventory.add(Types.ResourceKind.ICE, Constants.TECH_FIELD_MED_ICE)
 	Research.select(sim, Types.TechKind.FIELD_MEDICINE)
 	_hold_interact(sim, 1)
 	sim.research_progress = Constants.TECH_FIELD_MED_TIME - Constants.SIM_DT
@@ -338,6 +340,13 @@ func _inject_turret(sim: Sim, faction: int, tile: Vector2i) -> Building:
 func _player_depot(sim: Sim) -> Building:
 	for building in sim.world.buildings.values():
 		if building.kind == Types.BuildingKind.DEPOT and building.faction == Types.Faction.PLAYER:
+			return building
+	return null
+
+
+func _player_habitat(sim: Sim) -> Building:
+	for building in sim.world.buildings.values():
+		if building.kind == Types.BuildingKind.HABITAT and building.faction == Types.Faction.PLAYER:
 			return building
 	return null
 

@@ -89,6 +89,8 @@ func _refresh() -> void:
 		["projectiles  %d" % _record_count(snap, "projectiles"), TEXT],
 		["outcome  %s" % _outcome_name(snap.outcome), TEXT],
 		["oxygen_failed  %s" % str(_bool_field(snap, "oxygen_failed", false)), TEXT],
+		["player habitat  %s" % _habitat_line(snap, Types.Faction.PLAYER), TEXT],
+		["enemy habitat  %s" % _habitat_line(snap, Types.Faction.ENEMY), TEXT],
 		["player depot  %s" % _depot_line(snap, Types.Faction.PLAYER), TEXT],
 		["enemy depot  %s" % _depot_line(snap, Types.Faction.ENEMY), TEXT],
 		["carry food  %d" % _carry_food(snap), TEXT],
@@ -146,16 +148,26 @@ func _depot_line(snap: SimSnapshot, faction: int) -> String:
 	if rec.is_empty():
 		return MISSING
 	var inv := _inventory_from(rec.get("inventory", {}))
-	return "scrap %d  ice %d  ore %d  parts %d" % [
-		inv["scrap"], inv["ice"], inv["ore"], inv["parts"]
-	]
+	return "scrap %d  ore %d  parts %d" % [inv["scrap"], inv["ore"], inv["parts"]]
+
+
+func _habitat_line(snap: SimSnapshot, faction: int) -> String:
+	var rec := _living_kind(snap, Types.BuildingKind.HABITAT, faction)
+	if rec.is_empty():
+		return MISSING
+	var inv := _inventory_from(rec.get("inventory", {}))
+	return "ice %d" % inv["ice"]
 
 
 func _living_depot(snap: SimSnapshot, faction: int) -> Dictionary:
+	return _living_kind(snap, Types.BuildingKind.DEPOT, faction)
+
+
+func _living_kind(snap: SimSnapshot, kind: int, faction: int) -> Dictionary:
 	for rec in _records(snap, "buildings"):
 		if not rec is Dictionary:
 			continue
-		if rec.get("kind", -1) != Types.BuildingKind.DEPOT:
+		if rec.get("kind", -1) != kind:
 			continue
 		if rec.get("faction", -1) != faction:
 			continue
