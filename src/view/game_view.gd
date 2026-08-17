@@ -107,8 +107,8 @@ func _mount_ui() -> void:
 	_build_bar.theme = _THEME
 	_build_bar.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	_build_bar.offset_left = 12.0
-	_build_bar.offset_top = -64.0
-	_build_bar.offset_right = 220.0
+	_build_bar.offset_top = -140.0
+	_build_bar.offset_right = 240.0
 	_build_bar.offset_bottom = -12.0
 	layer.add_child(_build_bar)
 	_building_panel = BuildingPanel.new()
@@ -215,10 +215,7 @@ func _read_command() -> InputCommand:
 	else:
 		cmd.aim = to_mouse.normalized()
 		_last_aim = cmd.aim
-	if Input.is_action_just_pressed("build_wall"):
-		_set_build_kind(Types.BuildingKind.WALL)
-	elif Input.is_action_just_pressed("build_turret"):
-		_set_build_kind(Types.BuildingKind.TURRET)
+	_apply_build_hotkeys()
 	var snap := _latest_snap
 	if snap == null and _session != null:
 		snap = _session.get_snapshot()
@@ -242,6 +239,31 @@ func _read_command() -> InputCommand:
 		_hud_blocks_pointer()
 	)
 	return cmd
+
+
+func _apply_build_hotkeys() -> void:
+	if _lab_panel_open() and (
+		Input.is_action_just_pressed("build_greenhouse")
+		or Input.is_action_just_pressed("build_gate")
+		or Input.is_action_just_pressed("build_medbay")
+	):
+		return
+	if Input.is_action_just_pressed("build_wall"):
+		_set_build_kind(Types.BuildingKind.WALL)
+	elif Input.is_action_just_pressed("build_turret"):
+		_set_build_kind(Types.BuildingKind.TURRET)
+	elif Input.is_action_just_pressed("build_workshop"):
+		_set_build_kind(Types.BuildingKind.WORKSHOP)
+	elif Input.is_action_just_pressed("build_lab"):
+		_set_build_kind(Types.BuildingKind.LAB)
+
+
+func _lab_panel_open() -> bool:
+	return (
+		_building_panel != null
+		and _building_panel.is_open()
+		and _building_panel.inspected_kind() == Types.BuildingKind.LAB
+	)
 
 
 func _set_build_kind(kind: int) -> void:
@@ -393,8 +415,13 @@ func _update_build_ghost() -> void:
 	var tile := _cursor_tile()
 	var world := _session_world()
 	var valid := world != null and Rules.can_place(world, _build_kind, tile)
+	var span := 1
+	if world != null:
+		span = world.footprint_span(_build_kind)
+	else:
+		span = World.footprint_span(_build_kind)
 	_ghost.visible = true
-	_ghost.apply(tile, valid)
+	_ghost.apply(tile, valid, span)
 
 
 func _session_world() -> World:
@@ -448,6 +475,11 @@ func _ensure_actions() -> void:
 	_bind_keys("withdraw", [KEY_SHIFT])
 	_bind_keys("build_wall", [KEY_1])
 	_bind_keys("build_turret", [KEY_2])
+	_bind_keys("build_workshop", [KEY_3])
+	_bind_keys("build_lab", [KEY_4])
+	_bind_keys("build_greenhouse", [KEY_5])
+	_bind_keys("build_gate", [KEY_6])
+	_bind_keys("build_medbay", [KEY_7])
 	_bind_keys("inspect", [KEY_F])
 	_bind_keys("cancel", [KEY_Q])
 	_bind_mouse("cancel", MOUSE_BUTTON_RIGHT)

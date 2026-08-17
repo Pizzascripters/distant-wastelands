@@ -1,7 +1,7 @@
 class_name Types
 
 enum Faction { PLAYER, ENEMY }
-enum BuildingKind { HABITAT, DEPOT, WALL, TURRET }
+enum BuildingKind { HABITAT, DEPOT, WALL, TURRET, WORKSHOP, LAB }
 enum UnitKind { PLAYER, RAIDER, GUARD }
 enum ResourceKind { SCRAP, ICE, ORE, PARTS }
 enum TileTerrain { EMPTY, ROCK }

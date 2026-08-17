@@ -13,6 +13,8 @@ const _HABITAT := "res://assets/sprites/placeholder/habitat_player.png"
 const _DEPOT := "res://assets/sprites/placeholder/depot_player.png"
 const _WALL := "res://assets/sprites/placeholder/wall_player.png"
 const _TURRET := "res://assets/sprites/placeholder/turret_player.png"
+const _WORKSHOP := "res://assets/sprites/placeholder/workshop_player.png"
+const _LAB := "res://assets/sprites/placeholder/lab_player.png"
 const _SCRAP := "res://assets/sprites/placeholder/scrap.png"
 const _ICE := "res://assets/sprites/placeholder/ice.png"
 const _ORE := "res://assets/sprites/placeholder/ore.png"
@@ -49,6 +51,10 @@ func _ready() -> void:
 
 func is_open() -> bool:
 	return visible and inspected_id >= 0
+
+
+func inspected_kind() -> int:
+	return _kind
 
 
 func withdraw_active() -> bool:
@@ -144,9 +150,7 @@ static func footprint_aabb(rec: Dictionary) -> Rect2:
 	elif rec.has("pos"):
 		origin = rec["pos"]
 	var kind := int(rec.get("kind", -1))
-	var span := 1
-	if kind == Types.BuildingKind.HABITAT or kind == Types.BuildingKind.DEPOT:
-		span = 2
+	var span := World.footprint_span(kind)
 	var size := float(span * Constants.TILE)
 	return Rect2(origin, Vector2(size, size))
 
@@ -357,6 +361,10 @@ func _icon_path(kind: int) -> String:
 			return _DEPOT
 		Types.BuildingKind.TURRET:
 			return _TURRET
+		Types.BuildingKind.WORKSHOP:
+			return _WORKSHOP
+		Types.BuildingKind.LAB:
+			return _LAB
 		_:
 			return _WALL
 

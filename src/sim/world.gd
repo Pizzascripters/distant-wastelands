@@ -68,8 +68,12 @@ func tile_aabb(x: int, y: int) -> Rect2:
 	return Rect2(x * Constants.TILE, y * Constants.TILE, Constants.TILE, Constants.TILE)
 
 
-func footprint_span(kind: int) -> int:
-	if kind == Types.BuildingKind.HABITAT or kind == Types.BuildingKind.DEPOT:
+static func footprint_span(kind: int) -> int:
+	if (
+		kind == Types.BuildingKind.HABITAT
+		or kind == Types.BuildingKind.DEPOT
+		or kind == Types.BuildingKind.LAB
+	):
 		return 2
 	return 1
 

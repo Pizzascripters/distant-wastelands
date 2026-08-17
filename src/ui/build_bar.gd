@@ -8,6 +8,8 @@ const COST_ICON_PX := 16
 
 const _WALL_PATH := "res://assets/sprites/placeholder/wall_player.png"
 const _TURRET_PATH := "res://assets/sprites/placeholder/turret_player.png"
+const _WORKSHOP_PATH := "res://assets/sprites/placeholder/workshop_player.png"
+const _LAB_PATH := "res://assets/sprites/placeholder/lab_player.png"
 const _SCRAP_PATH := "res://assets/sprites/placeholder/scrap.png"
 
 var selected_kind: int = -1:
@@ -17,6 +19,8 @@ var selected_kind: int = -1:
 
 var _wall_frame: PanelContainer
 var _turret_frame: PanelContainer
+var _workshop_frame: PanelContainer
+var _lab_frame: PanelContainer
 var _plain: StyleBoxFlat
 var _selected: StyleBoxFlat
 
@@ -49,6 +53,8 @@ func _ensure_ui() -> void:
 	add_child(col)
 	_wall_frame = _entry(col, "1", _WALL_PATH, Constants.WALL_COST)
 	_turret_frame = _entry(col, "2", _TURRET_PATH, Constants.TURRET_COST)
+	_workshop_frame = _entry(col, "3", _WORKSHOP_PATH, Constants.WORKSHOP_COST)
+	_lab_frame = _entry(col, "4", _LAB_PATH, Constants.LAB_COST)
 
 
 func _entry(parent: VBoxContainer, hotkey: String, sprite_path: String, cost: int) -> PanelContainer:
@@ -104,4 +110,12 @@ func _refresh() -> void:
 	_turret_frame.add_theme_stylebox_override(
 		"panel",
 		_selected if selected_kind == Types.BuildingKind.TURRET else _plain
+	)
+	_workshop_frame.add_theme_stylebox_override(
+		"panel",
+		_selected if selected_kind == Types.BuildingKind.WORKSHOP else _plain
+	)
+	_lab_frame.add_theme_stylebox_override(
+		"panel",
+		_selected if selected_kind == Types.BuildingKind.LAB else _plain
 	)

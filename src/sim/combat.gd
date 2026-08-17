@@ -349,7 +349,7 @@ static func _spill_depot(world: World, depot: Building) -> void:
 
 
 static func _vacate_footprint(world: World, building: Building) -> void:
-	var span := _footprint_span(building.kind)
+	var span := World.footprint_span(building.kind)
 	for dy in span:
 		for dx in span:
 			var x: int = building.origin_tile.x + dx
@@ -361,14 +361,8 @@ static func _vacate_footprint(world: World, building: Building) -> void:
 				world.occupancy[i] = 0
 
 
-static func _footprint_span(kind: int) -> int:
-	if kind == Types.BuildingKind.HABITAT or kind == Types.BuildingKind.DEPOT:
-		return 2
-	return 1
-
-
 static func _footprint_aabb(building: Building) -> Rect2:
-	var span := float(_footprint_span(building.kind) * Constants.TILE)
+	var span := float(World.footprint_span(building.kind) * Constants.TILE)
 	return Rect2(
 		building.origin_tile.x * Constants.TILE,
 		building.origin_tile.y * Constants.TILE,

@@ -14,6 +14,7 @@ func run() -> PackedStringArray:
 	_test_missing_home_dead_drops(fails)
 	_test_skipped_spawn_advances_clock(fails)
 	_test_siege_rifle_damages_from_range(fails)
+	_test_boxed_in_by_workshop_while_hauling(fails)
 	return fails
 
 
@@ -216,6 +217,32 @@ func _test_siege_rifle_damages_from_range(fails: PackedStringArray) -> void:
 		fails.append("siege wall lost %d hp, expected rifle damage" % (hp0 - wall.hp))
 
 
+func _test_boxed_in_by_workshop_while_hauling(fails: PackedStringArray) -> void:
+	var sim := _ready_sim()
+	_banish_player(sim)
+	var tile := Vector2i(20, 20)
+	var shops := _box_with_workshops(sim, tile)
+	if shops.is_empty():
+		fails.append("could not box raider with workshops")
+		return
+	var raider := _inject_raider(sim, sim.world.tile_center(tile.x, tile.y))
+	raider.inventory.scrap = 1
+	var hp0 := _wall_hp_sum(shops)
+	_tick(sim, 6)
+	if not sim.world.units.has(raider.id):
+		fails.append("hauling raider boxed by workshops was deleted")
+		return
+	if raider.ai_state != Types.RaiderState.SIEGE:
+		fails.append(
+			"hauling raider boxed by workshops should SIEGE, got %d" % raider.ai_state
+		)
+	if _wall_hp_sum(shops) >= hp0:
+		fails.append("hauling raider did not smash a boxing workshop")
+	var depot := _living(sim.world, Types.Faction.PLAYER, Types.BuildingKind.DEPOT)
+	if depot != null and depot.hp < Constants.DEPOT_HP:
+		fails.append("hauling smash must not hit the player Depot")
+
+
 func _ready_sim() -> Sim:
 	var sim := Sim.new()
 	sim.setup(Constants.DEFAULT_SEED)
@@ -272,6 +299,38 @@ func _box_with_walls(sim: Sim, tile: Vector2i) -> Array[Building]:
 			sim.world.buildings.erase(occupant.id)
 		walls.append(_place_wall(sim, at))
 	return walls
+
+
+func _box_with_workshops(sim: Sim, tile: Vector2i) -> Array[Building]:
+	sim.world.set_terrain(tile.x, tile.y, Types.TileTerrain.EMPTY)
+	var shops: Array[Building] = []
+	var offsets: Array[Vector2i] = [
+		Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)
+	]
+	for d in offsets:
+		var at := tile + d
+		if not sim.world.in_bounds(at.x, at.y):
+			continue
+		sim.world.set_terrain(at.x, at.y, Types.TileTerrain.EMPTY)
+		var occupant := sim.world.building_at(at.x, at.y)
+		if occupant != null:
+			sim.world.vacate(occupant)
+			sim.world.buildings.erase(occupant.id)
+		shops.append(_place_workshop(sim, at))
+	return shops
+
+
+func _place_workshop(sim: Sim, tile: Vector2i) -> Building:
+	var building := Building.new()
+	building.id = sim.world.alloc_id()
+	building.kind = Types.BuildingKind.WORKSHOP
+	building.faction = Types.Faction.PLAYER
+	building.origin_tile = tile
+	building.hp = Constants.WORKSHOP_HP
+	building.hp_max = Constants.WORKSHOP_HP
+	sim.world.buildings[building.id] = building
+	sim.world.occupy(building)
+	return building
 
 
 func _place_wall(sim: Sim, tile: Vector2i) -> Building:

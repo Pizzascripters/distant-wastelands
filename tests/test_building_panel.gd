@@ -9,6 +9,7 @@ func run() -> PackedStringArray:
 	_test_nearest_and_rmb_targets(fails)
 	_test_inspect_cancels_build_and_close_rules(fails)
 	_test_withdraw_or_and_hud_blocks_fire(fails)
+	_test_lab_panel_ignores_late_build_keys(fails)
 	return fails
 
 
@@ -299,6 +300,45 @@ func _test_withdraw_or_and_hud_blocks_fire(fails: PackedStringArray) -> void:
 	view._apply_world_click(cmd, true, true, false)
 	if cmd.fire or cmd.build_kind != Types.BuildingKind.WALL:
 		fails.append("world LMB in build mode should confirm-place")
+	panel.free()
+	view.free()
+
+
+func _test_lab_panel_ignores_late_build_keys(fails: PackedStringArray) -> void:
+	var view := _make_game_view(fails)
+	if view == null:
+		return
+	var panel := BuildingPanel.new()
+	view._building_panel = panel
+	if view._lab_panel_open():
+		fails.append("lab panel should start closed")
+	panel.open_building({
+		"id": 9,
+		"kind": Types.BuildingKind.LAB,
+		"faction": Types.Faction.PLAYER,
+		"hp": Constants.LAB_HP,
+		"hp_max": Constants.LAB_HP,
+		"origin_tile": Vector2i(12, 12),
+	})
+	if not view._lab_panel_open():
+		fails.append("open Lab panel should be detected")
+	if World.footprint_span(Types.BuildingKind.LAB) != 2:
+		fails.append("Lab inspect AABB should use a 2x2 span")
+	var aabb := BuildingPanel.footprint_aabb({
+		"kind": Types.BuildingKind.LAB,
+		"origin_tile": Vector2i(12, 12),
+	})
+	if aabb.size != Vector2(float(Constants.TILE * 2), float(Constants.TILE * 2)):
+		fails.append("Lab panel AABB is %s, expected 2x2 tiles" % aabb.size)
+	panel.open_building({
+		"id": 1,
+		"kind": Types.BuildingKind.WALL,
+		"faction": Types.Faction.PLAYER,
+		"hp": 10,
+		"hp_max": Constants.WALL_HP,
+	})
+	if view._lab_panel_open():
+		fails.append("non-Lab panel should not ignore keys 5-7")
 	panel.free()
 	view.free()
 
