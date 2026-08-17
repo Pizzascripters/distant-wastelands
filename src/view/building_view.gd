@@ -11,15 +11,26 @@ const WALL_INSET := 2.0
 const WALL_SIZE := 28.0
 const BARREL_LEN := 18.0
 const BARREL_WIDTH := 4.0
+const HABITAT_PLAYER := "res://assets/sprites/placeholder/habitat_player.png"
+const HABITAT_ENEMY := "res://assets/sprites/placeholder/habitat_enemy.png"
+const DEPOT_PLAYER := "res://assets/sprites/placeholder/depot_player.png"
+const DEPOT_ENEMY := "res://assets/sprites/placeholder/depot_enemy.png"
+const WALL_PLAYER := "res://assets/sprites/placeholder/wall_player.png"
+const WALL_ENEMY := "res://assets/sprites/placeholder/wall_enemy.png"
+const TURRET_PLAYER := "res://assets/sprites/placeholder/turret_player.png"
+const TURRET_ENEMY := "res://assets/sprites/placeholder/turret_enemy.png"
 
 var _kind: int = Types.BuildingKind.WALL
 var _faction: int = Types.Faction.PLAYER
 var _aim: Vector2 = Vector2.RIGHT
 var _hp: int = -1
 var _flash_left: float = 0.0
+var _tex: Texture2D
+var _tex_key: String = ""
 
 
 func _ready() -> void:
+	texture_filter = TEXTURE_FILTER_NEAREST
 	set_process(_flash_left > 0.0)
 
 
@@ -53,7 +64,16 @@ func _process(delta: float) -> void:
 
 
 func _draw() -> void:
-	var fill := FLASH if _flash_left > 0.0 else FILL
+	var tex := _texture()
+	var flash := _flash_left > 0.0
+	if tex != null:
+		var modulate := FLASH if flash else Color.WHITE
+		var sz := Vector2(tex.get_width(), tex.get_height())
+		draw_texture_rect(tex, Rect2(Vector2.ZERO, sz), false, modulate)
+		if _kind == Types.BuildingKind.TURRET:
+			_draw_barrel()
+		return
+	var fill := FLASH if flash else FILL
 	var stripe := STRIPE_PLAYER if _faction == Types.Faction.PLAYER else STRIPE_ENEMY
 	match _kind:
 		Types.BuildingKind.HABITAT:
@@ -64,6 +84,26 @@ func _draw() -> void:
 			_draw_turret(fill, stripe)
 		_:
 			_draw_wall(fill, stripe)
+
+
+func _texture() -> Texture2D:
+	var key := "%d:%d" % [_kind, _faction]
+	if _tex_key == key:
+		return _tex
+	_tex_key = key
+	var player := _faction == Types.Faction.PLAYER
+	var path := ""
+	match _kind:
+		Types.BuildingKind.HABITAT:
+			path = HABITAT_PLAYER if player else HABITAT_ENEMY
+		Types.BuildingKind.DEPOT:
+			path = DEPOT_PLAYER if player else DEPOT_ENEMY
+		Types.BuildingKind.TURRET:
+			path = TURRET_PLAYER if player else TURRET_ENEMY
+		_:
+			path = WALL_PLAYER if player else WALL_ENEMY
+	_tex = WorldView.load_png(path)
+	return _tex
 
 
 func _draw_habitat(fill: Color, stripe: Color) -> void:
@@ -99,10 +139,15 @@ func _draw_wall(fill: Color, stripe: Color) -> void:
 func _draw_turret(fill: Color, stripe: Color) -> void:
 	var tile := float(Constants.TILE)
 	var box := Rect2(0.0, 0.0, tile, tile)
-	var center := Vector2(tile, tile) * 0.5
 	draw_rect(box, fill, true)
 	draw_rect(Rect2(0.0, 0.0, tile, STRIPE_H), stripe, true)
 	draw_rect(box, OUTLINE, false, 1.0)
+	_draw_barrel()
+
+
+func _draw_barrel() -> void:
+	var tile := float(Constants.TILE)
+	var center := Vector2(tile, tile) * 0.5
 	var dir := _aim
 	if dir.length_squared() < 0.0001:
 		dir = Vector2.RIGHT
