@@ -448,6 +448,18 @@ static func _delete_raider(world: World, unit: Unit) -> void:
 	world.units.erase(unit.id)
 
 
+static func _is_smash_blocker(kind: int) -> bool:
+	match kind:
+		Types.BuildingKind.WALL, Types.BuildingKind.TURRET, Types.BuildingKind.WORKSHOP:
+			return true
+		Types.BuildingKind.GREENHOUSE, Types.BuildingKind.LAB, Types.BuildingKind.MEDBAY:
+			return true
+		Types.BuildingKind.GATE:
+			return true
+		_:
+			return false
+
+
 static func _nearest_player_wall_or_turret(world: World, unit: Unit) -> Building:
 	var best: Building = null
 	var best_d := INF
@@ -457,10 +469,7 @@ static func _nearest_player_wall_or_turret(world: World, unit: Unit) -> Building
 			continue
 		if building.faction != Types.Faction.PLAYER:
 			continue
-		if (
-			building.kind == Types.BuildingKind.HABITAT
-			or building.kind == Types.BuildingKind.DEPOT
-		):
+		if not _is_smash_blocker(building.kind):
 			continue
 		var dist := _dist_to_building(world, unit, building)
 		if dist < best_d or (is_equal_approx(dist, best_d) and (best == null or building.id < best.id)):

@@ -21,6 +21,10 @@ const TURRET_PLAYER := "res://assets/sprites/placeholder/turret_player.png"
 const TURRET_ENEMY := "res://assets/sprites/placeholder/turret_enemy.png"
 const WORKSHOP_PLAYER := "res://assets/sprites/placeholder/workshop_player.png"
 const LAB_PLAYER := "res://assets/sprites/placeholder/lab_player.png"
+const MEDBAY_PLAYER := "res://assets/sprites/placeholder/medbay_player.png"
+const CROSS := Color("E24A3B")
+const CROSS_LEN := 6.0
+const CROSS_W := 2.0
 
 var _kind: int = Types.BuildingKind.WALL
 var _faction: int = Types.Faction.PLAYER
@@ -113,6 +117,8 @@ func _draw() -> void:
 			_draw_lab(fill, stripe)
 		Types.BuildingKind.WORKSHOP:
 			_draw_workshop(fill, stripe)
+		Types.BuildingKind.MEDBAY:
+			_draw_medbay(fill, stripe)
 		_:
 			_draw_wall(fill, stripe)
 
@@ -134,6 +140,8 @@ func _ensure_texture() -> void:
 			path = WORKSHOP_PLAYER
 		Types.BuildingKind.LAB:
 			path = LAB_PLAYER
+		Types.BuildingKind.MEDBAY:
+			path = MEDBAY_PLAYER
 		_:
 			path = WALL_PLAYER if player else WALL_ENEMY
 	_tex = WorldView.load_png(path)
@@ -169,6 +177,29 @@ func _draw_lab(fill: Color, stripe: Color) -> void:
 
 func _draw_workshop(fill: Color, stripe: Color) -> void:
 	_draw_wall(fill, stripe)
+
+
+func _draw_medbay(fill: Color, stripe: Color) -> void:
+	var tile := float(Constants.TILE)
+	var box := Rect2(0.0, 0.0, tile, tile)
+	draw_rect(box, fill, true)
+	draw_rect(Rect2(0.0, 0.0, tile, STRIPE_H), stripe, true)
+	draw_rect(box, OUTLINE, false, 1.0)
+	var center := Vector2(tile * 0.5, tile * 0.5 + 1.0)
+	draw_line(
+		Vector2(center.x, center.y - CROSS_LEN),
+		Vector2(center.x, center.y + CROSS_LEN),
+		CROSS,
+		CROSS_W,
+		true
+	)
+	draw_line(
+		Vector2(center.x - CROSS_LEN, center.y),
+		Vector2(center.x + CROSS_LEN, center.y),
+		CROSS,
+		CROSS_W,
+		true
+	)
 
 
 func _draw_wall(fill: Color, stripe: Color) -> void:

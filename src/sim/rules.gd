@@ -15,7 +15,10 @@ static func cost(kind: int) -> Dictionary:
 		Types.BuildingKind.GREENHOUSE:
 			return {Types.ResourceKind.SCRAP: 12, Types.ResourceKind.ICE: 4}
 		Types.BuildingKind.MEDBAY:
-			return {Types.ResourceKind.SCRAP: 10, Types.ResourceKind.ICE: 4}
+			return {
+				Types.ResourceKind.SCRAP: Constants.MEDBAY_COST_SCRAP,
+				Types.ResourceKind.ICE: Constants.MEDBAY_COST_ICE,
+			}
 		Types.BuildingKind.GATE:
 			return {Types.ResourceKind.SCRAP: 4, Types.ResourceKind.PARTS: 2}
 		_:
@@ -490,6 +493,8 @@ static func _hp_for(kind: int) -> int:
 			return Constants.WORKSHOP_HP
 		Types.BuildingKind.LAB:
 			return Constants.LAB_HP
+		Types.BuildingKind.MEDBAY:
+			return Constants.MEDBAY_HP
 		_:
 			return 0
 

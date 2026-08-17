@@ -10,6 +10,7 @@ func run() -> PackedStringArray:
 	_test_inspect_cancels_build_and_close_rules(fails)
 	_test_withdraw_or_and_hud_blocks_fire(fails)
 	_test_lab_panel_ignores_late_build_keys(fails)
+	_test_medbay_heal_hint(fails)
 	return fails
 
 
@@ -341,6 +342,27 @@ func _test_lab_panel_ignores_late_build_keys(fails: PackedStringArray) -> void:
 		fails.append("non-Lab panel should not ignore keys 5-7")
 	panel.free()
 	view.free()
+
+
+func _test_medbay_heal_hint(fails: PackedStringArray) -> void:
+	var panel := BuildingPanel.new()
+	panel.open_building({
+		"id": 11,
+		"kind": Types.BuildingKind.MEDBAY,
+		"faction": Types.Faction.PLAYER,
+		"hp": 40,
+		"hp_max": Constants.MEDBAY_HP,
+		"origin_tile": Vector2i(14, 14),
+	})
+	var hint := panel.find_child("HealHint", true, false) as Label
+	if hint == null or not hint.visible:
+		fails.append("Medbay panel should show a heal hint")
+	elif hint.text != "+2 HP/s while adjacent":
+		fails.append("Medbay heal hint is %s" % hint.text)
+	var hp := panel.find_child("HpValue", true, false) as Label
+	if hp == null or hp.text != "40 / %d" % Constants.MEDBAY_HP:
+		fails.append("Medbay HP text is %s" % (hp.text if hp != null else "missing"))
+	panel.free()
 
 
 func _make_game_view(fails: PackedStringArray) -> Node:

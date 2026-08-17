@@ -19,6 +19,7 @@ var research_selected: int = -1
 var research_progress: float = 0.0
 var research_paid: bool = false
 var techs_done: int = 0
+var medbay_heal_acc: float = 0.0
 var _interact_target_id: int = 0
 var _interact_withdraw: bool = false
 
@@ -37,6 +38,7 @@ func setup(p_seed: int) -> void:
 	research_progress = 0.0
 	research_paid = false
 	techs_done = 0
+	medbay_heal_acc = 0.0
 	_queue.clear()
 	player_id = 0
 	last_tick_usec = 0
@@ -92,6 +94,7 @@ func tick() -> void:
 			_integrate_unit(unit)
 			_update_stuck(unit)
 	_tick_player_oxygen()
+	_tick_medbay_heal()
 
 	_integrate_projectiles()
 	_resolve_melee()
@@ -605,6 +608,33 @@ func _tick_player_oxygen() -> void:
 		player.o2 = maxf(0.0, player.o2 - Constants.SIM_DT)
 	if player.o2 == 0.0 and tick_index % Constants.PLAYER_O2_PULSE_TICKS == 0:
 		Combat.apply_damage(player, Constants.PLAYER_O2_HP_PER_PULSE)
+
+
+func _tick_medbay_heal() -> void:
+	var player := get_player()
+	if player == null or not player.alive or player.hp <= 0 or not _adjacent_player_medbay(player):
+		medbay_heal_acc = 0.0
+		return
+	if player.hp >= player.hp_max:
+		return
+	medbay_heal_acc += Constants.SIM_DT
+	while player.hp < player.hp_max and (
+		medbay_heal_acc > Constants.MEDBAY_HEAL_PERIOD
+		or is_equal_approx(medbay_heal_acc, Constants.MEDBAY_HEAL_PERIOD)
+	):
+		medbay_heal_acc = maxf(0.0, medbay_heal_acc - Constants.MEDBAY_HEAL_PERIOD)
+		player.hp = mini(player.hp + 1, player.hp_max)
+
+
+func _adjacent_player_medbay(player: Unit) -> bool:
+	for building in world.buildings.values():
+		if building.hp <= 0 or building.faction != Types.Faction.PLAYER:
+			continue
+		if building.kind != Types.BuildingKind.MEDBAY:
+			continue
+		if world.point_aabb_distance(player.pos, world.footprint_aabb(building)) <= Constants.INTERACT_BUILDING_RANGE:
+			return true
+	return false
 
 
 func _adjacent_o2_refill(player: Unit) -> bool:
