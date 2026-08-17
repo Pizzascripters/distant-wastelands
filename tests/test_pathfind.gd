@@ -7,6 +7,7 @@ func run() -> PackedStringArray:
 	_test_no_diagonal_cut(fails)
 	_test_any_picks_nearer_goal(fails)
 	_test_any_empty_when_all_boxed(fails)
+	_test_gate_blocks_astar(fails)
 	return fails
 
 
@@ -75,6 +76,46 @@ func _test_any_empty_when_all_boxed(fails: PackedStringArray) -> void:
 	var path := Pathfind.find_path_any(world, Vector2i(5, 5), goals)
 	if not path.is_empty():
 		fails.append("find_path_any should return empty when start is boxed in")
+
+
+func _test_gate_blocks_astar(fails: PackedStringArray) -> void:
+	var world := World.new()
+	var gate := Building.new()
+	gate.id = world.alloc_id()
+	gate.kind = Types.BuildingKind.GATE
+	gate.faction = Types.Faction.PLAYER
+	gate.origin_tile = Vector2i(5, 0)
+	gate.hp = Constants.GATE_HP
+	gate.hp_max = Constants.GATE_HP
+	world.buildings[gate.id] = gate
+	world.occupy(gate)
+	if world.is_walkable(5, 0):
+		fails.append("Gate tile should not be walkable")
+	var path := Pathfind.find_path(world, Vector2i(0, 0), Vector2i(10, 0))
+	if path.is_empty():
+		fails.append("A* should path around a single Gate")
+	elif Vector2i(5, 0) in path:
+		fails.append("A* treated a Gate as walkable")
+	for x in range(4, 7):
+		_place_gate(world, Vector2i(x, 4))
+		_place_gate(world, Vector2i(x, 6))
+	_place_gate(world, Vector2i(4, 5))
+	_place_gate(world, Vector2i(6, 5))
+	var boxed := Pathfind.find_path(world, Vector2i(5, 5), Vector2i(10, 10))
+	if not boxed.is_empty():
+		fails.append("A* should return empty when start is boxed in by Gates")
+
+
+func _place_gate(world: World, tile: Vector2i) -> void:
+	var gate := Building.new()
+	gate.id = world.alloc_id()
+	gate.kind = Types.BuildingKind.GATE
+	gate.faction = Types.Faction.PLAYER
+	gate.origin_tile = tile
+	gate.hp = Constants.GATE_HP
+	gate.hp_max = Constants.GATE_HP
+	world.buildings[gate.id] = gate
+	world.occupy(gate)
 
 
 func _has_diagonal_step(path: Array[Vector2i]) -> bool:

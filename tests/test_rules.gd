@@ -28,6 +28,7 @@ func run() -> PackedStringArray:
 	_test_workshop_overlap_crafts_not_deposit(fails)
 	_test_lab_closer_wins_when_research_selected(fails)
 	_test_locked_buildings_not_placeable(fails)
+	_test_player_slides_onto_gate_raider_blocked(fails)
 	return fails
 
 
@@ -607,6 +608,57 @@ func _test_locked_buildings_not_placeable(fails: PackedStringArray) -> void:
 	Research.mark_complete(sim, Types.TechKind.FIELD_MEDICINE)
 	if not Research.building_unlocked(sim, Types.BuildingKind.MEDBAY):
 		fails.append("Field Medicine should unlock Medbay")
+
+
+func _test_player_slides_onto_gate_raider_blocked(fails: PackedStringArray) -> void:
+	var world := World.new()
+	var tile := Vector2i(10, 10)
+	var gate := _place_gate(world, tile)
+	var sim := Sim.new()
+	sim.world = world
+	var start := Vector2(float(tile.x * Constants.TILE) - Constants.PLAYER_RADIUS, world.tile_center(tile.x, tile.y).y)
+	var vel := Vector2(Constants.PLAYER_SPEED, 0.0)
+	var player := _player_at(world, start)
+	player.vel = vel
+	var raider := Unit.new()
+	raider.id = world.alloc_id()
+	raider.kind = Types.UnitKind.RAIDER
+	raider.faction = Types.Faction.ENEMY
+	raider.pos = start
+	raider.radius = Constants.RAIDER_RADIUS
+	raider.alive = true
+	raider.vel = vel
+	world.units[raider.id] = raider
+	if world.blocks_movement(tile.x, tile.y, player):
+		fails.append("blocks_movement should let the player occupy a Gate")
+	if not world.blocks_movement(tile.x, tile.y, raider):
+		fails.append("blocks_movement should keep a raider out of a Gate")
+	sim._integrate_unit(player)
+	sim._integrate_unit(raider)
+	sim._integrate_unit(player)
+	sim._integrate_unit(raider)
+	var aabb := world.footprint_aabb(gate)
+	if world.world_to_tile(player.pos) != tile:
+		fails.append("player should slide onto the Gate tile, pos=%s" % player.pos)
+	if world.point_aabb_distance(player.pos, aabb) > player.radius:
+		fails.append("player should overlap the Gate after sliding")
+	if world.world_to_tile(raider.pos) == tile:
+		fails.append("raider with the same velocity entered the Gate tile")
+	if world.point_aabb_distance(raider.pos, aabb) < raider.radius:
+		fails.append("raider should be blocked by the Gate")
+
+
+func _place_gate(world: World, tile: Vector2i) -> Building:
+	var gate := Building.new()
+	gate.id = world.alloc_id()
+	gate.kind = Types.BuildingKind.GATE
+	gate.faction = Types.Faction.PLAYER
+	gate.origin_tile = tile
+	gate.hp = Constants.GATE_HP
+	gate.hp_max = Constants.GATE_HP
+	world.buildings[gate.id] = gate
+	world.occupy(gate)
+	return gate
 
 
 func _tick_idle(sim: Sim, ticks: int) -> void:
