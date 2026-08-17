@@ -14,10 +14,13 @@ var player_id: int = 0
 var director: Director
 var path_queue: PathQueue = PathQueue.new()
 var life: Dictionary = {}
+var last_tick_usec: int = 0
 var _interact_target_id: int = 0
 var _interact_withdraw: bool = false
 
 var _queue: Array[InputCommand] = []
+var _snap_tiles: PackedByteArray = PackedByteArray()
+var _snap_tiles_generation: int = -1
 
 
 func setup(p_seed: int) -> void:
@@ -28,8 +31,11 @@ func setup(p_seed: int) -> void:
 	outcome_reason = Types.OutcomeReason.NONE
 	_queue.clear()
 	player_id = 0
+	last_tick_usec = 0
 	_interact_target_id = 0
 	_interact_withdraw = false
+	_snap_tiles = PackedByteArray()
+	_snap_tiles_generation = -1
 	director = Director.new()
 	path_queue = PathQueue.new()
 	life = {
@@ -48,7 +54,9 @@ func enqueue(cmd: InputCommand) -> void:
 
 
 func tick() -> void:
+	var started := Time.get_ticks_usec()
 	if outcome != Types.Outcome.NONE:
+		last_tick_usec = Time.get_ticks_usec() - started
 		return
 
 	# Tick order is the design contract (Sim.tick steps 1–13).
@@ -88,6 +96,7 @@ func tick() -> void:
 	if result.x != Types.Outcome.NONE:
 		outcome = result.x
 		outcome_reason = result.y
+	last_tick_usec = Time.get_ticks_usec() - started
 
 
 func snapshot() -> SimSnapshot:
@@ -96,7 +105,12 @@ func snapshot() -> SimSnapshot:
 	snap.time = time
 	snap.outcome = outcome
 	snap.outcome_reason = outcome_reason
-	snap.tiles = world.tiles.duplicate()
+	if world.tiles_generation != _snap_tiles_generation:
+		_snap_tiles = world.tiles.duplicate()
+		_snap_tiles_generation = world.tiles_generation
+	snap.tiles = _snap_tiles
+	snap.tiles_generation = world.tiles_generation
+	snap.sim_ms = float(last_tick_usec) * 0.001
 	for unit in world.units.values():
 		snap.units.append(_unit_record(unit))
 	for building in world.buildings.values():
@@ -440,6 +454,7 @@ func _spawn_projectile(
 
 
 func _integrate_projectiles() -> void:
+	Combat.bucket_units(world)
 	var ids: Array = world.projectiles.keys()
 	ids.sort()
 	var remove: Array[int] = []

@@ -75,6 +75,7 @@ func _process(delta: float) -> void:
 	else:
 		_session.submit_command(_read_command())
 	_session.tick(delta)
+	var view_started := Time.get_ticks_usec()
 	var snap := _session.get_snapshot()
 	_sync_views(snap)
 	if _gather_bar != null:
@@ -84,6 +85,7 @@ func _process(delta: float) -> void:
 		_hud.apply_snapshot(snap)
 	_update_end_screen(snap)
 	if _debug != null and _debug.visible:
+		snap.view_ms = float(Time.get_ticks_usec() - view_started) * 0.001
 		_debug.apply_snapshot(snap)
 	_camera.follow(_player_world_pos, delta)
 

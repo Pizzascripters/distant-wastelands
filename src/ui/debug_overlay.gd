@@ -2,11 +2,13 @@ class_name DebugOverlay
 extends Control
 
 const TEXT := Color("F2EDE6")
+const AMBER := Color("E2C044")
 const PANEL := Color(0, 0, 0, 0.65)
 const FONT_SIZE := 16
 const MISSING := "—"
 
 var _label: Label
+var _rows: VBoxContainer
 var _snap: SimSnapshot = SimSnapshot.new()
 
 
@@ -51,10 +53,15 @@ func _ensure_ui() -> void:
 	style.content_margin_bottom = 10.0
 	panel.add_theme_stylebox_override("panel", style)
 	_label = Label.new()
+	_label.visible = false
 	_label.mouse_filter = MOUSE_FILTER_IGNORE
 	_label.add_theme_color_override("font_color", TEXT)
 	_label.add_theme_font_size_override("font_size", FONT_SIZE)
 	panel.add_child(_label)
+	_rows = VBoxContainer.new()
+	_rows.mouse_filter = MOUSE_FILTER_IGNORE
+	_rows.add_theme_constant_override("separation", 0)
+	panel.add_child(_rows)
 	add_child(panel)
 
 
@@ -62,20 +69,55 @@ func _refresh() -> void:
 	if _label == null:
 		return
 	var snap := _snap
-	_label.text = "\n".join(PackedStringArray([
-		"tick  %d" % snap.tick,
-		"fps  %d" % Engine.get_frames_per_second(),
-		"units  %d" % _record_count(snap, "units"),
-		"buildings  %d" % _record_count(snap, "buildings"),
-		"deposits  %d" % _record_count(snap, "deposits"),
-		"loot  %d" % _record_count(snap, "loot"),
-		"projectiles  %d" % _record_count(snap, "projectiles"),
-		"outcome  %s" % _outcome_name(snap.outcome),
-		"player depot  %s" % _depot_line(snap, Types.Faction.PLAYER),
-		"enemy depot  %s" % _depot_line(snap, Types.Faction.ENEMY),
-		"o2  %.2f" % _float_field(snap, "player_o2", Constants.PLAYER_O2_MAX),
-		"next wave  %.2f" % _float_field(snap, "next_wave_at", 0.0),
-	]))
+	var sim_ms := _float_field(snap, "sim_ms", 0.0)
+	var view_ms := _float_field(snap, "view_ms", 0.0)
+	var lines: Array = [
+		["tick  %d" % snap.tick, TEXT],
+		["fps  %d" % Engine.get_frames_per_second(), TEXT],
+		[
+			"sim_ms  %.2f" % sim_ms,
+			AMBER if sim_ms >= Constants.TICK_BUDGET_MSEC else TEXT,
+		],
+		[
+			"view_ms  %.2f" % view_ms,
+			AMBER if view_ms >= Constants.VIEW_BUDGET_MSEC else TEXT,
+		],
+		["units  %d" % _record_count(snap, "units"), TEXT],
+		["buildings  %d" % _record_count(snap, "buildings"), TEXT],
+		["deposits  %d" % _record_count(snap, "deposits"), TEXT],
+		["loot  %d" % _record_count(snap, "loot"), TEXT],
+		["projectiles  %d" % _record_count(snap, "projectiles"), TEXT],
+		["outcome  %s" % _outcome_name(snap.outcome), TEXT],
+		["player depot  %s" % _depot_line(snap, Types.Faction.PLAYER), TEXT],
+		["enemy depot  %s" % _depot_line(snap, Types.Faction.ENEMY), TEXT],
+		["o2  %.2f" % _float_field(snap, "player_o2", Constants.PLAYER_O2_MAX), TEXT],
+		["next wave  %.2f" % _float_field(snap, "next_wave_at", 0.0), TEXT],
+	]
+	var plain := PackedStringArray()
+	for row in lines:
+		plain.append(str(row[0]))
+	_label.text = "\n".join(plain)
+	_sync_rows(lines)
+
+
+func _sync_rows(lines: Array) -> void:
+	if _rows == null:
+		return
+	while _rows.get_child_count() < lines.size():
+		var line := Label.new()
+		line.mouse_filter = MOUSE_FILTER_IGNORE
+		line.add_theme_font_size_override("font_size", FONT_SIZE)
+		_rows.add_child(line)
+	for i in _rows.get_child_count():
+		var line := _rows.get_child(i) as Label
+		if line == null:
+			continue
+		if i >= lines.size():
+			line.visible = false
+			continue
+		line.visible = true
+		line.text = str(lines[i][0])
+		line.add_theme_color_override("font_color", lines[i][1])
 
 
 func _record_count(snap: SimSnapshot, key: String) -> int:

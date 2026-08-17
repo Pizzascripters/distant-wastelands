@@ -133,3 +133,5 @@ const PATH_RECALC := 0.5
 const PATH_STAGGER := 0.10
 const MAX_PATHS_PER_TICK := 1
 const HIT_FLASH := 0.1
+const TICK_BUDGET_MSEC := 4.0
+const VIEW_BUDGET_MSEC := 8.0

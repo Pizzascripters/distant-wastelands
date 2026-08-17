@@ -6,6 +6,7 @@ func run() -> PackedStringArray:
 	_test_projectile_damages_opposing(fails)
 	_test_projectile_skips_same_faction(fails)
 	_test_projectile_hits_lowest_id(fails)
+	_test_projectile_hits_adjacent_tile_halo(fails)
 	_test_melee_respects_cooldown(fails)
 	_test_death_at_zero(fails)
 	_test_depot_death_spills_without_life_support(fails)
@@ -51,6 +52,23 @@ func _test_projectile_hits_lowest_id(fails: PackedStringArray) -> void:
 		fails.append("lowest id unit hp is %d, expected %d" % [first.hp, expected])
 	if second.hp != Constants.RAIDER_HP:
 		fails.append("higher id overlapping unit hp is %d, expected %d" % [second.hp, Constants.RAIDER_HP])
+
+
+func _test_projectile_hits_adjacent_tile_halo(fails: PackedStringArray) -> void:
+	var world := World.new()
+	var tile := float(Constants.TILE)
+	var proj_pos := Vector2(3.0 * tile + 30.0, 3.0 * tile + 16.0)
+	var unit_pos := Vector2(4.0 * tile + 2.0, 3.0 * tile + 16.0)
+	var raider := _make_unit(world, Types.UnitKind.RAIDER, Types.Faction.ENEMY, unit_pos, Constants.RAIDER_HP)
+	var proj := _make_proj(Types.Faction.PLAYER, proj_pos, Constants.PLAYER_PROJ_DAMAGE)
+	if world.world_to_tile(proj_pos) == world.world_to_tile(unit_pos):
+		fails.append("halo fixture should keep projectile and unit on neighboring tiles")
+		return
+	if not Combat.resolve_projectile_hit(world, proj):
+		fails.append("projectile should hit a unit whose center is in an adjacent tile")
+	var expected := Constants.RAIDER_HP - Constants.PLAYER_PROJ_DAMAGE
+	if raider.hp != expected:
+		fails.append("adjacent-tile unit hp is %d, expected %d" % [raider.hp, expected])
 
 
 func _test_melee_respects_cooldown(fails: PackedStringArray) -> void:
