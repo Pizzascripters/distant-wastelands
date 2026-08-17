@@ -21,6 +21,8 @@ var _hp: int = -1
 var _flash_left: float = 0.0
 var _tex: Texture2D
 var _tex_kind: int = -999
+var _applied: bool = false
+var _redraws: int = 0
 
 
 func _ready() -> void:
@@ -30,18 +32,34 @@ func _ready() -> void:
 
 
 func apply_record(rec: Dictionary) -> void:
-	position = rec["pos"]
-	_aim = rec.get("aim", Vector2.RIGHT)
-	_kind = rec.get("kind", Types.UnitKind.PLAYER)
-	visible = rec.get("alive", true)
+	var pos: Vector2 = rec["pos"]
+	var aim: Vector2 = rec.get("aim", Vector2.RIGHT)
+	var kind: int = rec.get("kind", Types.UnitKind.PLAYER)
+	var alive: bool = rec.get("alive", true)
+	var dirty := not _applied
+	_applied = true
+	if not position.is_equal_approx(pos):
+		position = pos
+		dirty = true
+	if not _aim.is_equal_approx(aim):
+		_aim = aim
+		dirty = true
+	if _kind != kind:
+		_kind = kind
+		dirty = true
+	if visible != alive:
+		visible = alive
+		dirty = true
 	_ensure_texture()
 	if rec.has("hp"):
 		var hp: int = rec["hp"]
 		if _hp >= 0 and hp < _hp:
 			_flash_left = Constants.HIT_FLASH
 			set_process(true)
+			dirty = true
 		_hp = hp
-	queue_redraw()
+	if dirty:
+		_queue_visual_redraw()
 
 
 func _process(delta: float) -> void:
@@ -51,6 +69,11 @@ func _process(delta: float) -> void:
 	_flash_left = maxf(0.0, _flash_left - delta)
 	if _flash_left <= 0.0:
 		set_process(false)
+	_queue_visual_redraw()
+
+
+func _queue_visual_redraw() -> void:
+	_redraws += 1
 	queue_redraw()
 
 
