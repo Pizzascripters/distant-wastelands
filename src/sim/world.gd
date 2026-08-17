@@ -17,6 +17,8 @@ var seed: int = 0
 var tiles: PackedByteArray = PackedByteArray()
 var tiles_generation: int = 0
 var chunk_generation: PackedInt32Array = PackedInt32Array()
+var discovered: PackedByteArray = PackedByteArray()
+var discovered_generation: int = 0
 var buildings: Dictionary = {}
 var occupancy: PackedInt32Array = PackedInt32Array()
 var deposits: Dictionary = {}
@@ -33,6 +35,8 @@ func _init() -> void:
 	var n := Constants.MAP_W * Constants.MAP_H
 	tiles.resize(n)
 	tiles.fill(Types.TileTerrain.EMPTY)
+	discovered.resize(n)
+	discovered.fill(0)
 	occupancy.resize(n)
 	occupancy.fill(0)
 	chunk_generation.resize(terrain_chunk_count())
@@ -68,6 +72,27 @@ func terrain_chunk_index(x: int, y: int) -> int:
 	var cx := int(x / Constants.TERRAIN_CHUNK_TILES)
 	var cy := int(y / Constants.TERRAIN_CHUNK_TILES)
 	return cy * n + cx
+
+
+func stamp_discovered(center: Vector2i, radius: int = Constants.MAP_DISCOVER_RADIUS) -> bool:
+	var flipped := false
+	var n := discovered.size()
+	for y in range(center.y - radius, center.y + radius + 1):
+		for x in range(center.x - radius, center.x + radius + 1):
+			if not in_bounds(x, y):
+				continue
+			if maxi(absi(x - center.x), absi(y - center.y)) > radius:
+				continue
+			var i := index_of(x, y)
+			if i < 0 or i >= n:
+				continue
+			if discovered[i] != 0:
+				continue
+			discovered[i] = 1
+			flipped = true
+	if flipped:
+		discovered_generation += 1
+	return flipped
 
 
 func set_terrain(x: int, y: int, terrain: int) -> void:

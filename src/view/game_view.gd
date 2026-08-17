@@ -21,6 +21,7 @@ var _camera: CameraCtrl
 var _hud: Hud
 var _build_bar: BuildBar
 var _building_panel: BuildingPanel
+var _map_overlay: MapOverlay
 var _pause_menu: PauseMenu
 var _end_screen: EndScreen
 var _debug: DebugOverlay
@@ -97,6 +98,8 @@ func _process(delta: float) -> void:
 		_build_bar.techs_done = snap.techs_done
 	_update_end_screen(snap)
 	_update_inspect(snap)
+	if _map_overlay != null and _map_overlay.is_open():
+		_map_overlay.apply_snapshot(snap)
 	if _debug != null and _debug.visible:
 		snap.view_ms = float(Time.get_ticks_usec() - view_started) * 0.001
 		_debug.apply_snapshot(snap)
@@ -127,6 +130,8 @@ func _mount_ui() -> void:
 	_building_panel.offset_top = -200.0
 	_building_panel.offset_bottom = -72.0
 	layer.add_child(_building_panel)
+	_map_overlay = MapOverlay.new()
+	layer.add_child(_map_overlay)
 	_pause_menu = _PAUSE_SCENE.instantiate() as PauseMenu
 	_pause_menu.theme = _THEME
 	_pause_menu.visible = false
@@ -147,8 +152,47 @@ func _handle_meta_input() -> void:
 	if Input.is_action_just_pressed("debug_overlay"):
 		if _debug != null:
 			_debug.visible = not _debug.visible
+	if Input.is_action_just_pressed("map_view"):
+		_toggle_map()
 	if Input.is_action_just_pressed("pause"):
-		_toggle_pause()
+		_on_pause_action()
+
+
+func _on_pause_action() -> void:
+	if _map_open():
+		_set_map_open(false)
+		return
+	_toggle_pause()
+
+
+func _map_open() -> bool:
+	return _map_overlay != null and _map_overlay.is_open()
+
+
+func _set_map_open(open: bool) -> void:
+	if _map_overlay == null:
+		return
+	if open:
+		_set_build_kind(-1)
+	_map_overlay.set_open(open)
+	if open and _latest_snap != null:
+		_map_overlay.apply_snapshot(_latest_snap)
+
+
+func _toggle_map() -> void:
+	if _map_open():
+		_set_map_open(false)
+		return
+	if _ended:
+		return
+	_set_map_open(true)
+
+
+func _input(event: InputEvent) -> void:
+	if not _map_open():
+		return
+	if event.is_action_pressed("zoom_in") or event.is_action_pressed("zoom_out"):
+		get_viewport().set_input_as_handled()
 
 
 func _toggle_pause() -> void:
@@ -355,6 +399,9 @@ func _on_cancel_pressed(snap: SimSnapshot, is_rmb: bool, world_pos: Vector2, ove
 	if _build_kind >= 0:
 		_set_build_kind(-1)
 		return
+	if _map_open():
+		_set_map_open(false)
+		return
 	if is_rmb and over_hud:
 		return
 	if is_rmb:
@@ -381,7 +428,7 @@ func _command_withdraw(shift_held: bool) -> bool:
 
 
 func _apply_world_click(cmd: InputCommand, fire_held: bool, fire_just: bool, blocked: bool) -> void:
-	if blocked:
+	if blocked or _map_open():
 		cmd.fire = false
 		return
 	if _build_kind >= 0:
@@ -454,7 +501,7 @@ func _cursor_tile() -> Vector2i:
 
 
 func _update_build_ghost() -> void:
-	if _ghost == null or _build_kind < 0 or _ended or _is_paused():
+	if _ghost == null or _build_kind < 0 or _ended or _is_paused() or _map_open():
 		if _ghost != null:
 			_ghost.visible = false
 		return
@@ -537,6 +584,7 @@ func _ensure_actions() -> void:
 	_bind_keys("build_habitat", [KEY_8])
 	_bind_keys("build_depot", [KEY_9])
 	_bind_keys("inspect", [KEY_F])
+	_bind_keys("map_view", [KEY_M])
 	_bind_keys("cancel", [KEY_Q])
 	_bind_mouse("cancel", MOUSE_BUTTON_RIGHT)
 	_bind_keys("pause", [KEY_ESCAPE])
