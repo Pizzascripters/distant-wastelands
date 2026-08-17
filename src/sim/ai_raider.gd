@@ -485,7 +485,7 @@ static func _is_smash_blocker(kind: int) -> bool:
 			return true
 		Types.BuildingKind.FARM, Types.BuildingKind.LAB, Types.BuildingKind.MEDBAY:
 			return true
-		Types.BuildingKind.GATE:
+		Types.BuildingKind.GATE, Types.BuildingKind.RADAR:
 			return true
 		_:
 			return false
@@ -493,7 +493,7 @@ static func _is_smash_blocker(kind: int) -> bool:
 
 static func _nearest_player_wall_or_turret(world: World, unit: Unit) -> Building:
 	# Hauling smash set: nearest solid player building that is not Depot/Habitat
-	# (Wall, Turret, Gate, Workshop, Farm, Lab, Medbay).
+	# (Wall, Turret, Gate, Workshop, Farm, Lab, Medbay, Radar).
 	var best: Building = null
 	var best_d := INF
 	for raw in world.buildings.values():

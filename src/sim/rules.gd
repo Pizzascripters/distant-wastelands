@@ -24,6 +24,11 @@ static func cost(kind: int) -> Dictionary:
 				Types.ResourceKind.SCRAP: Constants.GATE_COST_SCRAP,
 				Types.ResourceKind.PARTS: Constants.GATE_COST_PARTS,
 			}
+		Types.BuildingKind.RADAR:
+			return {
+				Types.ResourceKind.SCRAP: Constants.RADAR_COST_SCRAP,
+				Types.ResourceKind.PARTS: Constants.RADAR_COST_PARTS,
+			}
 		Types.BuildingKind.HABITAT:
 			return {Types.ResourceKind.SCRAP: Constants.HABITAT_COST_SCRAP}
 		Types.BuildingKind.DEPOT:
@@ -193,6 +198,62 @@ static func habitat_gives_o2(building: Building) -> bool:
 		and building.inventory != null
 		and building.inventory.ice >= 1
 	)
+
+
+static func radar_reveal_set(world: World) -> Dictionary:
+	var out := {}
+	if world == null:
+		return out
+	var radars: Array = living_player(world, Types.BuildingKind.RADAR)
+	if radars.is_empty():
+		return out
+	var limit := Constants.RADAR_RANGE_TILES
+	for raw in world.buildings.values():
+		var building := raw as Building
+		if building == null or building.hp <= 0:
+			continue
+		if building.faction != Types.Faction.ENEMY:
+			continue
+		if (
+			building.kind != Types.BuildingKind.HABITAT
+			and building.kind != Types.BuildingKind.DEPOT
+			and building.kind != Types.BuildingKind.TURRET
+		):
+			continue
+		if _radar_covers_building(radars, building, limit):
+			out[building.id] = true
+	for raw in world.units.values():
+		var unit := raw as Unit
+		if unit == null or not unit.alive or unit.hp <= 0:
+			continue
+		if unit.faction != Types.Faction.ENEMY:
+			continue
+		if _radar_covers_tile(radars, world.world_to_tile(unit.pos), limit):
+			out[unit.id] = true
+	return out
+
+
+static func _radar_covers_tile(radars: Array, tile: Vector2i, limit: int) -> bool:
+	var span := World.footprint_span(Types.BuildingKind.RADAR)
+	for raw in radars:
+		var radar := raw as Building
+		if radar == null:
+			continue
+		for dy in span:
+			for dx in span:
+				var origin := radar.origin_tile + Vector2i(dx, dy)
+				if maxi(absi(tile.x - origin.x), absi(tile.y - origin.y)) <= limit:
+					return true
+	return false
+
+
+static func _radar_covers_building(radars: Array, building: Building, limit: int) -> bool:
+	var span := World.footprint_span(building.kind)
+	for dy in span:
+		for dx in span:
+			if _radar_covers_tile(radars, building.origin_tile + Vector2i(dx, dy), limit):
+				return true
+	return false
 
 
 static func evaluate_outcome(sim: Sim) -> Vector2i:
@@ -745,6 +806,8 @@ static func _hp_for(kind: int) -> int:
 			return Constants.MEDBAY_HP
 		Types.BuildingKind.GATE:
 			return Constants.GATE_HP
+		Types.BuildingKind.RADAR:
+			return Constants.RADAR_HP
 		Types.BuildingKind.HABITAT:
 			return Constants.HABITAT_HP
 		Types.BuildingKind.DEPOT:

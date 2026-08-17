@@ -25,6 +25,8 @@ const FARM_PLAYER := "res://assets/sprites/placeholder/farm_player.png"
 const FARM_CROP := Color("6B8F3A")
 const MEDBAY_PLAYER := "res://assets/sprites/placeholder/medbay_player.png"
 const GATE_PLAYER := "res://assets/sprites/placeholder/gate_player.png"
+const RADAR_PLAYER := "res://assets/sprites/placeholder/radar_player.png"
+const DISH := Color("2A323A")
 const CROSS := Color("E24A3B")
 const CROSS_LEN := 6.0
 const CROSS_W := 2.0
@@ -126,6 +128,8 @@ func _draw() -> void:
 			_draw_medbay(fill, stripe)
 		Types.BuildingKind.GATE:
 			_draw_gate(fill, stripe)
+		Types.BuildingKind.RADAR:
+			_draw_radar(fill, stripe)
 		_:
 			_draw_wall(fill, stripe)
 
@@ -153,6 +157,8 @@ func _ensure_texture() -> void:
 			path = MEDBAY_PLAYER
 		Types.BuildingKind.GATE:
 			path = GATE_PLAYER
+		Types.BuildingKind.RADAR:
+			path = RADAR_PLAYER
 		_:
 			path = WALL_PLAYER if player else WALL_ENEMY
 	_tex = WorldView.load_png(path)
@@ -223,6 +229,20 @@ func _draw_medbay(fill: Color, stripe: Color) -> void:
 		CROSS_W,
 		true
 	)
+
+
+func _draw_radar(fill: Color, stripe: Color) -> void:
+	var tile := float(Constants.TILE)
+	var size := tile * 2.0
+	var box := Rect2(0.0, 0.0, size, size)
+	draw_rect(box, fill, true)
+	draw_rect(Rect2(0.0, 0.0, size, STRIPE_H), stripe, true)
+	draw_rect(box, OUTLINE, false, 1.0)
+	var center := Vector2(size * 0.5, 22.0)
+	draw_arc(center, 18.0, PI, TAU, 16, OUTLINE, 2.0, true)
+	draw_arc(center, 11.0, PI, TAU, 12, DISH, 2.0, true)
+	draw_circle(center, 3.0, stripe)
+	draw_line(center, Vector2(center.x, size - 10.0), OUTLINE, 2.0, true)
 
 
 func _draw_gate(fill: Color, stripe: Color) -> void:
