@@ -31,6 +31,7 @@ var _tex_key: String = ""
 
 func _ready() -> void:
 	texture_filter = TEXTURE_FILTER_NEAREST
+	_ensure_texture()
 	set_process(_flash_left > 0.0)
 
 
@@ -38,6 +39,7 @@ func apply_record(rec: Dictionary) -> void:
 	_kind = rec.get("kind", Types.BuildingKind.WALL)
 	_faction = rec.get("faction", Types.Faction.PLAYER)
 	_aim = rec.get("aim", Vector2.RIGHT)
+	_ensure_texture()
 	# Local origin is the footprint top-left.
 	if rec.has("origin_tile"):
 		var tile: Vector2i = rec["origin_tile"]
@@ -64,12 +66,11 @@ func _process(delta: float) -> void:
 
 
 func _draw() -> void:
-	var tex := _texture()
 	var flash := _flash_left > 0.0
-	if tex != null:
+	if _tex != null:
 		var modulate := FLASH if flash else Color.WHITE
-		var sz := Vector2(tex.get_width(), tex.get_height())
-		draw_texture_rect(tex, Rect2(Vector2.ZERO, sz), false, modulate)
+		var sz := Vector2(_tex.get_width(), _tex.get_height())
+		draw_texture_rect(_tex, Rect2(Vector2.ZERO, sz), false, modulate)
 		if _kind == Types.BuildingKind.TURRET:
 			_draw_barrel()
 		return
@@ -86,11 +87,10 @@ func _draw() -> void:
 			_draw_wall(fill, stripe)
 
 
-func _texture() -> Texture2D:
+func _ensure_texture() -> void:
 	var key := "%d:%d" % [_kind, _faction]
 	if _tex_key == key:
-		return _tex
-	_tex_key = key
+		return
 	var player := _faction == Types.Faction.PLAYER
 	var path := ""
 	match _kind:
@@ -103,7 +103,7 @@ func _texture() -> Texture2D:
 		_:
 			path = WALL_PLAYER if player else WALL_ENEMY
 	_tex = WorldView.load_png(path)
-	return _tex
+	_tex_key = key
 
 
 func _draw_habitat(fill: Color, stripe: Color) -> void:

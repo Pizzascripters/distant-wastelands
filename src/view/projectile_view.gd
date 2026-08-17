@@ -15,6 +15,7 @@ var _tex_faction: int = -999
 
 func _ready() -> void:
 	texture_filter = TEXTURE_FILTER_NEAREST
+	_ensure_texture()
 
 
 func apply_record(rec: Dictionary) -> void:
@@ -24,22 +25,21 @@ func apply_record(rec: Dictionary) -> void:
 		fill = PLAYER_FILL
 	else:
 		fill = ENEMY_FILL
+	_ensure_texture()
 	queue_redraw()
 
 
 func _draw() -> void:
-	var tex := _texture()
-	if tex != null:
-		var sz := Vector2(tex.get_width(), tex.get_height())
-		draw_texture(tex, -sz * 0.5)
+	if _tex != null:
+		var sz := Vector2(_tex.get_width(), _tex.get_height())
+		draw_texture(_tex, -sz * 0.5)
 		return
 	draw_circle(Vector2.ZERO, RADIUS, fill)
 
 
-func _texture() -> Texture2D:
+func _ensure_texture() -> void:
 	if _tex_faction == _faction:
-		return _tex
-	_tex_faction = _faction
+		return
 	var path := PLAYER_PATH if _faction == Types.Faction.PLAYER else ENEMY_PATH
 	_tex = WorldView.load_png(path)
-	return _tex
+	_tex_faction = _faction

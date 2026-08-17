@@ -25,6 +25,7 @@ var _tex_kind: int = -999
 
 func _ready() -> void:
 	texture_filter = TEXTURE_FILTER_NEAREST
+	_ensure_texture()
 	set_process(_flash_left > 0.0)
 
 
@@ -33,6 +34,7 @@ func apply_record(rec: Dictionary) -> void:
 	_aim = rec.get("aim", Vector2.RIGHT)
 	_kind = rec.get("kind", Types.UnitKind.PLAYER)
 	visible = rec.get("alive", true)
+	_ensure_texture()
 	if rec.has("hp"):
 		var hp: int = rec["hp"]
 		if _hp >= 0 and hp < _hp:
@@ -58,12 +60,11 @@ func _draw() -> void:
 		dir = Vector2.RIGHT
 	else:
 		dir = dir.normalized()
-	var tex := _texture()
 	var flash := _flash_left > 0.0
-	if tex != null:
-		var sz := Vector2(tex.get_width(), tex.get_height())
+	if _tex != null:
+		var sz := Vector2(_tex.get_width(), _tex.get_height())
 		var modulate := FLASH if flash else Color.WHITE
-		draw_texture_rect(tex, Rect2(-sz * 0.5, sz), false, modulate)
+		draw_texture_rect(_tex, Rect2(-sz * 0.5, sz), false, modulate)
 	else:
 		var fill := FLASH if flash else _fill_for_kind()
 		var outline_w := GUARD_OUTLINE_W if _kind == Types.UnitKind.GUARD else OUTLINE_W
@@ -75,18 +76,17 @@ func _draw() -> void:
 	draw_line(notch_a, notch_b, OUTLINE, 2.0, true)
 
 
-func _texture() -> Texture2D:
+func _ensure_texture() -> void:
 	if _tex_kind == _kind:
-		return _tex
-	_tex_kind = _kind
+		return
+	var path := PLAYER_PATH
 	match _kind:
 		Types.UnitKind.RAIDER:
-			_tex = WorldView.load_png(RAIDER_PATH)
+			path = RAIDER_PATH
 		Types.UnitKind.GUARD:
-			_tex = WorldView.load_png(GUARD_PATH)
-		_:
-			_tex = WorldView.load_png(PLAYER_PATH)
-	return _tex
+			path = GUARD_PATH
+	_tex = WorldView.load_png(path)
+	_tex_kind = _kind
 
 
 func _fill_for_kind() -> Color:
