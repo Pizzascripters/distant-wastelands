@@ -40,6 +40,10 @@ func run() -> PackedStringArray:
 	_test_farm_harvest_transfer(fails)
 	_test_hunger_is_not_a_lose(fails)
 	_test_depot_skips_food(fails)
+	_test_two_depots_share_scrap(fails)
+	_test_place_habitat_and_depot(fails)
+	_test_last_pad_recovery(fails)
+	_test_last_depot_zero_scrap_spills_floor(fails)
 	return fails
 
 
@@ -759,6 +763,10 @@ func _test_locked_buildings_not_placeable(fails: PackedStringArray) -> void:
 		fails.append("Wall should start unlocked")
 	if not Research.building_unlocked(sim, Types.BuildingKind.LAB):
 		fails.append("Lab should start unlocked")
+	if not Research.building_unlocked(sim, Types.BuildingKind.HABITAT):
+		fails.append("Habitat should start unlocked")
+	if not Research.building_unlocked(sim, Types.BuildingKind.DEPOT):
+		fails.append("Depot should start unlocked")
 	Research.mark_complete(sim, Types.TechKind.HYDROPONICS)
 	if not Research.building_unlocked(sim, Types.BuildingKind.FARM):
 		fails.append("Hydroponics should unlock Farm")
@@ -956,6 +964,222 @@ func _test_depot_skips_food(fails: PackedStringArray) -> void:
 		fails.append("steal took food from enemy depot")
 	if thief.inventory.scrap != Constants.TRANSFER_BATCH:
 		fails.append("steal should still move scrap, got %d" % thief.inventory.scrap)
+
+
+func _test_two_depots_share_scrap(fails: PackedStringArray) -> void:
+	var world := _world_with_depot(8)
+	var depot_a := world.building_at(2, 2)
+	var depot_b := Building.new()
+	depot_b.id = world.alloc_id()
+	depot_b.kind = Types.BuildingKind.DEPOT
+	depot_b.faction = Types.Faction.PLAYER
+	depot_b.origin_tile = Vector2i(6, 2)
+	depot_b.hp = Constants.DEPOT_HP
+	depot_b.hp_max = Constants.DEPOT_HP
+	depot_b.inventory = Building.inventory_for(Types.BuildingKind.DEPOT)
+	depot_b.inventory.add(Types.ResourceKind.SCRAP, 7)
+	world.buildings[depot_b.id] = depot_b
+	world.occupy(depot_b)
+	if depot_a.id >= depot_b.id:
+		fails.append("two-depot test expected first depot to have the lower id")
+		return
+	if Rules.player_pool_amount(world, Types.ResourceKind.SCRAP) != 15:
+		fails.append(
+			"scrap pool is %d, expected 15"
+			% Rules.player_pool_amount(world, Types.ResourceKind.SCRAP)
+		)
+	if not Rules.pay_player(world, {Types.ResourceKind.SCRAP: 10}):
+		fails.append("pay_player scrap 10 across two depots should succeed")
+		return
+	if depot_a.inventory.scrap != 0:
+		fails.append("lowest-id depot scrap is %d, expected 0" % depot_a.inventory.scrap)
+	if depot_b.inventory.scrap != 5:
+		fails.append("second depot scrap is %d, expected 5" % depot_b.inventory.scrap)
+
+
+func _test_place_habitat_and_depot(fails: PackedStringArray) -> void:
+	var habitat_cost := Rules.cost(Types.BuildingKind.HABITAT)
+	if (
+		habitat_cost.size() != 1
+		or int(habitat_cost.get(Types.ResourceKind.SCRAP, -1)) != Constants.HABITAT_COST_SCRAP
+	):
+		fails.append("Habitat cost should be scrap only at HABITAT_COST_SCRAP")
+	var depot_cost := Rules.cost(Types.BuildingKind.DEPOT)
+	if (
+		depot_cost.size() != 1
+		or int(depot_cost.get(Types.ResourceKind.SCRAP, -1)) != Constants.DEPOT_COST_SCRAP
+	):
+		fails.append("Depot cost should be scrap only at DEPOT_COST_SCRAP")
+
+	var world := _world_with_depot(Constants.HABITAT_COST_SCRAP + Constants.DEPOT_COST_SCRAP)
+	var depot := world.building_at(2, 2)
+	var habitat_tile := Vector2i(10, 10)
+	if not Rules.try_place(world, null, Types.BuildingKind.HABITAT, habitat_tile):
+		fails.append("try_place Habitat should succeed from the depot pool")
+		return
+	if depot.inventory.scrap != Constants.DEPOT_COST_SCRAP:
+		fails.append(
+			"pool Habitat left scrap %d, expected %d"
+			% [depot.inventory.scrap, Constants.DEPOT_COST_SCRAP]
+		)
+	var habitat := world.building_at(habitat_tile.x, habitat_tile.y)
+	if habitat == null or habitat.kind != Types.BuildingKind.HABITAT:
+		fails.append("placed Habitat missing from occupancy")
+		return
+	if habitat.hp != Constants.HABITAT_HP or habitat.hp_max != Constants.HABITAT_HP:
+		fails.append("Habitat hp is %d/%d" % [habitat.hp, habitat.hp_max])
+	if habitat.inventory == null or habitat.inventory.cap_ice != Constants.HABITAT_CAP_ICE:
+		fails.append("try_place Habitat should set HABITAT_CAP_ICE")
+	if habitat.inventory.ice != Constants.LAST_HABITAT_ICE:
+		fails.append(
+			"only living Habitat ice is %d, expected LAST_HABITAT_ICE"
+			% habitat.inventory.ice
+		)
+	for dy in 2:
+		for dx in 2:
+			var at := Vector2i(habitat_tile.x + dx, habitat_tile.y + dy)
+			if world.building_at(at.x, at.y) != habitat:
+				fails.append("Habitat does not occupy %s" % at)
+
+	var extra := Constants.HABITAT_COST_SCRAP
+	depot.inventory.add(Types.ResourceKind.SCRAP, extra)
+	var second_tile := Vector2i(14, 10)
+	if not Rules.try_place(world, null, Types.BuildingKind.HABITAT, second_tile):
+		fails.append("try_place second Habitat should succeed from the depot pool")
+		return
+	var second := world.building_at(second_tile.x, second_tile.y)
+	if second == null or second.inventory == null or second.inventory.ice != 0:
+		fails.append("second Habitat ice should be 0 when another Habitat lives")
+
+	var depot_tile := Vector2i(18, 10)
+	var scrap_before := depot.inventory.scrap
+	if not Rules.try_place(world, null, Types.BuildingKind.DEPOT, depot_tile):
+		fails.append("try_place Depot should succeed from the depot pool")
+		return
+	if depot.inventory.scrap != scrap_before - Constants.DEPOT_COST_SCRAP:
+		fails.append(
+			"pool Depot left scrap %d, expected %d"
+			% [depot.inventory.scrap, scrap_before - Constants.DEPOT_COST_SCRAP]
+		)
+	var placed_depot := world.building_at(depot_tile.x, depot_tile.y)
+	if placed_depot == null or placed_depot.kind != Types.BuildingKind.DEPOT:
+		fails.append("placed Depot missing from occupancy")
+		return
+	if placed_depot.inventory == null or placed_depot.inventory.cap_ice != 0:
+		fails.append("try_place Depot should set cap_ice == 0")
+	if (
+		placed_depot.inventory.scrap != 0
+		or placed_depot.inventory.ore != 0
+		or placed_depot.inventory.parts != 0
+	):
+		fails.append("new Depot should start empty")
+	for dy in 2:
+		for dx in 2:
+			var dep_at := Vector2i(depot_tile.x + dx, depot_tile.y + dy)
+			if world.building_at(dep_at.x, dep_at.y) != placed_depot:
+				fails.append("Depot does not occupy %s" % dep_at)
+
+	var blocked := Vector2i(22, 10)
+	world.set_terrain(blocked.x + 1, blocked.y + 1, Types.TileTerrain.ROCK)
+	if Rules.can_place(world, null, Types.BuildingKind.HABITAT, blocked):
+		fails.append("Habitat should reject when one footprint tile is rock")
+	if Rules.can_place(world, null, Types.BuildingKind.DEPOT, blocked):
+		fails.append("Depot should reject when one footprint tile is rock")
+
+
+func _test_last_pad_recovery(fails: PackedStringArray) -> void:
+	var world := World.new()
+	var player := _player_at(world, world.tile_center(0, 0))
+	player.inventory.add(Types.ResourceKind.SCRAP, Constants.LAST_PAD_HABITAT_SCRAP)
+	var habitat_tile := Vector2i(4, 4)
+	if not Rules.can_place(world, null, Types.BuildingKind.HABITAT, habitat_tile):
+		fails.append("0 Habitat 0 Depot + 10 carry should allow last-pad Habitat")
+	if not Rules.try_place(world, null, Types.BuildingKind.HABITAT, habitat_tile):
+		fails.append("last-pad Habitat place should succeed")
+		return
+	if player.inventory.scrap != 0:
+		fails.append("last-pad Habitat should charge carry, leftover %d" % player.inventory.scrap)
+	var habitat := world.building_at(habitat_tile.x, habitat_tile.y)
+	if habitat == null:
+		fails.append("last-pad Habitat missing")
+		return
+	if habitat.inventory == null or habitat.inventory.ice != Constants.LAST_HABITAT_ICE:
+		fails.append("last-pad Habitat ice is not LAST_HABITAT_ICE")
+	if not Rules.habitat_gives_o2(habitat):
+		fails.append("last-pad Habitat should give O2 the same tick")
+
+	player.inventory.add(Types.ResourceKind.SCRAP, Constants.LAST_PAD_DEPOT_SCRAP)
+	var depot_tile := Vector2i(8, 4)
+	if not Rules.try_place(world, null, Types.BuildingKind.DEPOT, depot_tile):
+		fails.append("last-pad Depot place should succeed")
+		return
+	if player.inventory.scrap != 0:
+		fails.append("last-pad Depot should charge carry, leftover %d" % player.inventory.scrap)
+	var depot := world.building_at(depot_tile.x, depot_tile.y)
+	if depot == null or depot.inventory == null or depot.inventory.cap_ice != 0:
+		fails.append("last-pad Depot should have cap_ice == 0")
+
+	player.inventory.add(Types.ResourceKind.SCRAP, Constants.PLAYER_CARRY_SCRAP)
+	if Rules.can_place(world, null, Types.BuildingKind.HABITAT, Vector2i(12, 4)):
+		fails.append("a full pack cannot pay the pool Habitat cost 20")
+	if Rules.try_place(world, null, Types.BuildingKind.HABITAT, Vector2i(12, 4)):
+		fails.append("pool Habitat must not charge carry")
+	if player.inventory.scrap != Constants.PLAYER_CARRY_SCRAP:
+		fails.append("failed pool Habitat place changed carry")
+
+	if Rules.can_place(world, null, Types.BuildingKind.WALL, Vector2i(16, 4)):
+		fails.append("walls must not last-pad from carry")
+
+
+func _test_last_depot_zero_scrap_spills_floor(fails: PackedStringArray) -> void:
+	var world := World.new()
+	var depot := Building.new()
+	depot.id = world.alloc_id()
+	depot.kind = Types.BuildingKind.DEPOT
+	depot.faction = Types.Faction.PLAYER
+	depot.origin_tile = Vector2i(10, 10)
+	depot.hp = Constants.DEPOT_HP
+	depot.hp_max = Constants.DEPOT_HP
+	depot.inventory = Building.inventory_for(Types.BuildingKind.DEPOT)
+	world.buildings[depot.id] = depot
+	world.occupy(depot)
+	Combat.apply_damage(depot, Constants.DEPOT_HP)
+	Combat.process_deaths(world)
+	if world.loot.size() != 1:
+		fails.append("last Depot 0-scrap spill piles: %d, expected 1" % world.loot.size())
+		return
+	var pile: Loot = world.loot.values()[0]
+	if pile.inventory.scrap != Constants.LAST_DEPOT_SCRAP:
+		fails.append(
+			"last Depot 0-scrap spill is %d, expected LAST_DEPOT_SCRAP"
+			% pile.inventory.scrap
+		)
+
+	var extra := Building.new()
+	extra.id = world.alloc_id()
+	extra.kind = Types.BuildingKind.DEPOT
+	extra.faction = Types.Faction.PLAYER
+	extra.origin_tile = Vector2i(14, 10)
+	extra.hp = Constants.DEPOT_HP
+	extra.hp_max = Constants.DEPOT_HP
+	extra.inventory = Building.inventory_for(Types.BuildingKind.DEPOT)
+	world.buildings[extra.id] = extra
+	world.occupy(extra)
+	var other := Building.new()
+	other.id = world.alloc_id()
+	other.kind = Types.BuildingKind.DEPOT
+	other.faction = Types.Faction.PLAYER
+	other.origin_tile = Vector2i(18, 10)
+	other.hp = Constants.DEPOT_HP
+	other.hp_max = Constants.DEPOT_HP
+	other.inventory = Building.inventory_for(Types.BuildingKind.DEPOT)
+	world.buildings[other.id] = other
+	world.occupy(other)
+	var before := world.loot.size()
+	Combat.apply_damage(extra, Constants.DEPOT_HP)
+	Combat.process_deaths(world)
+	if world.loot.size() != before:
+		fails.append("non-last 0-scrap Depot should not spill LAST_DEPOT_SCRAP")
 
 
 func _tick_idle(sim: Sim, ticks: int) -> void:

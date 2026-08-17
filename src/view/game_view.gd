@@ -114,7 +114,7 @@ func _mount_ui() -> void:
 	_build_bar.theme = _THEME
 	_build_bar.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	_build_bar.offset_left = 12.0
-	_build_bar.offset_top = -240.0
+	_build_bar.offset_top = -308.0
 	_build_bar.offset_right = 280.0
 	_build_bar.offset_bottom = -12.0
 	layer.add_child(_build_bar)
@@ -284,6 +284,10 @@ func _apply_build_hotkeys(cmd: InputCommand) -> void:
 		_try_build_kind(Types.BuildingKind.GATE)
 	elif Input.is_action_just_pressed("build_medbay"):
 		_try_build_kind(Types.BuildingKind.MEDBAY)
+	elif Input.is_action_just_pressed("build_habitat"):
+		_try_build_kind(Types.BuildingKind.HABITAT)
+	elif Input.is_action_just_pressed("build_depot"):
+		_try_build_kind(Types.BuildingKind.DEPOT)
 
 
 func _try_build_kind(kind: int) -> void:
@@ -530,6 +534,8 @@ func _ensure_actions() -> void:
 	_bind_keys("build_farm", [KEY_5])
 	_bind_keys("build_gate", [KEY_6])
 	_bind_keys("build_medbay", [KEY_7])
+	_bind_keys("build_habitat", [KEY_8])
+	_bind_keys("build_depot", [KEY_9])
 	_bind_keys("inspect", [KEY_F])
 	_bind_keys("cancel", [KEY_Q])
 	_bind_mouse("cancel", MOUSE_BUTTON_RIGHT)

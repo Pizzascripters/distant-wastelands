@@ -577,8 +577,6 @@ func _maybe_respawn_player() -> void:
 	var player := get_player()
 	if player == null or player.alive or player.respawn_timer > 0.0:
 		return
-	if _player_habitat() == null:
-		return
 	var tile := _respawn_tile()
 	player.pos = world.tile_center(tile.x, tile.y)
 	player.hp = player.hp_max
@@ -713,15 +711,10 @@ func _tick_hunger() -> void:
 
 
 func _player_habitat() -> Building:
-	for building in world.buildings.values():
-		if building.kind != Types.BuildingKind.HABITAT:
-			continue
-		if building.faction != Types.Faction.PLAYER:
-			continue
-		if building.hp <= 0:
-			continue
-		return building
-	return null
+	var habitats: Array = Rules.living_player(world, Types.BuildingKind.HABITAT)
+	if habitats.is_empty():
+		return null
+	return habitats[0] as Building
 
 
 func _respawn_tile() -> Vector2i:

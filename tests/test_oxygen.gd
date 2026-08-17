@@ -13,6 +13,8 @@ func run() -> PackedStringArray:
 	_test_dead_player_does_not_drain(fails)
 	_test_o2_empty_is_suffocation(fails)
 	_test_combat_death_respawns_full_o2(fails)
+	_test_combat_death_respawns_without_habitat(fails)
+	_test_second_habitat_with_ice_refills(fails)
 	_test_habitat_smash_is_not_a_lose(fails)
 	_test_hud_bar_colors(fails)
 	return fails
@@ -30,6 +32,9 @@ func _test_starts_at_max(fails: PackedStringArray) -> void:
 	var snap := sim.snapshot()
 	if not is_equal_approx(snap.player_o2, Constants.PLAYER_O2_MAX):
 		fails.append("snapshot o2 started at %s" % str(snap.player_o2))
+	sim.tick()
+	if not is_equal_approx(player.o2, Constants.PLAYER_O2_MAX):
+		fails.append("one tick at spawn left o2 at %s, expected max" % str(player.o2))
 
 
 func _test_habitat_refill(fails: PackedStringArray) -> void:
@@ -202,6 +207,57 @@ func _test_combat_death_respawns_full_o2(fails: PackedStringArray) -> void:
 		fails.append("respawn hp is %d" % player.hp)
 	if player.inventory.scrap != 0 or player.inventory.ice != 0:
 		fails.append("respawn carry should be empty")
+
+
+func _test_combat_death_respawns_without_habitat(fails: PackedStringArray) -> void:
+	var sim := _sim_quiet()
+	var player := sim.get_player()
+	var habitat := _player_building(sim, Types.BuildingKind.HABITAT)
+	if player == null or habitat == null:
+		fails.append("no-habitat respawn missing player or habitat")
+		return
+	habitat.hp = 0
+	player.pos = _far_pos()
+	player.o2 = 12.0
+	player.hp = 1
+	Combat.apply_damage(player, 1)
+	sim.tick()
+	if player.alive:
+		fails.append("combat death without Habitat should kill the player")
+		return
+	if sim.outcome != Types.Outcome.NONE:
+		fails.append(
+			"combat death without Habitat locked outcome %d/%d"
+			% [sim.outcome, sim.outcome_reason]
+		)
+	if _player_building(sim, Types.BuildingKind.HABITAT) != null:
+		fails.append("Habitat should be gone before the respawn tick")
+	player.respawn_timer = Constants.SIM_DT
+	sim.tick()
+	if not player.alive:
+		fails.append("player should respawn even if every Habitat is gone")
+		return
+	if not is_equal_approx(player.o2, Constants.PLAYER_O2_MAX):
+		fails.append("no-habitat respawn o2 is %s, expected max" % str(player.o2))
+
+
+func _test_second_habitat_with_ice_refills(fails: PackedStringArray) -> void:
+	var sim := _sim_quiet()
+	var player := sim.get_player()
+	var starter := _player_building(sim, Types.BuildingKind.HABITAT)
+	if player == null or starter == null:
+		fails.append("second Habitat refill missing player or starter Habitat")
+		return
+	var tile := Vector2i(30, 30)
+	var second := _inject_building(sim, Types.BuildingKind.HABITAT, tile, Constants.HABITAT_HP)
+	second.inventory = Building.inventory_for(Types.BuildingKind.HABITAT)
+	second.inventory.add(Types.ResourceKind.ICE, 1)
+	sim.world.occupy(second)
+	player.o2 = 8.0
+	player.pos = _adjacent_pos(sim, second)
+	sim.tick()
+	if not is_equal_approx(player.o2, Constants.PLAYER_O2_MAX):
+		fails.append("second Habitat with ice left o2 at %s" % str(player.o2))
 
 
 func _test_habitat_smash_is_not_a_lose(fails: PackedStringArray) -> void:

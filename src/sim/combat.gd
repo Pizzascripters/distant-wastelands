@@ -360,21 +360,34 @@ static func _melee_cooldown(unit: Unit) -> float:
 
 static func _spill_depot(world: World, depot: Building) -> void:
 	var inv: Inventory = depot.inventory
-	if inv == null or (
-		inv.scrap <= 0 and inv.ore <= 0 and inv.parts <= 0 and inv.food <= 0
-	):
+	var scrap := 0
+	var ore := 0
+	var parts := 0
+	var food := 0
+	if inv != null:
+		scrap = inv.scrap
+		ore = inv.ore
+		parts = inv.parts
+		food = inv.food
+	var last_player := (
+		depot.faction == Types.Faction.PLAYER
+		and Rules.living_player(world, Types.BuildingKind.DEPOT).is_empty()
+	)
+	if last_player and scrap <= 0:
+		scrap = Constants.LAST_DEPOT_SCRAP
+	if scrap <= 0 and ore <= 0 and parts <= 0 and food <= 0:
 		return
 	var pile := Loot.new()
 	pile.id = world.alloc_id()
 	pile.pos = _footprint_aabb(depot).get_center()
-	if inv.scrap > 0:
-		pile.inventory.add(Types.ResourceKind.SCRAP, inv.scrap)
-	if inv.ore > 0:
-		pile.inventory.add(Types.ResourceKind.ORE, inv.ore)
-	if inv.parts > 0:
-		pile.inventory.add(Types.ResourceKind.PARTS, inv.parts)
-	if inv.food > 0:
-		pile.inventory.add(Types.ResourceKind.FOOD, inv.food)
+	if scrap > 0:
+		pile.inventory.add(Types.ResourceKind.SCRAP, scrap)
+	if ore > 0:
+		pile.inventory.add(Types.ResourceKind.ORE, ore)
+	if parts > 0:
+		pile.inventory.add(Types.ResourceKind.PARTS, parts)
+	if food > 0:
+		pile.inventory.add(Types.ResourceKind.FOOD, food)
 	var piles = world.get("loot")
 	if piles is Dictionary:
 		piles[pile.id] = pile
