@@ -298,6 +298,11 @@ func _test_last_tick_usec_to_sim_ms(fails: PackedStringArray) -> void:
 	var expected := float(sim.last_tick_usec) * 0.001
 	if not is_equal_approx(snap.sim_ms, expected):
 		fails.append("sim_ms is %s, expected %s" % [str(snap.sim_ms), str(expected)])
+	if snap.completed_this_tick != sim.path_queue.completed_this_tick:
+		fails.append(
+			"completed_this_tick is %d, expected %d"
+			% [snap.completed_this_tick, sim.path_queue.completed_this_tick]
+		)
 
 
 func _player_rec(snap: SimSnapshot) -> Dictionary:

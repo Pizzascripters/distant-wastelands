@@ -17,6 +17,7 @@ const _WORKSHOP := "res://assets/sprites/placeholder/workshop_player.png"
 const _LAB := "res://assets/sprites/placeholder/lab_player.png"
 const _FARM := "res://assets/sprites/placeholder/farm_player.png"
 const _MEDBAY := "res://assets/sprites/placeholder/medbay_player.png"
+const _GATE := "res://assets/sprites/placeholder/gate_player.png"
 const _SCRAP := "res://assets/sprites/placeholder/scrap.png"
 const _ICE := "res://assets/sprites/placeholder/ice.png"
 const _ORE := "res://assets/sprites/placeholder/ore.png"
@@ -153,7 +154,8 @@ func apply_record(rec: Dictionary) -> void:
 		if _farm_box.visible:
 			var stock := int(rec.get("food_stock", 0))
 			var cap := int(rec.get("food_stock_cap", Constants.FARM_FOOD_CAP))
-			_farm_stock.text = "%d / %d" % [stock, cap]
+			var state := "full" if stock >= cap else "growing"
+			_farm_stock.text = "%d / %d %s" % [stock, cap, state]
 	if _lab_box != null:
 		_lab_box.visible = _kind == Types.BuildingKind.LAB
 		if _lab_box.visible:
@@ -569,6 +571,8 @@ func _icon_path(kind: int) -> String:
 			return _FARM
 		Types.BuildingKind.MEDBAY:
 			return _MEDBAY
+		Types.BuildingKind.GATE:
+			return _GATE
 		_:
 			return _WALL
 

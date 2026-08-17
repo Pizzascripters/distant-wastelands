@@ -90,9 +90,14 @@ func _refresh() -> void:
 		["outcome  %s" % _outcome_name(snap.outcome), TEXT],
 		["player depot  %s" % _depot_line(snap, Types.Faction.PLAYER), TEXT],
 		["enemy depot  %s" % _depot_line(snap, Types.Faction.ENEMY), TEXT],
+		["carry food  %d" % _carry_food(snap), TEXT],
 		["o2  %.2f" % _float_field(snap, "player_o2", Constants.PLAYER_O2_MAX), TEXT],
 		["research  %s" % _research_line(snap), TEXT],
 		["next wave  %.2f" % _float_field(snap, "next_wave_at", 0.0), TEXT],
+		[
+			"completed_this_tick  %d" % _int_field(snap, "completed_this_tick", 0),
+			TEXT,
+		],
 	]
 	var plain := PackedStringArray()
 	for row in lines:
@@ -181,6 +186,17 @@ func _inventory_from(inv: Variant) -> Dictionary:
 	return out
 
 
+func _carry_food(snap: SimSnapshot) -> int:
+	for rec in _records(snap, "units"):
+		if not rec is Dictionary:
+			continue
+		if rec.get("kind", -1) != Types.UnitKind.PLAYER:
+			continue
+		var inv := _inventory_from(rec.get("inventory", {}))
+		return int(inv["food"])
+	return 0
+
+
 func _research_line(snap: SimSnapshot) -> String:
 	var selected := -1
 	if "research_selected" in snap:
@@ -199,6 +215,12 @@ func _research_line(snap: SimSnapshot) -> String:
 func _float_field(snap: SimSnapshot, key: String, fallback: float) -> float:
 	if key in snap:
 		return float(snap.get(key))
+	return fallback
+
+
+func _int_field(snap: SimSnapshot, key: String, fallback: int) -> int:
+	if key in snap:
+		return int(snap.get(key))
 	return fallback
 
 

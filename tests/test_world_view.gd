@@ -35,14 +35,28 @@ func _test_apply_deposits_drops_removed(fails: PackedStringArray) -> void:
 
 
 func _test_placeholder_pngs_load(fails: PackedStringArray) -> void:
-	if WorldView.load_png("res://assets/sprites/placeholder/scrap.png") == null:
-		fails.append("placeholder scrap.png failed to load")
-	if WorldView.load_png("res://assets/sprites/placeholder/ice.png") == null:
-		fails.append("placeholder ice.png failed to load")
-	if WorldView.load_png("res://assets/sprites/placeholder/ore.png") == null:
-		fails.append("placeholder ore.png failed to load")
-	if WorldView.load_png("res://assets/sprites/placeholder/player.png") == null:
-		fails.append("placeholder player.png failed to load")
+	for path in [
+		"res://assets/sprites/placeholder/scrap.png",
+		"res://assets/sprites/placeholder/ice.png",
+		"res://assets/sprites/placeholder/ore.png",
+		"res://assets/sprites/placeholder/parts.png",
+		"res://assets/sprites/placeholder/food.png",
+		"res://assets/sprites/placeholder/player.png",
+		"res://assets/sprites/placeholder/workshop_player.png",
+		"res://assets/sprites/placeholder/lab_player.png",
+		"res://assets/sprites/placeholder/farm_player.png",
+		"res://assets/sprites/placeholder/medbay_player.png",
+		"res://assets/sprites/placeholder/gate_player.png",
+	]:
+		var tex := WorldView.load_png(path)
+		if tex == null:
+			fails.append("placeholder %s failed to load" % path.get_file())
+			continue
+		if tex.get_width() < 8 or tex.get_height() < 8:
+			fails.append(
+				"placeholder %s is %dx%d, expected a readable icon"
+				% [path.get_file(), tex.get_width(), tex.get_height()]
+			)
 
 
 func _test_rebuild_caches_terrain(fails: PackedStringArray) -> void:
