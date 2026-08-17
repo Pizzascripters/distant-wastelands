@@ -39,6 +39,7 @@ func setup(p_seed: int) -> void:
 	for unit in world.units.values():
 		if unit.kind == Types.UnitKind.PLAYER:
 			player_id = unit.id
+			unit.o2 = Constants.PLAYER_O2_MAX
 			break
 
 
@@ -74,6 +75,7 @@ func tick() -> void:
 		if unit.alive:
 			_integrate_unit(unit)
 			_update_stuck(unit)
+	_tick_player_oxygen()
 
 	_integrate_projectiles()
 	_resolve_melee()
@@ -109,6 +111,8 @@ func snapshot() -> SimSnapshot:
 	var player := get_player()
 	if player != null:
 		snap.player_respawn_timer = player.respawn_timer
+		snap.player_o2 = player.o2
+		snap.player_o2_max = Constants.PLAYER_O2_MAX
 	snap.player_zero_ice_timer = _faction_zero_ice(Types.Faction.PLAYER)
 	snap.enemy_zero_ice_timer = _faction_zero_ice(Types.Faction.ENEMY)
 	snap.player_living_depot_ice_empty = _living_depot_ice_empty(Types.Faction.PLAYER)
@@ -505,6 +509,7 @@ func _maybe_respawn_player() -> void:
 	var tile := _respawn_tile()
 	player.pos = world.tile_center(tile.x, tile.y)
 	player.hp = player.hp_max
+	player.o2 = Constants.PLAYER_O2_MAX
 	player.alive = true
 	player.vel = Vector2.ZERO
 	player.weapon_cooldown = 0.0
@@ -512,6 +517,33 @@ func _maybe_respawn_player() -> void:
 	player.inventory = Unit.inventory_for(Types.UnitKind.PLAYER)
 	_interact_target_id = 0
 	_interact_withdraw = false
+
+
+func _tick_player_oxygen() -> void:
+	var player := get_player()
+	if player == null or not player.alive:
+		return
+	if _adjacent_o2_refill(player):
+		player.o2 = Constants.PLAYER_O2_MAX
+	else:
+		player.o2 = maxf(0.0, player.o2 - Constants.SIM_DT)
+	if player.o2 == 0.0 and tick_index % Constants.PLAYER_O2_PULSE_TICKS == 0:
+		Combat.apply_damage(player, Constants.PLAYER_O2_HP_PER_PULSE)
+
+
+func _adjacent_o2_refill(player: Unit) -> bool:
+	for building in world.buildings.values():
+		if building.hp <= 0 or building.faction != Types.Faction.PLAYER:
+			continue
+		if not _is_o2_refill_building(building):
+			continue
+		if world.point_aabb_distance(player.pos, world.footprint_aabb(building)) <= Constants.INTERACT_BUILDING_RANGE:
+			return true
+	return false
+
+
+func _is_o2_refill_building(building: Building) -> bool:
+	return building.kind == Types.BuildingKind.HABITAT or building.kind == Types.BuildingKind.DEPOT
 
 
 func _own_depot_withdrawing(cmd: InputCommand, target_id: int) -> bool:

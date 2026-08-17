@@ -5,6 +5,8 @@ const TEXT := Color("F2EDE6")
 const LOW_ICE := Color("E24A3B")
 const RAID_BANNER := Color("E24A3B")
 const O2_FULL := Color("3DDC97")
+const O2_WARN := Color("E2C044")
+const O2_LOW := Color("E24A3B")
 const PANEL := Color(0, 0, 0, 0.65)
 const FONT_SIZE := 16
 const ICON_PX := 18
@@ -19,9 +21,12 @@ const _PARTS_PATH := "res://assets/sprites/placeholder/parts.png"
 var _carry: Dictionary = {}
 var _depot: Dictionary = {}
 var _ice_countdown: Label
+var _o2_track: ColorRect
 var _o2_fill: ColorRect
 var _o2_value: Label
 var _raid_banner: Label
+var _o2: float = Constants.PLAYER_O2_MAX
+var _o2_max: float = Constants.PLAYER_O2_MAX
 
 
 func _ready() -> void:
@@ -55,9 +60,7 @@ func apply_snapshot(snap: SimSnapshot) -> void:
 		if show_countdown:
 			_ice_countdown.text = str(maxi(ceili(Constants.ZERO_ICE_LIMIT - zero_ice), 0))
 
-	_o2_fill.color = O2_FULL
-	_o2_fill.anchor_right = 1.0
-	_o2_value.text = PLACEHOLDER_O2_TEXT
+	_apply_o2(snap)
 
 	var banner := _float_field(snap, "banner_timer", 0.0)
 	_raid_banner.visible = banner > 0.0
@@ -145,22 +148,59 @@ func _make_o2_row() -> HBoxContainer:
 	row.mouse_filter = MOUSE_FILTER_IGNORE
 	row.add_theme_constant_override("separation", 6)
 	row.add_child(_label("O2"))
-	var track := ColorRect.new()
-	track.name = "O2Track"
-	track.color = Color(0, 0, 0, 0.65)
-	track.custom_minimum_size = Vector2(72, 10)
-	track.mouse_filter = MOUSE_FILTER_IGNORE
+	_o2_track = ColorRect.new()
+	_o2_track.name = "O2Track"
+	_o2_track.color = Color(0, 0, 0, 0.65)
+	_o2_track.custom_minimum_size = Vector2(72, 10)
+	_o2_track.mouse_filter = MOUSE_FILTER_IGNORE
 	_o2_fill = ColorRect.new()
 	_o2_fill.name = "O2Fill"
 	_o2_fill.color = O2_FULL
 	_o2_fill.mouse_filter = MOUSE_FILTER_IGNORE
 	_o2_fill.set_anchors_preset(PRESET_FULL_RECT)
-	track.add_child(_o2_fill)
-	row.add_child(track)
+	_o2_track.add_child(_o2_fill)
+	row.add_child(_o2_track)
 	_o2_value = _label(PLACEHOLDER_O2_TEXT)
 	_o2_value.name = "O2Value"
 	row.add_child(_o2_value)
 	return row
+
+
+func _apply_o2(snap: SimSnapshot) -> void:
+	_o2 = _float_field(snap, "player_o2", Constants.PLAYER_O2_MAX)
+	_o2_max = _float_field(snap, "player_o2_max", Constants.PLAYER_O2_MAX)
+	if _o2_max <= 0.0:
+		_o2_max = Constants.PLAYER_O2_MAX
+	var ratio := clampf(_o2 / _o2_max, 0.0, 1.0)
+	_o2_fill.anchor_right = ratio
+	_o2_fill.color = _o2_bar_color(_o2)
+	_o2_value.text = "%d / %d" % [int(round(_o2)), int(round(_o2_max))]
+	if _o2 > 0.0 and _o2_track != null:
+		_o2_track.color = Color(0, 0, 0, 0.65)
+	set_process(_o2 == 0.0)
+	if _o2 == 0.0:
+		_pulse_o2_bar()
+
+
+func _o2_bar_color(o2: float) -> Color:
+	if o2 > Constants.PLAYER_O2_WARN:
+		return O2_FULL
+	if o2 > 10.0:
+		return O2_WARN
+	return O2_LOW
+
+
+func _process(_delta: float) -> void:
+	if _o2 == 0.0:
+		_pulse_o2_bar()
+
+
+func _pulse_o2_bar() -> void:
+	if _o2_track == null:
+		return
+	var t := Time.get_ticks_msec() / 1000.0
+	var pulse := 0.5 + 0.5 * sin(t * TAU * 2.0)
+	_o2_track.color = Color(0, 0, 0, 0.65).lerp(O2_LOW, pulse)
 
 
 func _label(text: String) -> Label:
