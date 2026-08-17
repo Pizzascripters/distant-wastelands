@@ -176,9 +176,7 @@ func _test_missing_home_dead_drops(fails: PackedStringArray) -> void:
 	raider.ai_state = Types.RaiderState.PATH_HOME
 	raider.inventory.scrap = 2
 	raider.inventory.ice = 1
-	var home := _living(sim.world, Types.Faction.ENEMY, Types.BuildingKind.DEPOT)
-	if home != null:
-		home.hp = 0
+	_kill_enemy_depots(sim)
 	_tick(sim, 1)
 	if sim.world.units.has(raider.id):
 		fails.append("hauling raider should be deleted when home depot is missing")
@@ -191,10 +189,7 @@ func _test_missing_home_dead_drops(fails: PackedStringArray) -> void:
 
 func _test_skipped_spawn_advances_clock(fails: PackedStringArray) -> void:
 	var sim := _ready_sim()
-	var home := _living(sim.world, Types.Faction.ENEMY, Types.BuildingKind.DEPOT)
-	if home != null:
-		sim.world.vacate(home)
-		sim.world.buildings.erase(home.id)
+	_remove_enemy_depots(sim)
 	_tick(sim, _ticks_for(Constants.FIRST_WAVE_AT))
 	if _raider_count(sim) != 0:
 		fails.append("skipped spawn created %d raiders" % _raider_count(sim))
@@ -470,6 +465,25 @@ func _first_raider(sim: Sim) -> Unit:
 		if unit.kind == Types.UnitKind.RAIDER:
 			return unit
 	return null
+
+
+func _kill_enemy_depots(sim: Sim) -> void:
+	for building in sim.world.buildings.values():
+		if building.kind == Types.BuildingKind.DEPOT and building.faction == Types.Faction.ENEMY:
+			building.hp = 0
+
+
+func _remove_enemy_depots(sim: Sim) -> void:
+	var ids: Array[int] = []
+	for building in sim.world.buildings.values():
+		if building.kind == Types.BuildingKind.DEPOT and building.faction == Types.Faction.ENEMY:
+			ids.append(building.id)
+	for id in ids:
+		var building: Building = sim.world.buildings.get(id)
+		if building == null:
+			continue
+		sim.world.vacate(building)
+		sim.world.buildings.erase(id)
 
 
 func _living(world: World, faction: int, kind: int) -> Building:

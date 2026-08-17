@@ -61,12 +61,12 @@ func _test_raider_fires_at_building_without_player(fails: PackedStringArray) -> 
 
 func _test_guard_fires_at_building(fails: PackedStringArray) -> void:
 	var sim := _ready_sim()
-	_banish_player(sim)
 	var guard := _find_guard(sim)
 	if guard == null:
 		fails.append("guard building-fire test missing guard")
 		return
-	var wall := _place_wall(sim, Constants.ENEMY_GUARD_TILE + Vector2i(3, 0))
+	var home_tile := _guard_home_tile(sim, guard)
+	var wall := _place_wall(sim, home_tile + Vector2i(3, 0))
 	sim.tick()
 	if _enemy_proj_count(sim) < 1:
 		fails.append("guard should fire at a player building with no player in range")
@@ -80,7 +80,7 @@ func _test_guard_idle_fires_outside_aggro(fails: PackedStringArray) -> void:
 	if guard == null:
 		fails.append("guard idle-fire test missing guard")
 		return
-	var home := sim.world.tile_center(Constants.ENEMY_GUARD_TILE.x, Constants.ENEMY_GUARD_TILE.y)
+	var home := sim.world.tile_center(_guard_home_tile(sim, guard).x, _guard_home_tile(sim, guard).y)
 	var player := sim.get_player()
 	player.pos = home + Vector2(250, 0)
 	sim.tick()
@@ -192,9 +192,9 @@ func _banish_player(sim: Sim) -> void:
 
 
 func _banish_guard(sim: Sim) -> void:
-	var guard := _find_guard(sim)
-	if guard != null:
-		guard.pos = Vector2(16, 16)
+	for unit in sim.world.units.values():
+		if unit.kind == Types.UnitKind.GUARD:
+			unit.pos = Vector2(16, 16)
 
 
 func _inject_raider(sim: Sim, pos: Vector2) -> Unit:
@@ -216,10 +216,33 @@ func _inject_raider(sim: Sim, pos: Vector2) -> Unit:
 
 
 func _find_guard(sim: Sim) -> Unit:
+	if not sim.world.camps.is_empty():
+		var camp: World.Camp = sim.world.camps[0]
+		var home := sim.world.tile_center(camp.guard_tile.x, camp.guard_tile.y)
+		for unit in sim.world.units.values():
+			if unit.kind == Types.UnitKind.GUARD and unit.pos == home:
+				return unit
 	for unit in sim.world.units.values():
 		if unit.kind == Types.UnitKind.GUARD:
 			return unit
 	return null
+
+
+func _guard_home_tile(sim: Sim, guard: Unit) -> Vector2i:
+	if guard == null:
+		return Vector2i.ZERO
+	var best := sim.world.world_to_tile(guard.pos)
+	var best_d := INF
+	for raw in sim.world.camps:
+		var camp: World.Camp = raw
+		if camp == null:
+			continue
+		var home := sim.world.tile_center(camp.guard_tile.x, camp.guard_tile.y)
+		var d := guard.pos.distance_squared_to(home)
+		if d < best_d:
+			best_d = d
+			best = camp.guard_tile
+	return best
 
 
 func _place_wall(sim: Sim, tile: Vector2i) -> Building:
