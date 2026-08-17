@@ -19,7 +19,7 @@ static func think(unit: Unit, sim: Sim) -> void:
 		_chase(unit, player)
 		return
 	if unit.pos.distance_to(home) > Constants.GUARD_LEASH:
-		_path_home(unit, sim.world, home)
+		_path_home(unit, sim, home)
 		return
 	_idle(unit)
 
@@ -30,20 +30,27 @@ static func _living_player_within_aggro(player: Unit, home: Vector2) -> bool:
 
 static func _chase(unit: Unit, player: Unit) -> void:
 	unit.path.clear()
+	unit.path_pending = false
 	_seek(unit, player.pos)
 
 
-static func _path_home(unit: Unit, world: World, home: Vector2) -> void:
+static func _path_home(unit: Unit, sim: Sim, home: Vector2) -> void:
+	var world := sim.world
 	var start := world.world_to_tile(unit.pos)
 	var goal := world.world_to_tile(home)
-	var need_recalc := unit.path_recalc_in <= 0.0 or unit.path.is_empty()
-	if not need_recalc:
+	var need_recalc := unit.path_recalc_in <= 0.0
+	if not need_recalc and not unit.path.is_empty():
 		var nxt: Vector2i = unit.path[0]
 		if not world.is_walkable(nxt.x, nxt.y):
 			need_recalc = true
 	if need_recalc:
-		unit.path = Pathfind.find_path(world, start, goal)
+		var goals: Array[Vector2i] = [goal]
+		if sim.path_queue != null:
+			sim.path_queue.request(unit, start, goals)
 		unit.path_recalc_in = Constants.PATH_RECALC
+	if unit.path_pending and unit.path.is_empty():
+		unit.vel = Vector2.ZERO
+		return
 	while not unit.path.is_empty() and unit.path[0] == world.world_to_tile(unit.pos):
 		unit.path.remove_at(0)
 	if unit.path.is_empty():
@@ -55,6 +62,7 @@ static func _path_home(unit: Unit, world: World, home: Vector2) -> void:
 
 static func _idle(unit: Unit) -> void:
 	unit.path.clear()
+	unit.path_pending = false
 	unit.vel = Vector2.ZERO
 
 

@@ -6,6 +6,7 @@ extends RefCounted
 
 const MELEE_TARGET_META := &"melee_target_id"
 const _HOME_CHECK_META := &"home_check_in"
+const _HOME_WAIT_META := &"home_path_wait"
 
 const _CARDINALS: Array[Vector2i] = [
 	Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)
@@ -67,7 +68,7 @@ static func _think_path_to_depot(unit: Unit, sim: Sim) -> void:
 		unit.vel = Vector2.ZERO
 		_enter(unit, Types.RaiderState.LOOT)
 		return
-	if _is_stuck(unit) or _cached_path_to(unit, sim.world, depot).is_empty():
+	if _is_stuck(unit) or _computed_empty(unit, sim, depot):
 		_enter(unit, Types.RaiderState.SIEGE)
 		return
 	if _player_in_chase_range(unit, sim):
@@ -106,7 +107,7 @@ static func _think_path_home(unit: Unit, sim: Sim) -> void:
 	if _adjacent(sim.world, unit, home):
 		_apply_home_despawn(unit, sim, home)
 		return
-	if _is_stuck(unit) or _cached_path_to(unit, sim.world, home).is_empty():
+	if _is_stuck(unit) or _computed_empty(unit, sim, home):
 		_enter(unit, Types.RaiderState.SIEGE)
 		return
 	if _player_in_chase_range(unit, sim):
@@ -121,7 +122,7 @@ static func _think_path_to_habitat(unit: Unit, sim: Sim) -> void:
 		unit.vel = Vector2.ZERO
 		_enter(unit, Types.RaiderState.ATTACK_HABITAT)
 		return
-	if habitat == null or _is_stuck(unit) or _cached_path_to(unit, sim.world, habitat).is_empty():
+	if habitat == null or _is_stuck(unit) or _computed_empty(unit, sim, habitat):
 		_enter(unit, Types.RaiderState.SIEGE)
 		return
 	if _player_in_chase_range(unit, sim):
@@ -138,11 +139,19 @@ static func _think_siege(unit: Unit, sim: Sim) -> void:
 			_enter(unit, Types.RaiderState.DEAD_DROP)
 			return
 		_tick_home_check(unit)
-		if not _is_stuck(unit) and _home_check_due(unit):
-			_arm_home_check(unit)
-			if not _path_to_building(sim.world, unit, home).is_empty():
-				_enter(unit, Types.RaiderState.PATH_HOME)
-				return
+		if not _is_stuck(unit):
+			if _home_check_due(unit):
+				_arm_home_check(unit)
+				_request_path_to(unit, sim, home)
+				unit.set_meta(_HOME_WAIT_META, true)
+			if bool(unit.get_meta(_HOME_WAIT_META, false)):
+				if unit.path_pending:
+					unit.vel = Vector2.ZERO
+					return
+				unit.remove_meta(_HOME_WAIT_META)
+				if not unit.path.is_empty():
+					_enter(unit, Types.RaiderState.PATH_HOME)
+					return
 		var wall := _nearest_player_wall_or_turret(sim.world, unit)
 		if wall == null:
 			unit.siege_target_id = 0
@@ -152,7 +161,7 @@ static func _think_siege(unit: Unit, sim: Sim) -> void:
 			unit.path.clear()
 			unit.path_recalc_in = 0.0
 		unit.siege_target_id = wall.id
-		_approach_and_melee_building(unit, sim.world, wall)
+		_approach_and_melee_building(unit, sim, wall)
 		return
 
 	# Non-hauling SIEGE does not exit when a loot path reopens.
@@ -168,7 +177,7 @@ static func _think_siege(unit: Unit, sim: Sim) -> void:
 	if target.kind == Types.BuildingKind.HABITAT and _adjacent(sim.world, unit, target):
 		_enter(unit, Types.RaiderState.ATTACK_HABITAT)
 		return
-	_approach_and_melee_building(unit, sim.world, target)
+	_approach_and_melee_building(unit, sim, target)
 
 
 static func _think_chase(unit: Unit, sim: Sim) -> void:
@@ -201,7 +210,7 @@ static func _think_attack_habitat(unit: Unit, sim: Sim) -> void:
 		unit.vel = Vector2.ZERO
 		return
 	unit.siege_target_id = habitat.id
-	_approach_and_melee_building(unit, sim.world, habitat)
+	_approach_and_melee_building(unit, sim, habitat)
 
 
 static func _give_up_chase(unit: Unit, sim: Sim) -> void:
@@ -218,11 +227,16 @@ static func _give_up_chase(unit: Unit, sim: Sim) -> void:
 static func _enter(unit: Unit, state: int) -> void:
 	if unit.ai_state == state:
 		return
+	var from := unit.ai_state
 	unit.ai_state = state
 	unit.ai_state_time = 0.0
 	unit.path.clear()
-	unit.path_recalc_in = 0.0
+	unit.path_pending = false
+	unit.path_computed = false
+	if from != Types.RaiderState.SPAWNED:
+		unit.path_recalc_in = 0.0
 	unit.remove_meta(_HOME_CHECK_META)
+	unit.remove_meta(_HOME_WAIT_META)
 	if state != Types.RaiderState.LOOT:
 		unit.interact_progress = 0.0
 	if state != Types.RaiderState.CHASE:
@@ -231,14 +245,19 @@ static func _enter(unit: Unit, state: int) -> void:
 		unit.siege_target_id = 0
 
 
-static func _approach_and_melee_building(unit: Unit, world: World, building: Building) -> void:
+static func _approach_and_melee_building(unit: Unit, sim: Sim, building: Building) -> void:
+	var world := sim.world
 	var dist := _dist_to_building(world, unit, building)
 	if dist <= Constants.RAIDER_MELEE_RANGE:
 		_set_melee_target(unit, building.id)
 		unit.vel = Vector2.ZERO
 		return
-	if _cached_path_to(unit, world, building).is_empty():
-		_steer_toward(unit, _closest_on_aabb(unit.pos, world.footprint_aabb(building)))
+	_cached_path_to(unit, sim, building)
+	if unit.path_pending or unit.path.is_empty():
+		if not unit.path_pending:
+			_steer_toward(unit, _closest_on_aabb(unit.pos, world.footprint_aabb(building)))
+		else:
+			unit.vel = Vector2.ZERO
 		return
 	_steer_along_path(unit, world)
 
@@ -253,12 +272,26 @@ static func _ensure_smash_target(_unit: Unit, world: World) -> Building:
 	return _living_building(world, Types.Faction.PLAYER, Types.BuildingKind.HABITAT)
 
 
-static func _cached_path_to(unit: Unit, world: World, building: Building) -> Array[Vector2i]:
-	if not _needs_recalc(unit, world):
+static func _computed_empty(unit: Unit, sim: Sim, building: Building) -> bool:
+	_cached_path_to(unit, sim, building)
+	return not unit.path_pending and unit.path_computed and unit.path.is_empty()
+
+
+static func _cached_path_to(unit: Unit, sim: Sim, building: Building) -> Array[Vector2i]:
+	if not _needs_recalc(unit, sim.world):
 		return unit.path
-	unit.path = _path_to_building(world, unit, building)
+	_request_path_to(unit, sim, building)
 	unit.path_recalc_in = Constants.PATH_RECALC
 	return unit.path
+
+
+static func _request_path_to(unit: Unit, sim: Sim, building: Building) -> void:
+	if sim == null or sim.world == null or building == null:
+		return
+	var start := sim.world.world_to_tile(unit.pos)
+	var goals := _walkable_neighbors(sim.world, building)
+	if sim.path_queue != null:
+		sim.path_queue.request(unit, start, goals)
 
 
 static func _steer_along_path(unit: Unit, world: World) -> void:
@@ -308,14 +341,6 @@ static func _tick_home_check(unit: Unit) -> void:
 	var remaining := float(unit.get_meta(_HOME_CHECK_META, 0.0))
 	if remaining > 0.0:
 		unit.set_meta(_HOME_CHECK_META, maxf(0.0, remaining - Constants.SIM_DT))
-
-
-static func _path_to_building(world: World, unit: Unit, building: Building) -> Array[Vector2i]:
-	var none: Array[Vector2i] = []
-	if building == null:
-		return none
-	var start := world.world_to_tile(unit.pos)
-	return Pathfind.find_path_any(world, start, _walkable_neighbors(world, building))
 
 
 static func _walkable_neighbors(world: World, building: Building) -> Array[Vector2i]:

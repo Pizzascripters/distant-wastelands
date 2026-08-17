@@ -126,4 +126,6 @@ const MIN_ORE_DEPOSITS := 6
 const ROCK_PERCENT := 12
 const MAX_BUILDINGS := 64
 const PATH_RECALC := 0.5
+const PATH_STAGGER := 0.10
+const MAX_PATHS_PER_TICK := 1
 const HIT_FLASH := 0.1

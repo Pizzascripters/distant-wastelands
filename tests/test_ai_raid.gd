@@ -144,7 +144,7 @@ func _test_hauling_leaves_siege_for_home(fails: PackedStringArray) -> void:
 	raider.ai_state = Types.RaiderState.SIEGE
 	raider.inventory.scrap = 1
 	var hp0 := depot.hp if depot != null else 0
-	_tick(sim, 1)
+	_tick(sim, 2)
 	if not sim.world.units.has(raider.id):
 		fails.append("hauling raider was deleted instead of leaving SIEGE")
 		return

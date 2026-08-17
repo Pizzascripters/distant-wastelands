@@ -12,6 +12,7 @@ var outcome_reason: int = Types.OutcomeReason.NONE
 var world: World
 var player_id: int = 0
 var director: Director
+var path_queue: PathQueue = PathQueue.new()
 var life: Dictionary = {}
 var _interact_target_id: int = 0
 var _interact_withdraw: bool = false
@@ -30,6 +31,7 @@ func setup(p_seed: int) -> void:
 	_interact_target_id = 0
 	_interact_withdraw = false
 	director = Director.new()
+	path_queue = PathQueue.new()
 	life = {
 		Types.Faction.PLAYER: FactionLife.new(),
 		Types.Faction.ENEMY: FactionLife.new(),
@@ -64,6 +66,8 @@ func tick() -> void:
 	if director != null:
 		director.maybe_spawn(self)
 	_think_ai()
+	if path_queue != null:
+		path_queue.service(world)
 	_fire_turrets()
 
 	for unit in world.units.values():

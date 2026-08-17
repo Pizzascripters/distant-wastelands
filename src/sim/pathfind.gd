@@ -32,24 +32,17 @@ static func find_path_any(world: World, start: Vector2i, goals: Array[Vector2i])
 	var max_nodes := Constants.MAP_W * Constants.MAP_H
 	var g_score := {start_i: 0}
 	var came_from := {}
-	var in_open := {start_i: true}
-	var open: Array[int] = [start_i]
+	var closed := {}
+	var heap_f: Array[int] = []
+	var heap_n: Array[int] = []
+	_heap_push(heap_f, heap_n, _min_manhattan(start.x, start.y, goal_set), start_i)
 	var expanded := 0
 
-	while not open.is_empty() and expanded < max_nodes:
-		var best_idx := 0
-		var best_f := 0x7fffffff
-		for oi in open.size():
-			var ni: int = open[oi]
-			var ny: int = int(ni / map_w)
-			var nx: int = ni - ny * map_w
-			var f: int = int(g_score[ni]) + _min_manhattan(nx, ny, goal_set)
-			if f < best_f:
-				best_f = f
-				best_idx = oi
-		var current: int = open[best_idx]
-		open.remove_at(best_idx)
-		in_open.erase(current)
+	while not heap_n.is_empty() and expanded < max_nodes:
+		var current := _heap_pop(heap_f, heap_n)
+		if closed.has(current):
+			continue
+		closed[current] = true
 		expanded += 1
 
 		if goal_set.has(current):
@@ -64,14 +57,14 @@ static func find_path_any(world: World, start: Vector2i, goals: Array[Vector2i])
 			if not world.is_walkable(nx, ny):
 				continue
 			var ni: int = ny * map_w + nx
+			if closed.has(ni):
+				continue
 			var tentative: int = cg + 1
 			if g_score.has(ni) and tentative >= int(g_score[ni]):
 				continue
 			came_from[ni] = current
 			g_score[ni] = tentative
-			if not in_open.has(ni):
-				open.append(ni)
-				in_open[ni] = true
+			_heap_push(heap_f, heap_n, tentative + _min_manhattan(nx, ny, goal_set), ni)
 
 	return none
 
@@ -84,6 +77,52 @@ static func _min_manhattan(x: int, y: int, goal_set: Dictionary) -> int:
 		if d < best:
 			best = d
 	return best
+
+
+static func _heap_push(heap_f: Array[int], heap_n: Array[int], f: int, n: int) -> void:
+	heap_f.append(f)
+	heap_n.append(n)
+	var i := heap_f.size() - 1
+	while i > 0:
+		var p := int((i - 1) / 2)
+		if heap_f[p] <= heap_f[i]:
+			break
+		var tf: int = heap_f[p]
+		heap_f[p] = heap_f[i]
+		heap_f[i] = tf
+		var tn: int = heap_n[p]
+		heap_n[p] = heap_n[i]
+		heap_n[i] = tn
+		i = p
+
+
+static func _heap_pop(heap_f: Array[int], heap_n: Array[int]) -> int:
+	var n: int = heap_n[0]
+	var last := heap_n.size() - 1
+	heap_f[0] = heap_f[last]
+	heap_n[0] = heap_n[last]
+	heap_f.remove_at(last)
+	heap_n.remove_at(last)
+	var i := 0
+	var count := heap_n.size()
+	while true:
+		var l := i * 2 + 1
+		if l >= count:
+			break
+		var r := l + 1
+		var best := l
+		if r < count and heap_f[r] < heap_f[l]:
+			best = r
+		if heap_f[i] <= heap_f[best]:
+			break
+		var tf: int = heap_f[i]
+		heap_f[i] = heap_f[best]
+		heap_f[best] = tf
+		var tn: int = heap_n[i]
+		heap_n[i] = heap_n[best]
+		heap_n[best] = tn
+		i = best
+	return n
 
 
 static func _reconstruct(came_from: Dictionary, current: int, map_w: int) -> Array[Vector2i]:
