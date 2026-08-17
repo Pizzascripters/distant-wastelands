@@ -1,3 +1,4 @@
+class_name PauseMenu
 extends Control
 
 signal resume_pressed
@@ -5,6 +6,8 @@ signal quit_to_menu_pressed
 
 
 func _ready() -> void:
+	if theme == null:
+		theme = preload("res://assets/theme/default.tres")
 	$Center/VBox/Resume.pressed.connect(_on_resume)
 	$Center/VBox/QuitToMenu.pressed.connect(_on_quit_to_menu)
 

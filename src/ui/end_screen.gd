@@ -14,6 +14,8 @@ var _reason: Label
 
 
 func _ready() -> void:
+	if theme == null:
+		theme = preload("res://assets/theme/default.tres")
 	_bind_nodes()
 	_style_labels()
 	var play_again_btn := get_node_or_null("Center/VBox/PlayAgain") as Button
