@@ -10,6 +10,8 @@ func run() -> PackedStringArray:
 	_test_gather_channel_defaults(fails)
 	_test_gather_channel_while_mining(fails)
 	_test_player_o2_copied(fails)
+	_test_tiles_recopy_on_generation(fails)
+	_test_last_tick_usec_to_sim_ms(fails)
 	return fails
 
 
@@ -246,6 +248,56 @@ func _test_player_o2_copied(fails: PackedStringArray) -> void:
 		fails.append("snapshot player_o2 is %s, expected 17.5" % str(snap.player_o2))
 	if not is_equal_approx(snap.player_o2_max, Constants.PLAYER_O2_MAX):
 		fails.append("snapshot player_o2_max is %s" % str(snap.player_o2_max))
+
+
+func _test_tiles_recopy_on_generation(fails: PackedStringArray) -> void:
+	var sim := Sim.new()
+	sim.setup(Constants.DEFAULT_SEED)
+	if "occupancy_generation" in sim.world:
+		fails.append("tiles_generation is not occupancy; do not add occupancy_generation")
+	var first := sim.snapshot()
+	var gen := sim.world.tiles_generation
+	if first.tiles_generation != gen:
+		fails.append("snapshot tiles_generation is %d, expected %d" % [first.tiles_generation, gen])
+	var second := sim.snapshot()
+	if second.tiles_generation != gen or second.tiles != first.tiles:
+		fails.append("snapshot tiles changed without tiles_generation change")
+	var wall := Building.new()
+	wall.id = sim.world.alloc_id()
+	wall.kind = Types.BuildingKind.WALL
+	wall.faction = Types.Faction.PLAYER
+	wall.origin_tile = Vector2i(2, 2)
+	wall.hp = Constants.WALL_HP
+	sim.world.buildings[wall.id] = wall
+	sim.world.occupy(wall)
+	if sim.world.tiles_generation != gen:
+		fails.append("occupy must not bump tiles_generation")
+	sim.world.vacate(wall)
+	if sim.world.tiles_generation != gen:
+		fails.append("vacate must not bump tiles_generation")
+	var next_terrain := Types.TileTerrain.ROCK
+	if sim.world.get_terrain(0, 0) == Types.TileTerrain.ROCK:
+		next_terrain = Types.TileTerrain.EMPTY
+	sim.world.set_terrain(0, 0, next_terrain)
+	if sim.world.tiles_generation == gen:
+		fails.append("set_terrain should bump tiles_generation")
+	var third := sim.snapshot()
+	if third.tiles_generation != sim.world.tiles_generation:
+		fails.append("snapshot tiles_generation stale after terrain change")
+	if third.tiles[0] != sim.world.tiles[0]:
+		fails.append("snapshot tiles stale after tiles_generation change")
+
+
+func _test_last_tick_usec_to_sim_ms(fails: PackedStringArray) -> void:
+	var sim := Sim.new()
+	sim.setup(Constants.DEFAULT_SEED)
+	sim.tick()
+	if sim.last_tick_usec < 0:
+		fails.append("last_tick_usec is %d, expected >= 0" % sim.last_tick_usec)
+	var snap := sim.snapshot()
+	var expected := float(sim.last_tick_usec) * 0.001
+	if not is_equal_approx(snap.sim_ms, expected):
+		fails.append("sim_ms is %s, expected %s" % [str(snap.sim_ms), str(expected)])
 
 
 func _player_rec(snap: SimSnapshot) -> Dictionary:

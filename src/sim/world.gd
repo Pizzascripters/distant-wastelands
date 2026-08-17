@@ -3,6 +3,7 @@ extends RefCounted
 
 var seed: int = 0
 var tiles: PackedByteArray = PackedByteArray()
+var tiles_generation: int = 0
 var buildings: Dictionary = {}
 var occupancy: Array[int] = []
 var deposits: Dictionary = {}
@@ -35,8 +36,13 @@ func get_terrain(x: int, y: int) -> int:
 
 
 func set_terrain(x: int, y: int, terrain: int) -> void:
-	if in_bounds(x, y):
-		tiles[index_of(x, y)] = terrain
+	if not in_bounds(x, y):
+		return
+	var i := index_of(x, y)
+	if tiles[i] == terrain:
+		return
+	tiles[i] = terrain
+	tiles_generation += 1
 
 
 func is_walkable(x: int, y: int) -> bool:

@@ -3,6 +3,30 @@ extends RefCounted
 
 ## Damage, hit order, melee, and death helpers.
 
+static var _unit_buckets: Dictionary = {}
+static var _bucket_world: World = null
+static var _max_unit_radius: float = 0.0
+
+
+static func bucket_units(world: World) -> void:
+	_unit_buckets.clear()
+	_bucket_world = world
+	_max_unit_radius = 0.0
+	if world == null:
+		return
+	var tile := float(Constants.TILE)
+	for unit in world.units.values():
+		if unit == null or not unit.alive:
+			continue
+		var tx := int(floor(unit.pos.x / tile))
+		var ty := int(floor(unit.pos.y / tile))
+		var key := ty * Constants.MAP_W + tx
+		if not _unit_buckets.has(key):
+			_unit_buckets[key] = []
+		_unit_buckets[key].append(unit)
+		if unit.radius > _max_unit_radius:
+			_max_unit_radius = unit.radius
+
 
 static func apply_damage(target: Object, amount: int) -> void:
 	if target == null or amount <= 0:
@@ -77,14 +101,32 @@ static func process_building_death(world: World, building: Building) -> void:
 
 
 static func _lowest_id_opposing_unit(world: World, proj: Projectile) -> Unit:
+	if _bucket_world != world:
+		bucket_units(world)
+	var tile := float(Constants.TILE)
+	var tx := int(floor(proj.pos.x / tile))
+	var ty := int(floor(proj.pos.y / tile))
+	var reach := Constants.PROJ_RADIUS + _max_unit_radius
 	var best: Unit = null
-	for unit in world.units.values():
-		if not unit.alive or unit.faction == proj.faction:
-			continue
-		if not _circles_overlap(proj.pos, Constants.PROJ_RADIUS, unit.pos, unit.radius):
-			continue
-		if best == null or unit.id < best.id:
-			best = unit
+	# One-tile halo: PROJ_RADIUS + max unit radius is 13 < TILE 32.
+	for dy in range(-1, 2):
+		for dx in range(-1, 2):
+			var x: int = tx + dx
+			var y: int = ty + dy
+			if not world.in_bounds(x, y):
+				continue
+			if world.point_aabb_distance(proj.pos, world.tile_aabb(x, y)) > reach:
+				continue
+			var bucket: Variant = _unit_buckets.get(y * Constants.MAP_W + x)
+			if bucket == null:
+				continue
+			for unit in bucket:
+				if not unit.alive or unit.faction == proj.faction:
+					continue
+				if not _circles_overlap(proj.pos, Constants.PROJ_RADIUS, unit.pos, unit.radius):
+					continue
+				if best == null or unit.id < best.id:
+					best = unit
 	return best
 
 
