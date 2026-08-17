@@ -27,8 +27,24 @@ func go_to_menu() -> void:
 
 
 func go_to_game() -> void:
+	_start_game(Constants.DEFAULT_SEED)
+
+
+func play_again() -> void:
+	_start_game(_session_seed())
+
+
+func _session_seed() -> int:
+	if current_session is LocalSession:
+		var local := current_session as LocalSession
+		if local.sim != null and local.sim.world != null:
+			return local.sim.world.seed
+	return Constants.DEFAULT_SEED
+
+
+func _start_game(p_seed: int) -> void:
 	var session := LocalSession.new()
-	session.start(Constants.DEFAULT_SEED)
+	session.start(p_seed)
 	current_session = session
 	get_tree().change_scene_to_file("res://scenes/game.tscn")
 

@@ -2,6 +2,8 @@ extends Node2D
 
 const _THEME := preload("res://assets/theme/default.tres")
 const _HUD_SCENE := preload("res://scenes/ui/hud.tscn")
+const _PAUSE_SCENE := preload("res://scenes/ui/pause_menu.tscn")
+const _END_SCENE := preload("res://scenes/ui/end_screen.tscn")
 
 var _session: Session
 var _world_view: WorldView
@@ -18,9 +20,14 @@ var _gather_bar: GatherBar
 var _camera: CameraCtrl
 var _hud: Hud
 var _build_bar: BuildBar
+var _pause_menu: PauseMenu
+var _end_screen: EndScreen
+var _debug: DebugOverlay
 var _build_kind: int = -1
 var _player_world_pos: Vector2 = Vector2.ZERO
 var _last_aim: Vector2 = Vector2.RIGHT
+var _ended: bool = false
+var _ignore_gameplay_input: bool = false
 
 
 func _ready() -> void:
@@ -59,7 +66,14 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if _session == null:
 		return
-	_session.submit_command(_read_command())
+	_handle_meta_input()
+	if _ended or _is_paused() or _ignore_gameplay_input:
+		var idle := InputCommand.new()
+		idle.aim = _last_aim
+		_session.submit_command(idle)
+		_ignore_gameplay_input = false
+	else:
+		_session.submit_command(_read_command())
 	_session.tick(delta)
 	var snap := _session.get_snapshot()
 	_sync_views(snap)
@@ -68,6 +82,9 @@ func _process(delta: float) -> void:
 	_update_build_ghost()
 	if _hud != null:
 		_hud.apply_snapshot(snap)
+	_update_end_screen(snap)
+	if _debug != null and _debug.visible:
+		_debug.apply_snapshot(snap)
 	_camera.follow(_player_world_pos, delta)
 
 
@@ -85,6 +102,77 @@ func _mount_ui() -> void:
 	_build_bar.offset_right = 220.0
 	_build_bar.offset_bottom = -12.0
 	layer.add_child(_build_bar)
+	_pause_menu = _PAUSE_SCENE.instantiate() as PauseMenu
+	_pause_menu.theme = _THEME
+	_pause_menu.visible = false
+	_pause_menu.resume_pressed.connect(_on_resume)
+	_pause_menu.quit_to_menu_pressed.connect(_on_quit_to_menu)
+	layer.add_child(_pause_menu)
+	_end_screen = _END_SCENE.instantiate() as EndScreen
+	_end_screen.theme = _THEME
+	_end_screen.visible = false
+	_end_screen.play_again.connect(_on_play_again)
+	_end_screen.menu.connect(_on_quit_to_menu)
+	layer.add_child(_end_screen)
+	_debug = DebugOverlay.new()
+	layer.add_child(_debug)
+
+
+func _handle_meta_input() -> void:
+	if Input.is_action_just_pressed("debug_overlay"):
+		if _debug != null:
+			_debug.visible = not _debug.visible
+	if Input.is_action_just_pressed("pause"):
+		_toggle_pause()
+
+
+func _toggle_pause() -> void:
+	if _ended or _session == null:
+		return
+	if _is_paused():
+		_set_paused(false)
+	else:
+		_set_paused(true)
+
+
+func _set_paused(paused: bool) -> void:
+	if _pause_menu != null:
+		_pause_menu.visible = paused
+	_session.set_paused(paused)
+	if paused:
+		_set_build_kind(-1)
+
+
+func _is_paused() -> bool:
+	return _pause_menu != null and _pause_menu.visible
+
+
+func _update_end_screen(snap: SimSnapshot) -> void:
+	if snap.outcome == Types.Outcome.NONE or _end_screen == null:
+		return
+	if not _ended:
+		_ended = true
+		_set_paused(false)
+		_set_build_kind(-1)
+		_end_screen.set_outcome(snap.outcome, snap.outcome_reason)
+	_end_screen.visible = true
+
+
+func _on_resume() -> void:
+	if _ended:
+		return
+	_set_paused(false)
+	_ignore_gameplay_input = true
+
+
+func _on_play_again() -> void:
+	App.play_again()
+
+
+func _on_quit_to_menu() -> void:
+	if _session != null:
+		_session.set_paused(false)
+	App.go_to_menu()
 
 
 func _read_command() -> InputCommand:
@@ -142,7 +230,7 @@ func _cursor_tile() -> Vector2i:
 
 
 func _update_build_ghost() -> void:
-	if _ghost == null or _build_kind < 0:
+	if _ghost == null or _build_kind < 0 or _ended or _is_paused():
 		if _ghost != null:
 			_ghost.visible = false
 		return
