@@ -1,7 +1,7 @@
 class_name AiGuard
 extends RefCounted
 
-## Guard aggro and leash.
+## Guard aggro, leash, and fire intent.
 
 
 static func think(unit: Unit, sim: Sim) -> void:
@@ -17,11 +17,11 @@ static func think(unit: Unit, sim: Sim) -> void:
 	var player := sim.get_player()
 	if _living_player_within_aggro(player, home):
 		_chase(unit, player)
-		return
-	if unit.pos.distance_to(home) > Constants.GUARD_LEASH:
+	elif unit.pos.distance_to(home) > Constants.GUARD_LEASH:
 		_path_home(unit, sim, home)
-		return
-	_idle(unit)
+	else:
+		_idle(unit)
+	Combat.write_fire_intent(sim.world, unit, player)
 
 
 static func _living_player_within_aggro(player: Unit, home: Vector2) -> bool:

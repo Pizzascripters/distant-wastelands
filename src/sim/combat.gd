@@ -67,6 +67,140 @@ static func apply_melee(attacker: Unit, target: Object) -> bool:
 	return true
 
 
+static func range_distance(world: World, shooter: Unit, target: Object) -> float:
+	if shooter == null or target == null:
+		return INF
+	if target is Unit:
+		return shooter.pos.distance_to((target as Unit).pos)
+	if target is Building and world != null:
+		return world.point_aabb_distance(shooter.pos, world.footprint_aabb(target as Building))
+	return INF
+
+
+static func resolve_fire_target(world: World, unit: Unit) -> Object:
+	if world == null or unit == null or unit.fire_target_id <= 0:
+		return null
+	var other: Unit = world.units.get(unit.fire_target_id) as Unit
+	if other != null:
+		if other.alive and other.faction != unit.faction:
+			return other
+		return null
+	var building: Building = world.buildings.get(unit.fire_target_id) as Building
+	if building != null and building.hp > 0 and building.faction != unit.faction:
+		return building
+	return null
+
+
+static func aim_at(world: World, unit: Unit, target: Object) -> void:
+	if unit == null or target == null:
+		return
+	var dest := Vector2.ZERO
+	if target is Unit:
+		dest = (target as Unit).pos
+	elif target is Building and world != null:
+		dest = world.footprint_aabb(target as Building).get_center()
+	else:
+		return
+	var delta := dest - unit.pos
+	if delta.length_squared() <= 0.0001:
+		return
+	unit.aim = delta.normalized()
+
+
+static func write_fire_intent(world: World, unit: Unit, player: Unit) -> void:
+	if unit == null:
+		return
+	unit.fire_target_id = 0
+	unit.set_meta(AiRaider.MELEE_TARGET_META, 0)
+	if world == null or not unit.alive or unit.ai_state == Types.RaiderState.DEAD_DROP:
+		return
+	var tid := acquire_fire_target(world, unit, player)
+	unit.fire_target_id = tid
+	var target := resolve_fire_target(world, unit)
+	if target == null:
+		return
+	aim_at(world, unit, target)
+	if range_distance(world, unit, target) <= Constants.RAIDER_MELEE_RANGE:
+		unit.set_meta(AiRaider.MELEE_TARGET_META, tid)
+
+
+static func acquire_fire_target(world: World, unit: Unit, player: Unit) -> int:
+	if world == null or unit == null:
+		return 0
+	if player != null and player.alive:
+		if unit.pos.distance_to(player.pos) <= Constants.ENEMY_RIFLE_RANGE:
+			return player.id
+	var tasked := _tasked_building(world, unit)
+	if tasked != null and _player_building_allowed(unit, tasked):
+		if range_distance(world, unit, tasked) <= Constants.ENEMY_RIFLE_RANGE:
+			return tasked.id
+	var nearest := _nearest_player_building_in_range(world, unit)
+	if nearest != null:
+		return nearest.id
+	return 0
+
+
+static func _tasked_building(world: World, unit: Unit) -> Building:
+	match unit.ai_state:
+		Types.RaiderState.SIEGE, Types.RaiderState.ATTACK_HABITAT:
+			var siege: Building = world.buildings.get(unit.siege_target_id) as Building
+			if siege != null:
+				return siege
+			if unit.ai_state == Types.RaiderState.ATTACK_HABITAT:
+				return _living_player_kind(world, Types.BuildingKind.HABITAT)
+			return null
+		Types.RaiderState.LOOT, Types.RaiderState.PATH_TO_DEPOT:
+			return _living_player_kind(world, Types.BuildingKind.DEPOT)
+		Types.RaiderState.PATH_TO_HABITAT:
+			return _living_player_kind(world, Types.BuildingKind.HABITAT)
+		_:
+			return null
+
+
+static func _living_player_kind(world: World, kind: int) -> Building:
+	var best: Building = null
+	for raw in world.buildings.values():
+		var building := raw as Building
+		if building == null or building.hp <= 0:
+			continue
+		if building.faction != Types.Faction.PLAYER or building.kind != kind:
+			continue
+		if best == null or building.id < best.id:
+			best = building
+	return best
+
+
+static func _player_building_allowed(unit: Unit, building: Building) -> bool:
+	if building == null or building.hp <= 0:
+		return false
+	if building.faction != Types.Faction.PLAYER:
+		return false
+	if unit.kind == Types.UnitKind.RAIDER and AiRaider.is_hauling(unit):
+		if (
+			building.kind == Types.BuildingKind.DEPOT
+			or building.kind == Types.BuildingKind.HABITAT
+		):
+			return false
+	return true
+
+
+static func _nearest_player_building_in_range(world: World, unit: Unit) -> Building:
+	var best: Building = null
+	var best_d := Constants.ENEMY_RIFLE_RANGE
+	for raw in world.buildings.values():
+		var building := raw as Building
+		if not _player_building_allowed(unit, building):
+			continue
+		var dist := range_distance(world, unit, building)
+		if dist > Constants.ENEMY_RIFLE_RANGE:
+			continue
+		if best != null and (dist > best_d or (is_equal_approx(dist, best_d) and building.id >= best.id)):
+			continue
+		best = building
+		best_d = dist
+	return best
+
+
 static func process_deaths(world: World) -> void:
 	var dead_units: Array[Unit] = []
 	for unit in world.units.values():

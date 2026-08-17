@@ -77,7 +77,7 @@ func tick() -> void:
 	_think_ai()
 	if path_queue != null:
 		path_queue.service(world)
-	_fire_turrets()
+	_fire_ranged()
 
 	for unit in world.units.values():
 		if unit.alive:
@@ -388,6 +388,43 @@ func _update_stuck(unit: Unit) -> void:
 	unit.stuck_last_pos = unit.pos
 
 
+func _fire_ranged() -> void:
+	_fire_turrets()
+	_fire_enemy_rifles()
+
+
+func _fire_enemy_rifles() -> void:
+	var ids: Array = world.units.keys()
+	ids.sort()
+	for id in ids:
+		var unit: Unit = world.units.get(id)
+		if unit == null or not unit.alive:
+			continue
+		if unit.kind != Types.UnitKind.RAIDER and unit.kind != Types.UnitKind.GUARD:
+			continue
+		if unit.weapon_cooldown > 0.0:
+			continue
+		var target := Combat.resolve_fire_target(world, unit)
+		if target == null:
+			continue
+		var dist := Combat.range_distance(world, unit, target)
+		if dist <= Constants.RAIDER_MELEE_RANGE or dist > Constants.ENEMY_RIFLE_RANGE:
+			continue
+		Combat.aim_at(world, unit, target)
+		_spawn_projectile(
+			Types.Faction.ENEMY,
+			unit.pos,
+			unit.aim,
+			Constants.RAIDER_PROJ_DAMAGE,
+			Constants.PLAYER_PROJ_SPEED,
+			Constants.PLAYER_PROJ_LIFE
+		)
+		if unit.kind == Types.UnitKind.GUARD:
+			unit.weapon_cooldown = Constants.GUARD_FIRE_COOLDOWN
+		else:
+			unit.weapon_cooldown = Constants.RAIDER_FIRE_COOLDOWN
+
+
 func _fire_turrets() -> void:
 	var ids: Array = world.buildings.keys()
 	ids.sort()
@@ -481,6 +518,9 @@ func _resolve_melee() -> void:
 
 
 func _melee_intent_target(unit: Unit) -> Object:
+	var fire := Combat.resolve_fire_target(world, unit)
+	if fire != null and Combat.range_distance(world, unit, fire) <= Constants.RAIDER_MELEE_RANGE:
+		return fire
 	if not unit.has_meta(AiRaider.MELEE_TARGET_META):
 		return null
 	var tid := int(unit.get_meta(AiRaider.MELEE_TARGET_META))
