@@ -241,7 +241,7 @@ func _test_ballistics_range(fails: PackedStringArray) -> void:
 		fails.append("Ballistics should raise player turret range")
 	if Research.turret_range(sim, Types.Faction.ENEMY) != Constants.TURRET_RANGE:
 		fails.append("Ballistics must not upgrade the enemy turret")
-	var player_turret := _inject_turret(sim, Types.Faction.PLAYER, Vector2i(20, 20))
+	var player_turret := _inject_turret(sim, Types.Faction.PLAYER, Vector2i(20, 214))
 	var raider := Unit.new()
 	raider.id = sim.world.alloc_id()
 	raider.kind = Types.UnitKind.RAIDER

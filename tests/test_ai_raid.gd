@@ -1,5 +1,7 @@
 extends RefCounted
 
+const _AWAKE := Vector2i(22, 176)
+
 
 func run() -> PackedStringArray:
 	var fails := PackedStringArray()
@@ -68,7 +70,7 @@ func _test_next_wave_advances(fails: PackedStringArray) -> void:
 func _test_blocked_siege_damages_wall(fails: PackedStringArray) -> void:
 	var sim := _ready_sim()
 	_banish_player(sim)
-	var tile := Vector2i(20, 20)
+	var tile := _AWAKE
 	var walls := _box_with_walls(sim, tile)
 	if walls.is_empty():
 		fails.append("could not box raider with walls")
@@ -89,7 +91,7 @@ func _test_blocked_siege_damages_wall(fails: PackedStringArray) -> void:
 func _test_siege_commits_to_depot(fails: PackedStringArray) -> void:
 	var sim := _ready_sim()
 	_banish_player(sim)
-	var tile := Vector2i(20, 20)
+	var tile := _AWAKE
 	var walls := _box_with_walls(sim, tile)
 	var raider := _inject_raider(sim, sim.world.tile_center(tile.x, tile.y))
 	_tick(sim, 1)
@@ -118,7 +120,7 @@ func _test_siege_commits_to_depot(fails: PackedStringArray) -> void:
 
 func _test_chase_does_not_leave_siege(fails: PackedStringArray) -> void:
 	var sim := _ready_sim()
-	var tile := Vector2i(20, 20)
+	var tile := _AWAKE
 	var walls := _box_with_walls(sim, tile)
 	if walls.is_empty():
 		fails.append("chase test could not box raider")
@@ -134,7 +136,7 @@ func _test_chase_does_not_leave_siege(fails: PackedStringArray) -> void:
 
 func _test_hauling_definition(fails: PackedStringArray) -> void:
 	var sim := _ready_sim()
-	var raider := _inject_raider(sim, sim.world.tile_center(20, 20))
+	var raider := _inject_raider(sim, sim.world.tile_center(_AWAKE.x, _AWAKE.y))
 	if AiRaider.is_hauling(raider):
 		fails.append("empty carry should not be hauling")
 	raider.inventory.scrap = 1
@@ -169,7 +171,7 @@ func _test_hauling_leaves_siege_for_home(fails: PackedStringArray) -> void:
 func _test_missing_home_dead_drops(fails: PackedStringArray) -> void:
 	var sim := _ready_sim()
 	_banish_player(sim)
-	var pos := sim.world.tile_center(30, 30)
+	var pos := sim.world.tile_center(_AWAKE.x + 10, _AWAKE.y)
 	var raider := _inject_raider(sim, pos)
 	raider.ai_state = Types.RaiderState.PATH_HOME
 	raider.inventory.scrap = 2
@@ -207,9 +209,9 @@ func _test_skipped_spawn_advances_clock(fails: PackedStringArray) -> void:
 func _test_siege_rifle_damages_from_range(fails: PackedStringArray) -> void:
 	var sim := _ready_sim()
 	_banish_player(sim)
-	var wall_tile := Vector2i(20, 30)
-	for x in range(20, 30):
-		sim.world.set_terrain(x, 30, Types.TileTerrain.EMPTY)
+	var wall_tile := Vector2i(_AWAKE.x, _AWAKE.y + 2)
+	for x in range(_AWAKE.x, _AWAKE.x + 10):
+		sim.world.set_terrain(x, wall_tile.y, Types.TileTerrain.EMPTY)
 	var wall := _place_wall(sim, wall_tile)
 	var aabb := sim.world.footprint_aabb(wall)
 	var raider := _inject_raider(sim, Vector2(aabb.end.x + 200.0, aabb.get_center().y))
@@ -229,7 +231,7 @@ func _test_siege_rifle_damages_from_range(fails: PackedStringArray) -> void:
 
 func _test_hauling_includes_food(fails: PackedStringArray) -> void:
 	var sim := _ready_sim()
-	var raider := _inject_raider(sim, sim.world.tile_center(20, 20))
+	var raider := _inject_raider(sim, sim.world.tile_center(_AWAKE.x, _AWAKE.y))
 	raider.inventory.scrap = 0
 	raider.inventory.ice = 0
 	raider.inventory.ore = 0
@@ -242,9 +244,9 @@ func _test_hauling_includes_food(fails: PackedStringArray) -> void:
 func _test_hauling_smashes_farm(fails: PackedStringArray) -> void:
 	var sim := _ready_sim()
 	_banish_player(sim)
-	var tile := Vector2i(20, 20)
+	var tile := _AWAKE
 	sim.world.set_terrain(tile.x, tile.y, Types.TileTerrain.EMPTY)
-	var farm := _place_farm(sim, Vector2i(21, 20))
+	var farm := _place_farm(sim, Vector2i(tile.x + 1, tile.y))
 	if farm == null:
 		fails.append("could not place a farm for smash test")
 		return
@@ -266,7 +268,7 @@ func _test_hauling_smashes_farm(fails: PackedStringArray) -> void:
 func _test_boxed_in_by_workshop_while_hauling(fails: PackedStringArray) -> void:
 	var sim := _ready_sim()
 	_banish_player(sim)
-	var tile := Vector2i(20, 20)
+	var tile := _AWAKE
 	var shops := _box_with_workshops(sim, tile)
 	if shops.is_empty():
 		fails.append("could not box raider with workshops")

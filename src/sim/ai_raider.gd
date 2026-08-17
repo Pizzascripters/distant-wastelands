@@ -296,6 +296,8 @@ static func _cached_path_to(unit: Unit, sim: Sim, building: Building) -> Array[V
 static func _request_path_to(unit: Unit, sim: Sim, building: Building) -> void:
 	if sim == null or sim.world == null or building == null:
 		return
+	if sim.world.is_unit_asleep(unit):
+		return
 	var start := sim.world.world_to_tile(unit.pos)
 	var goals := _walkable_neighbors(sim.world, building)
 	if sim.path_queue != null:
@@ -454,10 +456,14 @@ static func _drop_loot(world: World, pos: Vector2, leftover: Inventory) -> void:
 	if leftover.food > 0:
 		pile.inventory.add(Types.ResourceKind.FOOD, leftover.food)
 	world.loot[pile.id] = pile
+	if world.spatial != null:
+		world.spatial.insert_loot(pile)
 
 
 static func _delete_raider(world: World, unit: Unit) -> void:
 	unit.alive = false
+	if world.spatial != null:
+		world.spatial.remove_unit(unit)
 	world.units.erase(unit.id)
 
 

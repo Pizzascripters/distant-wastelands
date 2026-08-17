@@ -35,6 +35,7 @@ static func generate(p_seed: int) -> World:
 	assert(connected, "mapgen connectivity failed seed=%d" % p_seed)
 
 	print("seed=%d" % p_seed)
+	world.rebuild_spatial()
 	return world
 
 

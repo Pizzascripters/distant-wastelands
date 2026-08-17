@@ -29,16 +29,22 @@ static func find_path_any(world: World, start: Vector2i, goals: Array[Vector2i])
 		var same: Array[Vector2i] = [start]
 		return same
 
-	var max_nodes := Constants.MAP_W * Constants.MAP_H
+	var max_nodes := Constants.PATH_MAX_EXPAND
 	var g_score := {start_i: 0}
 	var came_from := {}
 	var closed := {}
 	var heap_f: Array[int] = []
 	var heap_n: Array[int] = []
-	_heap_push(heap_f, heap_n, _min_manhattan(start.x, start.y, goal_set), start_i)
+	var start_h := _min_manhattan(start.x, start.y, goal_set)
+	_heap_push(heap_f, heap_n, start_h, start_i)
 	var expanded := 0
+	var best_node := start_i
+	var best_f := start_h
+	var best_g := 0
 
-	while not heap_n.is_empty() and expanded < max_nodes:
+	while not heap_n.is_empty():
+		if expanded >= max_nodes:
+			return _reconstruct(came_from, best_node, map_w)
 		var current := _heap_pop(heap_f, heap_n)
 		if closed.has(current):
 			continue
@@ -51,6 +57,11 @@ static func find_path_any(world: World, start: Vector2i, goals: Array[Vector2i])
 		var cy: int = int(current / map_w)
 		var cx: int = current - cy * map_w
 		var cg: int = int(g_score[current])
+		var cf: int = cg + _min_manhattan(cx, cy, goal_set)
+		if cf < best_f or (cf == best_f and cg > best_g):
+			best_f = cf
+			best_g = cg
+			best_node = current
 		for d in _DIRS:
 			var nx: int = cx + d.x
 			var ny: int = cy + d.y

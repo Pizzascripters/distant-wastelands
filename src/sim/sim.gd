@@ -17,6 +17,8 @@ var techs_done: int = 0
 var medbay_heal_acc: float = 0.0
 var oxygen_failed: bool = false
 var hunger_starving: bool = false
+var active_unit_count: int = 0
+var sleeping_unit_count: int = 0
 var _interact_target_id: int = 0
 var _interact_withdraw: bool = false
 
@@ -52,6 +54,8 @@ func setup(p_seed: int) -> void:
 			player_id = unit.id
 			unit.o2 = Constants.PLAYER_O2_MAX
 			break
+	_refresh_active_window()
+	_recount_sleep()
 
 
 func enqueue(cmd: InputCommand) -> void:
@@ -67,6 +71,7 @@ func tick() -> void:
 	# Tick order is the design contract (Sim.tick steps 1–13).
 	tick_index += 1
 	time = float(tick_index) * Constants.SIM_DT
+	_refresh_active_window()
 
 	_decrement_cooldowns()
 	Rules.tick_life_support(self)
@@ -87,7 +92,7 @@ func tick() -> void:
 	_fire_ranged()
 
 	for unit in world.units.values():
-		if unit.alive:
+		if unit.alive and not world.is_unit_asleep(unit):
 			_integrate_unit(unit)
 			_update_stuck(unit)
 	_tick_player_oxygen()
@@ -104,6 +109,8 @@ func tick() -> void:
 	if result.x != Types.Outcome.NONE:
 		outcome = result.x
 		outcome_reason = result.y
+	_refresh_active_window()
+	_recount_sleep()
 	last_tick_usec = Time.get_ticks_usec() - started
 
 
@@ -146,6 +153,8 @@ func snapshot() -> SimSnapshot:
 	snap.hunger_starving = hunger_starving
 	if path_queue != null:
 		snap.completed_this_tick = path_queue.completed_this_tick
+	snap.active_unit_count = active_unit_count
+	snap.sleeping_unit_count = sleeping_unit_count
 	return snap
 
 
@@ -303,6 +312,7 @@ func _apply_player_command(cmd: InputCommand) -> void:
 
 
 func _integrate_unit(unit: Unit) -> void:
+	var old_tile := world.world_to_tile(unit.pos)
 	var delta := unit.vel * Constants.SIM_DT
 	var pos := unit.pos
 	pos.x += delta.x
@@ -314,6 +324,9 @@ func _integrate_unit(unit: Unit) -> void:
 	pos.x = clampf(pos.x, r, limit - r)
 	pos.y = clampf(pos.y, r, limit - r)
 	unit.pos = pos
+	var new_tile := world.world_to_tile(unit.pos)
+	if old_tile != new_tile:
+		world.move_unit(unit, old_tile, new_tile)
 
 
 func _resolve_circle_tiles(unit: Unit, pos: Vector2, radius: float) -> Vector2:
@@ -359,13 +372,19 @@ func _push_circle_out_of_aabb(center: Vector2, radius: float, aabb: Rect2) -> Ve
 
 func _decrement_cooldowns() -> void:
 	for unit in world.units.values():
-		unit.weapon_cooldown = maxf(0.0, unit.weapon_cooldown - Constants.SIM_DT)
-		unit.path_recalc_in = maxf(0.0, unit.path_recalc_in - Constants.SIM_DT)
 		if not unit.alive and unit.kind == Types.UnitKind.PLAYER:
 			unit.respawn_timer = maxf(0.0, unit.respawn_timer - Constants.SIM_DT)
+		if world.is_unit_asleep(unit):
+			continue
+		unit.weapon_cooldown = maxf(0.0, unit.weapon_cooldown - Constants.SIM_DT)
+		unit.path_recalc_in = maxf(0.0, unit.path_recalc_in - Constants.SIM_DT)
 	for building in world.buildings.values():
+		if world.is_building_asleep(building):
+			continue
 		building.fire_cooldown = maxf(0.0, building.fire_cooldown - Constants.SIM_DT)
 	for proj in world.projectiles.values():
+		if not world.is_tile_active(world.world_to_tile(proj.pos)):
+			continue
 		proj.life = maxf(0.0, proj.life - Constants.SIM_DT)
 	if director != null:
 		director.banner_timer = maxf(0.0, director.banner_timer - Constants.SIM_DT)
@@ -376,7 +395,7 @@ func _think_ai() -> void:
 	ids.sort()
 	for id in ids:
 		var unit: Unit = world.units.get(id)
-		if unit == null or not unit.alive:
+		if unit == null or not unit.alive or world.is_unit_asleep(unit):
 			continue
 		match unit.kind:
 			Types.UnitKind.RAIDER:
@@ -397,6 +416,8 @@ func _update_stuck(unit: Unit) -> void:
 
 
 func _fire_ranged() -> void:
+	if world.spatial != null:
+		world.spatial.rebuild_units(world)
 	_fire_turrets()
 	_fire_enemy_rifles()
 
@@ -406,7 +427,7 @@ func _fire_enemy_rifles() -> void:
 	ids.sort()
 	for id in ids:
 		var unit: Unit = world.units.get(id)
-		if unit == null or not unit.alive:
+		if unit == null or not unit.alive or world.is_unit_asleep(unit):
 			continue
 		if unit.kind != Types.UnitKind.RAIDER and unit.kind != Types.UnitKind.GUARD:
 			continue
@@ -441,7 +462,7 @@ func _fire_turrets() -> void:
 		var building: Building = world.buildings.get(id)
 		if building == null or building.kind != Types.BuildingKind.TURRET:
 			continue
-		if building.hp <= 0:
+		if building.hp <= 0 or world.is_building_asleep(building):
 			continue
 		var center := world.footprint_aabb(building).get_center()
 		var max_range := Research.turret_range(self, building.faction)
@@ -468,8 +489,13 @@ func _nearest_opposing_unit(origin: Vector2, faction: int, max_range: float) -> 
 	var best: Unit = null
 	var best_dist := max_range
 	var best_id := 0x7fffffff
-	for unit in world.units.values():
-		if not unit.alive or unit.faction == faction:
+	if world.spatial == null:
+		return null
+	var tile := world.world_to_tile(origin)
+	var cheb := int(ceili(max_range / float(Constants.TILE)))
+	for raw in world.spatial.units_near_tile(tile, cheb):
+		var unit := raw as Unit
+		if unit == null or not unit.alive or unit.faction == faction:
 			continue
 		var dist := origin.distance_to(unit.pos)
 		if dist > max_range:
@@ -506,6 +532,8 @@ func _spawn_projectile(
 	if shooter != null:
 		proj.ignore_gate_id = Combat.overlapping_friendly_gate_id(world, shooter)
 	world.projectiles[proj.id] = proj
+	if world.spatial != null:
+		world.spatial.insert_projectile(proj)
 
 
 func _integrate_projectiles() -> void:
@@ -517,9 +545,15 @@ func _integrate_projectiles() -> void:
 		var proj: Projectile = world.projectiles.get(id)
 		if proj == null:
 			continue
+		if not world.is_tile_active(world.world_to_tile(proj.pos)):
+			remove.append(int(id))
+			continue
 		if Combat.integrate_projectile(world, proj) or proj.life <= 0.0:
 			remove.append(int(id))
 	for id in remove:
+		var gone: Projectile = world.projectiles.get(id)
+		if gone != null and world.spatial != null:
+			world.spatial.remove_projectile(gone)
 		world.projectiles.erase(id)
 
 
@@ -528,7 +562,7 @@ func _resolve_melee() -> void:
 	ids.sort()
 	for id in ids:
 		var unit: Unit = world.units.get(id)
-		if unit == null or not unit.alive or unit.weapon_cooldown > 0.0:
+		if unit == null or not unit.alive or world.is_unit_asleep(unit) or unit.weapon_cooldown > 0.0:
 			continue
 		var target := _melee_intent_target(unit)
 		if target != null:
@@ -570,6 +604,8 @@ func _drop_unit_carry(unit: Unit) -> void:
 	pile.pos = unit.pos
 	_copy_stock(inv, pile.inventory)
 	world.loot[pile.id] = pile
+	if world.spatial != null:
+		world.spatial.insert_loot(pile)
 	_clear_stock(inv)
 
 
@@ -578,7 +614,11 @@ func _maybe_respawn_player() -> void:
 	if player == null or player.alive or player.respawn_timer > 0.0:
 		return
 	var tile := _respawn_tile()
+	var old_tile := world.world_to_tile(player.pos)
 	player.pos = world.tile_center(tile.x, tile.y)
+	world.move_unit(player, old_tile, tile)
+	if world.spatial != null:
+		world.spatial.insert_unit(player)
 	player.hp = player.hp_max
 	player.o2 = Constants.PLAYER_O2_MAX
 	player.food_debt_timer = 0.0
@@ -708,6 +748,26 @@ func _tick_hunger() -> void:
 			hunger_starving = true
 	if hunger_starving and tick_index % Constants.PLAYER_HUNGER_PULSE_TICKS == 0:
 		Combat.apply_damage(player, Constants.PLAYER_HUNGER_HP_PER_PULSE)
+
+
+func _refresh_active_window() -> void:
+	if world == null:
+		return
+	world.refresh_active_window(get_player())
+
+
+func _recount_sleep() -> void:
+	active_unit_count = 0
+	sleeping_unit_count = 0
+	if world == null:
+		return
+	for unit in world.units.values():
+		if unit == null or not unit.alive:
+			continue
+		if world.is_unit_asleep(unit):
+			sleeping_unit_count += 1
+		else:
+			active_unit_count += 1
 
 
 func _player_habitat() -> Building:
