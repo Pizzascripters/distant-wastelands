@@ -7,18 +7,29 @@ const _DIRS: Array[Vector2i] = [
 
 
 static func find_path(world: World, start: Vector2i, goal: Vector2i) -> Array[Vector2i]:
+	var goals: Array[Vector2i] = [goal]
+	return find_path_any(world, start, goals)
+
+
+static func find_path_any(world: World, start: Vector2i, goals: Array[Vector2i]) -> Array[Vector2i]:
 	var none: Array[Vector2i] = []
-	if not world.is_walkable(start.x, start.y) or not world.is_walkable(goal.x, goal.y):
+	if goals.is_empty() or not world.is_walkable(start.x, start.y):
 		return none
-	if start == goal:
+	var map_w := Constants.MAP_W
+	var goal_set := {}
+	for goal in goals:
+		if not world.is_walkable(goal.x, goal.y):
+			continue
+		var gi := goal.y * map_w + goal.x
+		goal_set[gi] = goal
+	if goal_set.is_empty():
+		return none
+	var start_i := start.y * map_w + start.x
+	if goal_set.has(start_i):
 		var same: Array[Vector2i] = [start]
 		return same
 
-	var map_w := Constants.MAP_W
 	var max_nodes := Constants.MAP_W * Constants.MAP_H
-	var start_i := start.y * map_w + start.x
-	var goal_i := goal.y * map_w + goal.x
-
 	var g_score := {start_i: 0}
 	var came_from := {}
 	var in_open := {start_i: true}
@@ -32,7 +43,7 @@ static func find_path(world: World, start: Vector2i, goal: Vector2i) -> Array[Ve
 			var ni: int = open[oi]
 			var ny: int = int(ni / map_w)
 			var nx: int = ni - ny * map_w
-			var f: int = int(g_score[ni]) + absi(nx - goal.x) + absi(ny - goal.y)
+			var f: int = int(g_score[ni]) + _min_manhattan(nx, ny, goal_set)
 			if f < best_f:
 				best_f = f
 				best_idx = oi
@@ -41,7 +52,7 @@ static func find_path(world: World, start: Vector2i, goal: Vector2i) -> Array[Ve
 		in_open.erase(current)
 		expanded += 1
 
-		if current == goal_i:
+		if goal_set.has(current):
 			return _reconstruct(came_from, current, map_w)
 
 		var cy: int = int(current / map_w)
@@ -63,6 +74,16 @@ static func find_path(world: World, start: Vector2i, goal: Vector2i) -> Array[Ve
 				in_open[ni] = true
 
 	return none
+
+
+static func _min_manhattan(x: int, y: int, goal_set: Dictionary) -> int:
+	var best := 0x7fffffff
+	for gi in goal_set.keys():
+		var goal: Vector2i = goal_set[gi]
+		var d: int = absi(x - goal.x) + absi(y - goal.y)
+		if d < best:
+			best = d
+	return best
 
 
 static func _reconstruct(came_from: Dictionary, current: int, map_w: int) -> Array[Vector2i]:

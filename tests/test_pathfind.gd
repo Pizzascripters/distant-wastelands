@@ -5,6 +5,8 @@ func run() -> PackedStringArray:
 	_test_empty_map(fails)
 	_test_boxed_in(fails)
 	_test_no_diagonal_cut(fails)
+	_test_any_picks_nearer_goal(fails)
+	_test_any_empty_when_all_boxed(fails)
 	return fails
 
 
@@ -44,6 +46,35 @@ func _test_no_diagonal_cut(fails: PackedStringArray) -> void:
 	var path := Pathfind.find_path(world, Vector2i(1, 1), Vector2i(2, 2))
 	if not path.is_empty():
 		fails.append("A* cut a diagonal through two corner rocks")
+
+
+func _test_any_picks_nearer_goal(fails: PackedStringArray) -> void:
+	var world := World.new()
+	var start := Vector2i(0, 0)
+	var near := Vector2i(2, 0)
+	var far := Vector2i(10, 0)
+	var goals: Array[Vector2i] = [far, near]
+	var path := Pathfind.find_path_any(world, start, goals)
+	if path.is_empty():
+		fails.append("find_path_any found no path to either goal")
+		return
+	if path[path.size() - 1] != near:
+		fails.append("find_path_any ended at %s, expected nearer goal %s" % [str(path[path.size() - 1]), str(near)])
+	if path.size() != 3:
+		fails.append("find_path_any nearer path length is %d, expected 3" % path.size())
+
+
+func _test_any_empty_when_all_boxed(fails: PackedStringArray) -> void:
+	var world := World.new()
+	for x in range(4, 7):
+		world.set_terrain(x, 4, Types.TileTerrain.ROCK)
+		world.set_terrain(x, 6, Types.TileTerrain.ROCK)
+	world.set_terrain(4, 5, Types.TileTerrain.ROCK)
+	world.set_terrain(6, 5, Types.TileTerrain.ROCK)
+	var goals: Array[Vector2i] = [Vector2i(10, 10), Vector2i(11, 11)]
+	var path := Pathfind.find_path_any(world, Vector2i(5, 5), goals)
+	if not path.is_empty():
+		fails.append("find_path_any should return empty when start is boxed in")
 
 
 func _has_diagonal_step(path: Array[Vector2i]) -> bool:
