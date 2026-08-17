@@ -190,6 +190,7 @@ The Godot project root **is** the repository root. Application name in `project.
     test_pathfind.gd
     test_research.gd
     test_oxygen.gd
+    test_hud.gd
     test_workshop.gd
     test_medbay.gd
     test_perf.gd
@@ -936,7 +937,12 @@ The session hitches when the first wave (and later waves) spawn. This is a v0.1 
 - Raid banner stays top-center (`"Raid incoming"` while `banner_timer > 0`).
 - **Do not** show Habitat HP or Depot HP on the HUD. Remove `HabitatHp` and `DepotHp` from `hud.tscn`.
 - Personal **O2 bar** (always visible) with the color/pulse rules above.
-- Compact **player HP bar** (needed for Medbay and O2 damage). Not a building HP.
+- Compact **player HP bar**, always visible, in the same HUD panel as O2 (the row under O2). Same chrome as O2: label `HP`, dark track `Color(0,0,0,0.65)`, fill width = `hp / hp_max` clamped to `[0, 1]`, numeric `hp / hp_max` to the right in the 16 px font.
+  - Fill `#E07A5F` when `hp * 2 > hp_max`.
+  - Fill `#E2C044` when `hp > 10` and `hp * 2 <= hp_max`.
+  - Fill `#E24A3B` when `0 < hp <= 10`.
+  - When `hp <= 0` or the player unit is dead, the bar is empty and the number is `0 / hp_max`.
+  - Read `hp` / `hp_max` / `alive` from the snapshot player unit (`units[].kind == PLAYER`). Do not add a second HP field on the snapshot. This is personal combat/O2/Medbay state, not a building HP. Habitat and Depot HP stay off the HUD.
 
 **Build bar (`src/ui/build_bar.gd`)**
 
@@ -1099,8 +1105,8 @@ The constraint is **parseability at a glance**. New icons and buildings must mee
 | Projectile (enemy / turret) | Faction-colored 4 px circle | `projectile_enemy.png` / player sprite for player turrets |
 | Build ghost | 40% opacity, green `#3DDC97` or red `#C23B22`, footprint-sized | — |
 | Damage flash | Entity fill `#F2EDE6` for `HIT_FLASH` after HP decreases | — |
-| HUD | Dark panel `Color(0,0,0,0.65)`, text `#F2EDE6`, Godot default font 16 px; **icons** for resources and buildings; O2 + player HP bars; no Habitat/Depot HP |
-| Low ice / low O2 | Ice count and O2 bar turn `#E24A3B` |
+| HUD | Dark panel `Color(0,0,0,0.65)`, text `#F2EDE6`, Godot default font 16 px; **icons** for resources and buildings; O2 + player HP bars (HP under O2); no Habitat/Depot HP |
+| Low ice / low O2 / low HP | Ice count and O2 bar turn `#E24A3B`; player HP bar uses `#E07A5F` / `#E2C044` / `#E24A3B` by remaining HP |
 | Raid banner | Top-center text while `banner_timer > 0` |
 | Gather channel | Short bar above the deposit being gathered; dark track `Color(0,0,0,0.65)`, fill `#F2EDE6` |
 
@@ -1245,7 +1251,7 @@ static func try_place(world: World, sim: Sim, kind: int, tile: Vector2i) -> bool
 `SimSnapshot` is a `RefCounted` with copied primitive fields the view needs: tick, time, `outcome`, `outcome_reason`, tiles (or a handle + `tiles_generation`), arrays of unit/building/projectile/deposit/loot records (id, kind, faction, pos, hp, hp_max, **aim**, inventory with four resources + four caps, timers relevant to HUD), director `next_wave_at`, `wave_index`, `banner_timer`, player `respawn_timer`, each faction’s `zero_ice_timer` and whether that faction currently has a living depot with `ice == 0`, gather-channel fields `gather_deposit_id` and `gather_progress` (0 / 0.0 when the player is not gathering a deposit), plus:
 
 - `player_o2`, `player_o2_max`
-- `player_hp`, `player_hp_max` (or read from the player unit record)
+- Player HP is **not** a top-level snapshot field. HUD reads `hp` / `hp_max` / `alive` from the player unit record (`units[].kind == PLAYER`).
 - `research_selected`, `research_progress`, `research_paid`, `techs_done`
 - `sim_ms` (from `last_tick_usec`)
 - Building records include `ice_tank` / `ice_tank_cap` for Greenhouses (0 otherwise)
@@ -1630,6 +1636,7 @@ Required cases (baseline cases stay; new cases are marked ★):
 | `test_ai_ranged.gd` ★ | a raider with a living player in `ENEMY_RIFLE_RANGE` and `weapon_cooldown = 0` spawns an enemy projectile on the **first** tick (still in `PATH_TO_DEPOT`, player outside `RAIDER_CHASE_RADIUS`); a raider/guard with **no** player in range and a player building in range fires at that building; they do **not** need to enter `CHASE` or melee first; a guard idle at home fires at a player who is inside rifle range but outside `GUARD_AGGRO`; a 2×2 Habitat whose AABB is inside 320 px and whose center is outside 320 px **is** in range (point-to-AABB) ★; friendly-fire-off holds |
 | `test_research.gd` ★ | Lab interact advances `research_progress` only while standing still; walking away pauses (does not reset); payment deducts from the depot on the first progress tick and not before; cannot select Ballistics before Metallurgy; completion sets the bitmask and unlocks the building / recipe / turret range; switching discards unpaid/paid progress with no refund |
 | `test_oxygen.gd` ★ | `o2` starts at `PLAYER_O2_MAX`; adjacent to Habitat refills; adjacent to Depot refills; adjacent to an unfueled Greenhouse does not; adjacent to a fueled Greenhouse does; at 0, HP drops 1 when `tick_index % PLAYER_O2_PULSE_TICKS == 0`; a lethal pulse while adjacent to a Medbay is **not** healed — the player dies that tick ★; death drops carry and respawns with full O2 |
+| `test_hud.gd` ★ | existing icon / no-building-HP cases stay; add `apply_snapshot` shows player `hp / hp_max`; fill is empty and the number is `0 / hp_max` when the player is dead or `hp <= 0` |
 | `test_workshop.gd` ★ | craft does not run before Metallurgy; 1.5 s channel with 3 scrap + 2 ore in carry produces 1 part; walking away resets; missing inputs reset; no Parts space does not consume; **deposit leftover ore that was not spent on Metallurgy, withdraw it, then craft ★** (do **not** test “withdraw the 6 Ore tech payment”) |
 | `test_medbay.gd` ★ | 10 ticks adjacent to one Medbay → +1 HP; two Medbays still +1 per `MEDBAY_HEAL_PERIOD`; walking away resets `medbay_heal_acc`; `hp <= 0` skips heal |
 | `test_perf.gd` ★ | `WAVE_CAP` simultaneous path requests complete at most `MAX_PATHS_PER_TICK` per tick; a pending path is not treated as SIEGE-empty. Does **not** assert wall-clock ms. |
@@ -1643,7 +1650,7 @@ Tests construct `Sim` / `Inventory` / `World` directly. They must not create a `
 Play on default seed `1`, default window 1280×720.
 
 1. Main menu shows New Game and Quit. Quit closes the process.
-2. New Game spawns the player in the SW camp; Habitat and Depot are visible with teal stripes. HUD shows **icons** for carry and depot (scrap, ice, ore, parts), an O2 bar at full, and **no** Habitat HP / Depot HP numbers.
+2. New Game spawns the player in the SW camp; Habitat and Depot are visible with teal stripes. HUD shows **icons** for carry and depot (scrap, ice, ore, parts), an O2 bar at full, a player HP bar at `50 / 50`, and **no** Habitat HP / Depot HP numbers.
 3. WASD moves; mouse-aim notch follows the cursor; wheel zooms and clamps.
 4. Holding E on a scrap, ice, or ore pile **while standing still** increments carry by 1/s; a short bar fills above the pile during the channel and hides when walking or the pile is gone; walking cancels the channel; the pile empties and disappears.
 5. Holding E on the player depot (stand next to it) moves carry into the HUD depot counts in batches of 5 after 0.2 s, all four kinds. **Shift+E** (or the depot panel Withdraw toggle + E) pulls leftover dumped stock back out. After dumping extra ore you can withdraw it and craft. Metallurgy’s 6 Ore payment is consumed and cannot be withdrawn.
@@ -1656,7 +1663,7 @@ Play on default seed `1`, default window 1280×720.
 12. 3 places a Workshop (10 scrap). 4 places a Lab (8 scrap). Standing at the Lab and selecting Hydroponics spends 8 ice from the depot and fills a progress bar only while you stand there; walking pauses it.
 13. After Metallurgy, the Workshop consumes 3 scrap + 2 ore from **carry** over 1.5 s and produces 1 part. Walking away cancels the craft. After Hydroponics, a Greenhouse accepts ice into its tank and refills O2 while fueled. After Field Medicine, a Medbay heals 2 HP/s while adjacent.
 14. A Gate (after Metallurgy + Parts) lets the player walk through and blocks raiders and projectiles.
-15. Walking away from the Habitat **and** Depot drops the O2 bar. Standing next to the Habitat **or** the Depot (including the corridor-side depot tile) snaps it full. Letting it hit 0 away from camp damages HP. A mid-map fueled Greenhouse also snaps it full. Gathering off-pad drains; coming home to dump before a wave refills. Home defense at the depot is not a suffocation check.
+15. Walking away from the Habitat **and** Depot drops the O2 bar. Standing next to the Habitat **or** the Depot (including the corridor-side depot tile) snaps it full. Letting it hit 0 away from camp damages HP and the HUD HP bar ticks down. A mid-map fueled Greenhouse also snaps it full. Gathering off-pad drains; coming home to dump before a wave refills. Home defense at the depot is not a suffocation check.
 16. Player can walk to the NE camp (O2 matters), see red-stripe buildings, take fire from the guard at rifle range, steal from the **living** enemy depot, walk home, and deposit.
 17. Life-support **lose** is unit-tested (do not idle 5 minutes in manual play). Manual only: when player depot ice is 0, HUD shows a per-frame 30 s countdown; destroying a depot does not start that countdown.
 18. Destroying the enemy habitat shows the win screen with `Enemy habitat destroyed`. Play Again starts a fresh sim.
@@ -1801,6 +1808,12 @@ Same-file work is serial: **PR 1 then PR 3a** on `sim.gd` / `ai_raider.gd` / `sn
 - **Depends on:** PR 4, **PR 3a** (`sim.gd` PathQueue service must land first)
 - **What:** `unit.o2`, `PLAYER_O2_HP_PER_PULSE` / `PLAYER_O2_PULSE_TICKS`. Refill adjacent to living player Habitat **or** Depot. Greenhouse hook is a no-op until PR 10. Suffocation and respawn refill. HUD bar colors / pulse. Do not describe this as “tick step 10” — insert **after unit movement**.
 
+### PR 7b — Player HP bar on the HUD
+
+- **Files:** `src/ui/hud.gd`, `tests/test_hud.gd` (extend; already listed in `tests/run.gd`)
+- **Depends on:** PR 4, PR 7
+- **What:** Always-on compact player HP bar under the O2 row. Same track chrome as O2. Fill `hp / hp_max` from the snapshot player unit; colors `#E07A5F` / `#E2C044` / `#E24A3B` as specified. Dead / `hp <= 0` shows an empty bar and `0 / hp_max`. No Habitat/Depot HP. No new sim fields.
+
 ### PR 8 — Tech tree and Lab research
 
 - **Files:** `src/core/types.gd`, `src/sim/research.gd` (new), `src/sim/sim.gd`, `src/sim/rules.gd`, `src/sim/commands.gd`, `src/session/local_session.gd`, `src/view/game_view.gd`, `src/ui/building_panel.gd`, `src/ui/build_bar.gd`, `src/ui/debug_overlay.gd`, `tests/test_research.gd` (new), `tests/test_rules.gd`, `tests/run.gd`
@@ -1821,9 +1834,9 @@ Same-file work is serial: **PR 1 then PR 3a** on `sim.gd` / `ai_raider.gd` / `sn
 
 ### PR 11 — Medbay
 
-- **Files:** `src/core/constants.gd`, `src/core/types.gd`, `src/sim/rules.gd`, `src/sim/sim.gd` (heal **after movement**, with oxygen), `src/sim/ai_raider.gd` (**smash set includes Medbay**), `src/view/building_view.gd`, `src/ui/build_bar.gd`, `src/ui/building_panel.gd`, `src/ui/hud.gd` (player HP bar if not already in PR 4/7), `assets/sprites/placeholder/medbay_player.png`, `tests/test_medbay.gd` (new), `tests/run.gd`
+- **Files:** `src/core/constants.gd`, `src/core/types.gd`, `src/sim/rules.gd`, `src/sim/sim.gd` (heal **after movement**, with oxygen), `src/sim/ai_raider.gd` (**smash set includes Medbay**), `src/view/building_view.gd`, `src/ui/build_bar.gd`, `src/ui/building_panel.gd`, `assets/sprites/placeholder/medbay_player.png`, `tests/test_medbay.gd` (new), `tests/run.gd`
 - **Depends on:** PR 8
-- **What:** 1×1 after Field Medicine, 2 HP/s while adjacent, no stack, walk-away resets acc. Panel heal hint. `test_medbay.gd`: 10 ticks → +1 HP; two medbays still +1.
+- **What:** 1×1 after Field Medicine, 2 HP/s while adjacent, no stack, walk-away resets acc. Panel heal hint. Player HP readout is PR 7b, not this PR. `test_medbay.gd`: 10 ticks → +1 HP; two medbays still +1.
 
 ### PR 12 — Gate
 
@@ -1840,5 +1853,5 @@ Same-file work is serial: **PR 1 then PR 3a** on `sim.gd` / `ai_raider.gd` / `sn
 ### PR 14 — Playtest polish and remaining tests
 
 - **Files:** `tests/run.gd` (confirm every new script is listed), any leftover `test_*.gd` gaps, `src/ui/debug_overlay.gd` (ore/parts/o2/research/`sim_ms`), placeholder PNG fill-ins
-- **Depends on:** PR 1–13
-- **What:** Close checklist holes (icon parseability, first-raid-without-ore, O2 telegraph, withdraw, F3 fields). No new rules. If a number in this document is wrong in play, change **this document** in a follow-up — do not silently retune.
+- **Depends on:** PR 1–13 and PR 7b
+- **What:** Close checklist holes (icon parseability, first-raid-without-ore, O2 telegraph, player HP bar, withdraw, F3 fields). No new rules. If a number in this document is wrong in play, change **this document** in a follow-up — do not silently retune.
