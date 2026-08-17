@@ -1,10 +1,6 @@
 class_name Sim
 extends RefCounted
 
-class FactionLife extends RefCounted:
-	var ice_debt_timer: float = 0.0
-	var zero_ice_timer: float = 0.0
-
 var tick_index: int = 0
 var time: float = 0.0
 var outcome: int = Types.Outcome.NONE
@@ -13,7 +9,6 @@ var world: World
 var player_id: int = 0
 var director: Director
 var path_queue: PathQueue = PathQueue.new()
-var life: Dictionary = {}
 var last_tick_usec: int = 0
 var research_selected: int = -1
 var research_progress: float = 0.0
@@ -52,10 +47,6 @@ func setup(p_seed: int) -> void:
 	_snap_tiles_generation = -1
 	director = Director.new()
 	path_queue = PathQueue.new()
-	life = {
-		Types.Faction.PLAYER: FactionLife.new(),
-		Types.Faction.ENEMY: FactionLife.new(),
-	}
 	for unit in world.units.values():
 		if unit.kind == Types.UnitKind.PLAYER:
 			player_id = unit.id
@@ -145,10 +136,7 @@ func snapshot() -> SimSnapshot:
 		snap.player_respawn_timer = player.respawn_timer
 		snap.player_o2 = player.o2
 		snap.player_o2_max = Constants.PLAYER_O2_MAX
-	snap.player_zero_ice_timer = _faction_zero_ice(Types.Faction.PLAYER)
-	snap.enemy_zero_ice_timer = _faction_zero_ice(Types.Faction.ENEMY)
-	snap.player_living_depot_ice_empty = _living_depot_ice_empty(Types.Faction.PLAYER)
-	snap.enemy_living_depot_ice_empty = _living_depot_ice_empty(Types.Faction.ENEMY)
+	snap.habitat_ice_pool = Rules.player_pool_amount(world, Types.ResourceKind.ICE)
 	_copy_gather_channel(snap, player)
 	snap.research_selected = research_selected
 	snap.research_progress = research_progress
@@ -201,6 +189,7 @@ func _building_record(building: Building) -> Dictionary:
 		"inventory": _inventory_record(building.inventory),
 		"food_stock": building.food_stock,
 		"food_stock_cap": Constants.FARM_FOOD_CAP if building.kind == Types.BuildingKind.FARM else 0,
+		"ice_debt_timer": building.ice_debt_timer,
 	}
 
 
@@ -281,28 +270,6 @@ func _copy_director(snap: SimSnapshot) -> void:
 		snap.wave_index = int(director.wave_index)
 	if "banner_timer" in director:
 		snap.banner_timer = float(director.banner_timer)
-
-
-func _faction_zero_ice(faction: int) -> float:
-	var lives: Variant = get("life")
-	if lives is Dictionary:
-		var rec: Variant = lives.get(faction)
-		if rec is Object and "zero_ice_timer" in rec:
-			return float(rec.zero_ice_timer)
-	return 0.0
-
-
-func _living_depot_ice_empty(faction: int) -> bool:
-	for building in world.buildings.values():
-		if building.kind != Types.BuildingKind.DEPOT:
-			continue
-		if building.faction != faction:
-			continue
-		if building.hp <= 0:
-			continue
-		var inv: Inventory = building.inventory
-		return inv != null and inv.ice == 0
-	return false
 
 
 func _apply_player_command(cmd: InputCommand) -> void:
@@ -678,11 +645,12 @@ func _adjacent_o2_refill(player: Unit) -> bool:
 func _own_depot_withdrawing(cmd: InputCommand, target_id: int) -> bool:
 	if cmd == null or not cmd.withdraw or target_id <= 0:
 		return false
-	var depot := world.buildings.get(target_id) as Building
+	var building := world.buildings.get(target_id) as Building
+	if building == null or building.faction != Types.Faction.PLAYER:
+		return false
 	return (
-		depot != null
-		and depot.kind == Types.BuildingKind.DEPOT
-		and depot.faction == Types.Faction.PLAYER
+		building.kind == Types.BuildingKind.DEPOT
+		or building.kind == Types.BuildingKind.HABITAT
 	)
 
 

@@ -24,16 +24,23 @@ func run() -> PackedStringArray:
 
 	var carry := _counts(hud, "Carry")
 	var depot := _counts(hud, "Depot")
+	var colony := _counts(hud, "Colony")
 	for key in ["Scrap", "Ice", "Ore", "Parts", "Food"]:
 		if not carry.has(key):
 			fails.append("carry missing %s count" % key)
-	for key in ["Scrap", "Ice", "Ore", "Parts"]:
+	for key in ["Scrap", "Ore", "Parts"]:
 		if not depot.has(key):
 			fails.append("depot missing %s count" % key)
+	if depot.has("Ice"):
+		fails.append("depot row must not show Ice")
 	if depot.has("Food"):
 		fails.append("depot row must not show Food")
+	if not colony.has("Ice"):
+		fails.append("colony Ice count missing")
 	if carry.get("Scrap", "") != "0" or depot.get("Scrap", "") != "—":
 		fails.append("empty snap carry/depot were %s / %s" % [str(carry), str(depot)])
+	if colony.get("Ice", "") != "—":
+		fails.append("empty snap colony ice was %s" % str(colony))
 
 	var snap := SimSnapshot.new()
 	snap.units = [{
@@ -48,8 +55,13 @@ func run() -> PackedStringArray:
 		"faction": Types.Faction.PLAYER,
 		"hp": 80,
 		"inventory": {"scrap": 15, "ice": 4, "ore": 0, "parts": 1, "food": 2},
+	}, {
+		"kind": Types.BuildingKind.HABITAT,
+		"faction": Types.Faction.PLAYER,
+		"hp": 200,
+		"inventory": {"scrap": 0, "ice": 4, "ore": 0, "parts": 0, "food": 0},
 	}]
-	snap.player_zero_ice_timer = 0.0
+	snap.habitat_ice_pool = 4
 	snap.banner_timer = 1.5
 	hud.apply_snapshot(snap)
 
@@ -62,10 +74,15 @@ func run() -> PackedStringArray:
 		fails.append("carry ore/parts were %s" % str(carry))
 	if carry.get("Food", "") != "24":
 		fails.append("carry food was %s" % str(carry))
-	if depot.get("Ice", "") != "4" or depot.get("Parts", "") != "1":
-		fails.append("depot ice/parts were %s" % str(depot))
+	if depot.has("Ice"):
+		fails.append("depot row must not show Ice after apply")
+	if depot.get("Parts", "") != "1":
+		fails.append("depot parts were %s" % str(depot))
 	if depot.has("Food"):
 		fails.append("depot row must not show Food after apply")
+	colony = _counts(hud, "Colony")
+	if colony.get("Ice", "") != "4":
+		fails.append("colony ice was %s" % str(colony))
 	snap.units[0]["inventory"]["food"] = 4
 	hud.apply_snapshot(snap)
 	carry = _counts(hud, "Carry")
@@ -76,17 +93,17 @@ func run() -> PackedStringArray:
 		fails.append("carry food <= FOOD_WARN should use the low-food color")
 	snap.units[0]["inventory"]["food"] = 24
 	hud.apply_snapshot(snap)
-	var ice_lab := _count_label(hud, "Depot", "Ice")
+	var ice_lab := _count_label(hud, "Colony", "Ice")
 	if ice_lab == null or ice_lab.get_theme_color("font_color") != Color("E24A3B"):
-		fails.append("depot ice <= 5 should use low-ice color")
+		fails.append("colony ice <= 5 should use low-ice color")
 	var banner := hud.find_child("RaidBanner", true, false) as Label
 	if banner == null or not banner.visible or banner.text != "Raid incoming":
 		fails.append("raid banner should show while banner_timer > 0")
 	if hud.find_child("IceCountdown", true, false) != null:
 		fails.append("HUD must not have an IceCountdown node")
 
-	snap.buildings[0]["inventory"]["ice"] = 0
-	snap.player_zero_ice_timer = 12.0
+	snap.buildings[1]["inventory"]["ice"] = 0
+	snap.habitat_ice_pool = 0
 	hud.apply_snapshot(snap)
 	if hud.find_child("IceCountdown", true, false) != null:
 		fails.append("zero ice must not create a starve countdown")

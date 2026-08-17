@@ -43,9 +43,12 @@ func run() -> PackedStringArray:
 	_expect_contains(fails, text, "loot  0", "loot")
 	_expect_contains(fails, text, "projectiles  0", "projectiles")
 	_expect_contains(fails, text, "outcome  PLAYER_WIN", "outcome")
+	_expect_contains(fails, text, "player habitat  —", "player habitat")
 	_expect_contains(
-		fails, text, "player depot  scrap 15  ice 20  ore 3  parts 1", "player depot"
+		fails, text, "player depot  scrap 15  ore 3  parts 1", "player depot"
 	)
+	if text.find("ice 20") >= 0:
+		fails.append("player depot must not list Ice")
 	if text.find("parts 1  food") >= 0:
 		fails.append("player depot must not list Food")
 	_expect_contains(fails, text, "enemy depot  —", "enemy depot")

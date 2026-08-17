@@ -156,8 +156,18 @@ func _test_starting_stocks(fails: PackedStringArray) -> void:
 	if enemy_depot == null or enemy_depot.kind != Types.BuildingKind.DEPOT:
 		fails.append("enemy depot missing at ENEMY_DEPOT_TILE")
 		return
-	_expect_stock(fails, player_depot, "player depot", Constants.START_PLAYER_SCRAP, Constants.START_PLAYER_ICE)
-	_expect_stock(fails, enemy_depot, "enemy depot", Constants.START_ENEMY_SCRAP, Constants.START_ENEMY_ICE)
+	_expect_stock(fails, player_depot, "player depot", Constants.START_PLAYER_SCRAP, 0)
+	_expect_stock(fails, enemy_depot, "enemy depot", Constants.START_ENEMY_SCRAP, 0)
+	var player_habitat := world.building_at(Constants.PLAYER_HABITAT_TILE.x, Constants.PLAYER_HABITAT_TILE.y)
+	var enemy_habitat := world.building_at(Constants.ENEMY_HABITAT_TILE.x, Constants.ENEMY_HABITAT_TILE.y)
+	if player_habitat == null or player_habitat.kind != Types.BuildingKind.HABITAT:
+		fails.append("player habitat missing at PLAYER_HABITAT_TILE")
+		return
+	if enemy_habitat == null or enemy_habitat.kind != Types.BuildingKind.HABITAT:
+		fails.append("enemy habitat missing at ENEMY_HABITAT_TILE")
+		return
+	_expect_habitat_ice(fails, player_habitat, "player habitat", Constants.START_PLAYER_ICE)
+	_expect_habitat_ice(fails, enemy_habitat, "enemy habitat", Constants.START_ENEMY_ICE)
 
 
 func _test_deposit_minima(fails: PackedStringArray) -> void:
@@ -299,6 +309,26 @@ func _expect_stock(fails: PackedStringArray, depot: Building, label: String, scr
 			"%s stock is %d/%d, expected %d/%d"
 			% [label, depot.inventory.scrap, depot.inventory.ice, scrap, ice]
 		)
+
+
+func _expect_habitat_ice(fails: PackedStringArray, habitat: Building, label: String, ice: int) -> void:
+	if habitat.inventory == null:
+		fails.append("%s has no inventory" % label)
+		return
+	if habitat.inventory.cap_ice != Constants.HABITAT_CAP_ICE:
+		fails.append(
+			"%s cap_ice is %d, expected %d"
+			% [label, habitat.inventory.cap_ice, Constants.HABITAT_CAP_ICE]
+		)
+	if (
+		habitat.inventory.cap_scrap != 0
+		or habitat.inventory.cap_ore != 0
+		or habitat.inventory.cap_parts != 0
+		or habitat.inventory.cap_food != 0
+	):
+		fails.append("%s should only accept Ice" % label)
+	if habitat.inventory.ice != ice:
+		fails.append("%s ice is %d, expected %d" % [label, habitat.inventory.ice, ice])
 
 
 func _deposit_tiles(world: World) -> Array:

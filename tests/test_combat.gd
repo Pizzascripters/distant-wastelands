@@ -12,6 +12,7 @@ func run() -> PackedStringArray:
 	_test_melee_respects_cooldown(fails)
 	_test_death_at_zero(fails)
 	_test_depot_death_spills_without_life_support(fails)
+	_test_habitat_death_spills_ice(fails)
 	_test_two_arg_spill_rejects_ore(fails)
 	_test_four_arg_spill_holds_ore(fails)
 	_test_player_on_gate_shot_lives(fails)
@@ -179,7 +180,7 @@ func _test_depot_death_spills_without_life_support(fails: PackedStringArray) -> 
 	depot.origin_tile = Vector2i(10, 10)
 	depot.hp = Constants.DEPOT_HP
 	depot.hp_max = Constants.DEPOT_HP
-	depot.inventory = Inventory.new(Constants.DEPOT_CAP_SCRAP, Constants.DEPOT_CAP_ICE)
+	depot.inventory = Building.inventory_for(Types.BuildingKind.DEPOT)
 	depot.inventory.add(Types.ResourceKind.SCRAP, scrap)
 	depot.inventory.add(Types.ResourceKind.ICE, ice)
 	world.buildings[depot.id] = depot
@@ -192,16 +193,43 @@ func _test_depot_death_spills_without_life_support(fails: PackedStringArray) -> 
 		fails.append("depot death loot piles: %d, expected 1" % world.loot.size())
 		return
 	var pile: Loot = world.loot.values()[0]
-	if pile.inventory.scrap != scrap or pile.inventory.ice != ice:
+	if pile.inventory.scrap != scrap or pile.inventory.ice != 0:
 		fails.append(
-			"spilled loot is %d/%d, expected %d/%d"
-			% [pile.inventory.scrap, pile.inventory.ice, scrap, ice]
+			"spilled loot is %d/%d, expected %d/0"
+			% [pile.inventory.scrap, pile.inventory.ice, scrap]
 		)
 	var center := world.footprint_aabb(depot).get_center()
 	if pile.pos != center:
 		fails.append("loot pos is %s, expected depot center %s" % [pile.pos, center])
 	if sim.outcome != Types.Outcome.NONE:
 		fails.append("depot death set outcome %d" % sim.outcome)
+
+
+func _test_habitat_death_spills_ice(fails: PackedStringArray) -> void:
+	var world := World.new()
+	var habitat := Building.new()
+	habitat.id = world.alloc_id()
+	habitat.kind = Types.BuildingKind.HABITAT
+	habitat.faction = Types.Faction.PLAYER
+	habitat.origin_tile = Vector2i(10, 10)
+	habitat.hp = Constants.HABITAT_HP
+	habitat.hp_max = Constants.HABITAT_HP
+	habitat.inventory = Building.inventory_for(Types.BuildingKind.HABITAT)
+	habitat.inventory.add(Types.ResourceKind.ICE, 11)
+	world.buildings[habitat.id] = habitat
+	world.occupy(habitat)
+	Combat.apply_damage(habitat, Constants.HABITAT_HP)
+	Combat.process_deaths(world)
+	if world.buildings.has(habitat.id):
+		fails.append("dead habitat remained in world.buildings")
+	if world.loot.size() != 1:
+		fails.append("habitat death loot piles: %d, expected 1" % world.loot.size())
+		return
+	var pile: Loot = world.loot.values()[0]
+	if pile.inventory.ice != 11 or pile.inventory.scrap != 0:
+		fails.append("habitat spill is ice %d scrap %d" % [pile.inventory.ice, pile.inventory.scrap])
+	if pile.pos != world.footprint_aabb(habitat).get_center():
+		fails.append("habitat loot pos is %s" % pile.pos)
 
 
 func _test_two_arg_spill_rejects_ore(fails: PackedStringArray) -> void:
@@ -256,6 +284,8 @@ func _test_four_arg_spill_holds_ore(fails: PackedStringArray) -> void:
 		fails.append("depot cap_food is %d, expected 0" % five.cap_food)
 	if five.add(Types.ResourceKind.FOOD, 4) != 4 or five.food != 0:
 		fails.append("five-arg depot bag accepted food")
+	if five.add(Types.ResourceKind.ICE, 4) != 4 or five.ice != 0:
+		fails.append("five-arg depot bag accepted ice")
 
 
 func _test_five_kind_spill_holds_food(fails: PackedStringArray) -> void:

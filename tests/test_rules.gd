@@ -18,10 +18,12 @@ func run() -> PackedStringArray:
 	_test_own_depot_withdraw(fails)
 	_test_gather(fails)
 	_test_steal(fails)
-	_test_ice_pull_decrements_depot(fails)
+	_test_ice_pull_decrements_habitat(fails)
 	_test_zero_ice_does_not_lose(fails)
 	_test_destroying_depot_is_not_a_lose(fails)
 	_test_missing_depot_never_starts_timer(fails)
+	_test_habitat_ice_transfer(fails)
+	_test_pools_pay_from_habitats(fails)
 	_test_enemy_habitat_zero_is_not_win(fails)
 	_test_habitat_smash_is_not_a_lose(fails)
 	_test_oxygen_failed_is_suffocation(fails)
@@ -210,10 +212,10 @@ func _test_first_depot_transfer(fails: PackedStringArray) -> void:
 			"player scrap after first transfer is %d, expected %d"
 			% [player.inventory.scrap, 8 - Constants.TRANSFER_BATCH]
 		)
-	if player.inventory.ice != 8 - Constants.TRANSFER_BATCH:
+	if player.inventory.ice != 8:
 		fails.append(
-			"player ice after first transfer is %d, expected %d"
-			% [player.inventory.ice, 8 - Constants.TRANSFER_BATCH]
+			"player ice after first depot transfer is %d, expected 8 (depots reject Ice)"
+			% player.inventory.ice
 		)
 	if player.inventory.ore != 1:
 		fails.append("player ore after first transfer is %d, expected 1" % player.inventory.ore)
@@ -224,10 +226,10 @@ func _test_first_depot_transfer(fails: PackedStringArray) -> void:
 			"depot scrap after first transfer is %d, expected %d"
 			% [depot.inventory.scrap, depot_scrap + Constants.TRANSFER_BATCH]
 		)
-	if depot.inventory.ice != depot_ice + Constants.TRANSFER_BATCH:
+	if depot.inventory.ice != depot_ice:
 		fails.append(
-			"depot ice after first transfer is %d, expected %d"
-			% [depot.inventory.ice, depot_ice + Constants.TRANSFER_BATCH]
+			"depot ice after first transfer is %d, expected %d (depots reject Ice)"
+			% [depot.inventory.ice, depot_ice]
 		)
 	if depot.inventory.ore != depot_ore + 5:
 		fails.append("depot ore after first transfer is %d, expected %d" % [depot.inventory.ore, depot_ore + 5])
@@ -303,7 +305,7 @@ func _test_steal(fails: PackedStringArray) -> void:
 	depot.origin_tile = Vector2i(2, 2)
 	depot.hp = Constants.DEPOT_HP
 	depot.hp_max = Constants.DEPOT_HP
-	depot.inventory = Inventory.new(Constants.DEPOT_CAP_SCRAP, Constants.DEPOT_CAP_ICE)
+	depot.inventory = Building.inventory_for(Types.BuildingKind.DEPOT)
 	depot.inventory.add(Types.ResourceKind.SCRAP, 9)
 	depot.inventory.add(Types.ResourceKind.ICE, 4)
 	world.buildings[depot.id] = depot
@@ -319,51 +321,55 @@ func _test_steal(fails: PackedStringArray) -> void:
 	last = Rules.resolve_interact(world, player, cmd, last)
 	if player.inventory.scrap != Constants.TRANSFER_BATCH:
 		fails.append("steal scrap is %d, expected %d" % [player.inventory.scrap, Constants.TRANSFER_BATCH])
-	if player.inventory.ice != 4:
-		fails.append("steal ice is %d, expected 4" % player.inventory.ice)
+	if player.inventory.ice != 0:
+		fails.append("steal took ice from a depot: %d" % player.inventory.ice)
 	if depot.inventory.scrap != 9 - Constants.TRANSFER_BATCH:
 		fails.append("enemy depot scrap is %d, expected %d" % [depot.inventory.scrap, 9 - Constants.TRANSFER_BATCH])
 	if depot.inventory.ice != 0:
 		fails.append("enemy depot ice is %d, expected 0" % depot.inventory.ice)
 
 
-func _test_ice_pull_decrements_depot(fails: PackedStringArray) -> void:
+func _test_ice_pull_decrements_habitat(fails: PackedStringArray) -> void:
 	var sim := Sim.new()
 	sim.setup(Constants.DEFAULT_SEED)
+	var habitat := _faction_building(sim.world, Types.Faction.PLAYER, Types.BuildingKind.HABITAT)
 	var depot := _player_depot(sim.world)
-	if depot == null or depot.inventory == null:
-		fails.append("generated map missing player depot")
+	if habitat == null or habitat.inventory == null:
+		fails.append("generated map missing player habitat")
 		return
-	var before := depot.inventory.ice
+	var before := habitat.inventory.ice
 	if before < 1:
-		fails.append("player depot ice is %d, expected starting stock" % before)
+		fails.append("player habitat ice is %d, expected starting stock" % before)
 		return
+	var depot_ice := 0
+	if depot != null and depot.inventory != null:
+		depot_ice = depot.inventory.ice
 	_tick_idle(sim, _ticks_for(Constants.ICE_PULL_PLAYER) - 1)
-	if depot.inventory.ice != before:
-		fails.append("ice pull ran before one ICE_PULL_PLAYER (%d -> %d)" % [before, depot.inventory.ice])
+	if habitat.inventory.ice != before:
+		fails.append("ice pull ran before one ICE_PULL_PLAYER (%d -> %d)" % [before, habitat.inventory.ice])
 	_tick_idle(sim, 1)
-	if depot.inventory.ice != before - 1:
-		fails.append("ice pull left depot ice %d, expected %d" % [depot.inventory.ice, before - 1])
+	if habitat.inventory.ice != before - 1:
+		fails.append("ice pull left habitat ice %d, expected %d" % [habitat.inventory.ice, before - 1])
+	if depot != null and depot.inventory != null and depot.inventory.ice != depot_ice:
+		fails.append("ice pull mutated depot ice %d -> %d" % [depot_ice, depot.inventory.ice])
 
 
 func _test_zero_ice_does_not_lose(fails: PackedStringArray) -> void:
 	var sim := Sim.new()
 	sim.setup(Constants.DEFAULT_SEED)
-	var depot := _player_depot(sim.world)
-	if depot == null or depot.inventory == null:
-		fails.append("generated map missing player depot")
+	var habitat := _faction_building(sim.world, Types.Faction.PLAYER, Types.BuildingKind.HABITAT)
+	if habitat == null or habitat.inventory == null:
+		fails.append("generated map missing player habitat")
 		return
-	_empty_ice(depot)
-	var limit_ticks := _ticks_for(Constants.ZERO_ICE_LIMIT)
-	_tick_idle(sim, limit_ticks)
+	_empty_ice(habitat)
+	_tick_idle(sim, _ticks_for(30.0))
 	if sim.outcome != Types.Outcome.NONE:
 		fails.append(
-			"zero ice locked outcome %d/%d, expected NONE"
+			"zero habitat ice locked outcome %d/%d, expected NONE"
 			% [sim.outcome, sim.outcome_reason]
 		)
-	var rec: Variant = sim.life.get(Types.Faction.PLAYER)
-	if rec == null or rec.zero_ice_timer < Constants.ZERO_ICE_LIMIT:
-		fails.append("zero_ice_timer after 600 ticks is %s" % str(rec.zero_ice_timer if rec else rec))
+	if "life" in sim:
+		fails.append("Sim.life should be removed")
 
 
 func _test_destroying_depot_is_not_a_lose(fails: PackedStringArray) -> void:
@@ -373,20 +379,8 @@ func _test_destroying_depot_is_not_a_lose(fails: PackedStringArray) -> void:
 	if depot == null or depot.inventory == null:
 		fails.append("generated map missing player depot")
 		return
-	_empty_ice(depot)
-	_tick_idle(sim, 10)
-	var rec: Variant = sim.life.get(Types.Faction.PLAYER)
-	if rec == null:
-		fails.append("missing player FactionLife")
-		return
-	var frozen: float = rec.zero_ice_timer
-	if frozen <= 0.0:
-		fails.append("starve clock did not advance before depot death")
-		return
 	Combat.process_building_death(sim.world, depot)
-	_tick_idle(sim, _ticks_for(Constants.ZERO_ICE_LIMIT))
-	if not is_equal_approx(rec.zero_ice_timer, frozen):
-		fails.append("zero_ice_timer grew after depot death (%s -> %s)" % [str(frozen), str(rec.zero_ice_timer)])
+	_tick_idle(sim, _ticks_for(30.0))
 	if sim.outcome != Types.Outcome.NONE:
 		fails.append("destroying the depot set outcome %d/%d" % [sim.outcome, sim.outcome_reason])
 
@@ -399,12 +393,98 @@ func _test_missing_depot_never_starts_timer(fails: PackedStringArray) -> void:
 		fails.append("generated map missing player depot")
 		return
 	Combat.process_building_death(sim.world, depot)
-	_tick_idle(sim, _ticks_for(Constants.ZERO_ICE_LIMIT))
-	var rec: Variant = sim.life.get(Types.Faction.PLAYER)
-	if rec != null and rec.zero_ice_timer != 0.0:
-		fails.append("missing depot from t=0 set zero_ice_timer to %s" % str(rec.zero_ice_timer))
+	_tick_idle(sim, _ticks_for(30.0))
 	if sim.outcome != Types.Outcome.NONE:
 		fails.append("missing depot from t=0 set outcome %d/%d" % [sim.outcome, sim.outcome_reason])
+
+
+func _test_habitat_ice_transfer(fails: PackedStringArray) -> void:
+	var sim := Sim.new()
+	sim.setup(Constants.DEFAULT_SEED)
+	if sim.director != null:
+		sim.director.next_wave_at = 1.0e9
+	var player := sim.get_player()
+	var habitat := _faction_building(sim.world, Types.Faction.PLAYER, Types.BuildingKind.HABITAT)
+	if player == null or habitat == null or habitat.inventory == null:
+		fails.append("habitat transfer missing player or habitat")
+		return
+	_stand_beside(player, sim.world, habitat)
+	player.inventory.add(Types.ResourceKind.ICE, 8)
+	player.inventory.add(Types.ResourceKind.SCRAP, 5)
+	var hab_ice := habitat.inventory.ice
+	_hold_interact(sim, 3)
+	if player.inventory.ice != 8:
+		fails.append("habitat ice transfer ran before one TRANSFER_PERIOD")
+	_hold_interact(sim, 1)
+	if player.inventory.ice != 8 - Constants.TRANSFER_BATCH:
+		fails.append("player ice after habitat dump is %d" % player.inventory.ice)
+	if habitat.inventory.ice != hab_ice + Constants.TRANSFER_BATCH:
+		fails.append("habitat ice after dump is %d" % habitat.inventory.ice)
+	if player.inventory.scrap != 5:
+		fails.append("habitat dump moved scrap")
+	_hold_withdraw(sim, 4)
+	if player.inventory.ice != 8:
+		fails.append("player ice after habitat withdraw is %d" % player.inventory.ice)
+	if habitat.inventory.ice != hab_ice:
+		fails.append("habitat ice after withdraw is %d" % habitat.inventory.ice)
+
+	var world := World.new()
+	var enemy := Building.new()
+	enemy.id = world.alloc_id()
+	enemy.kind = Types.BuildingKind.HABITAT
+	enemy.faction = Types.Faction.ENEMY
+	enemy.origin_tile = Vector2i(2, 2)
+	enemy.hp = Constants.HABITAT_HP
+	enemy.hp_max = Constants.HABITAT_HP
+	enemy.inventory = Building.inventory_for(Types.BuildingKind.HABITAT)
+	enemy.inventory.add(Types.ResourceKind.ICE, 7)
+	world.buildings[enemy.id] = enemy
+	world.occupy(enemy)
+	var thief := _player_at(world, world.tile_center(1, 2))
+	var cmd := _interact_cmd()
+	var last := 0
+	var ticks := int(Constants.TRANSFER_PERIOD / Constants.SIM_DT)
+	for _i in ticks:
+		last = Rules.resolve_interact(world, thief, cmd, last)
+	if thief.inventory.ice != Constants.TRANSFER_BATCH:
+		fails.append("steal habitat ice is %d, expected %d" % [thief.inventory.ice, Constants.TRANSFER_BATCH])
+	if enemy.inventory.ice != 7 - Constants.TRANSFER_BATCH:
+		fails.append("enemy habitat ice after steal is %d" % enemy.inventory.ice)
+
+
+func _test_pools_pay_from_habitats(fails: PackedStringArray) -> void:
+	var world := _world_with_depot(Constants.FARM_COST_SCRAP)
+	var habitat_a := Building.new()
+	habitat_a.id = world.alloc_id()
+	habitat_a.kind = Types.BuildingKind.HABITAT
+	habitat_a.faction = Types.Faction.PLAYER
+	habitat_a.origin_tile = Vector2i(4, 2)
+	habitat_a.hp = Constants.HABITAT_HP
+	habitat_a.hp_max = Constants.HABITAT_HP
+	habitat_a.inventory = Building.inventory_for(Types.BuildingKind.HABITAT)
+	habitat_a.inventory.add(Types.ResourceKind.ICE, 2)
+	world.buildings[habitat_a.id] = habitat_a
+	world.occupy(habitat_a)
+	var habitat_b := Building.new()
+	habitat_b.id = world.alloc_id()
+	habitat_b.kind = Types.BuildingKind.HABITAT
+	habitat_b.faction = Types.Faction.PLAYER
+	habitat_b.origin_tile = Vector2i(6, 2)
+	habitat_b.hp = Constants.HABITAT_HP
+	habitat_b.hp_max = Constants.HABITAT_HP
+	habitat_b.inventory = Building.inventory_for(Types.BuildingKind.HABITAT)
+	habitat_b.inventory.add(Types.ResourceKind.ICE, 3)
+	world.buildings[habitat_b.id] = habitat_b
+	world.occupy(habitat_b)
+	if Rules.player_pool_amount(world, Types.ResourceKind.ICE) != 5:
+		fails.append("ice pool is %d, expected 5" % Rules.player_pool_amount(world, Types.ResourceKind.ICE))
+	if not Rules.pay_player(world, {Types.ResourceKind.ICE: 4}):
+		fails.append("pay_player ice 4 should succeed")
+		return
+	if habitat_a.inventory.ice != 0:
+		fails.append("lowest-id habitat ice is %d, expected 0" % habitat_a.inventory.ice)
+	if habitat_b.inventory.ice != 1:
+		fails.append("second habitat ice is %d, expected 1" % habitat_b.inventory.ice)
 
 
 func _test_enemy_habitat_zero_is_not_win(fails: PackedStringArray) -> void:
@@ -752,7 +832,6 @@ func _test_place_farm_after_hydroponics(fails: PackedStringArray) -> void:
 		fails.append("farm place missing depot")
 		return
 	depot.inventory.add(Types.ResourceKind.SCRAP, Constants.FARM_COST_SCRAP)
-	depot.inventory.add(Types.ResourceKind.ICE, Constants.FARM_COST_ICE)
 	var tile := _first_placeable(world, Types.BuildingKind.FARM, sim)
 	if tile.x >= 0:
 		fails.append("Farm should not be placeable before Hydroponics")
@@ -788,7 +867,6 @@ func _test_farm_harvest_transfer(fails: PackedStringArray) -> void:
 		return
 	Research.mark_complete(sim, Types.TechKind.HYDROPONICS)
 	depot.inventory.add(Types.ResourceKind.SCRAP, Constants.FARM_COST_SCRAP)
-	depot.inventory.add(Types.ResourceKind.ICE, Constants.FARM_COST_ICE)
 	var tile := _first_placeable(sim.world, Types.BuildingKind.FARM, sim)
 	if tile.x < 0 or not Rules.try_place(sim.world, sim, Types.BuildingKind.FARM, tile):
 		fails.append("farm harvest could not place a farm")
@@ -966,7 +1044,7 @@ func _world_with_depot(scrap: int) -> World:
 	depot.origin_tile = Vector2i(2, 2)
 	depot.hp = Constants.DEPOT_HP
 	depot.hp_max = Constants.DEPOT_HP
-	depot.inventory = Inventory.new(Constants.DEPOT_CAP_SCRAP, Constants.DEPOT_CAP_ICE)
+	depot.inventory = Building.inventory_for(Types.BuildingKind.DEPOT)
 	depot.inventory.add(Types.ResourceKind.SCRAP, scrap)
 	world.buildings[depot.id] = depot
 	world.occupy(depot)

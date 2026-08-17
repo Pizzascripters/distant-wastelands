@@ -76,9 +76,10 @@ const GUARD_MELEE_COOLDOWN := 0.65
 const GUARD_FIRE_COOLDOWN := 1.0
 
 const HABITAT_HP := 200
+const HABITAT_CAP_ICE := 50
 const DEPOT_HP := 100
 const DEPOT_CAP_SCRAP := 50
-const DEPOT_CAP_ICE := 50
+const DEPOT_CAP_ICE := 0
 const DEPOT_CAP_ORE := 30
 const DEPOT_CAP_PARTS := 20
 const DEPOT_CAP_FOOD := 0
@@ -136,7 +137,6 @@ const START_ENEMY_ORE := 6
 const START_ENEMY_PARTS := 0
 const ICE_PULL_PLAYER := 15.0
 const ICE_PULL_ENEMY := 20.0
-const ZERO_ICE_LIMIT := 30.0
 
 const GATHER_CHANNEL := 1.0
 const GATHER_RANGE := 20.0

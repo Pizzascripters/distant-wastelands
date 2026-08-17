@@ -62,10 +62,7 @@ static func can_place(world: World, sim: Sim, kind: int, tile: Vector2i) -> bool
 				return false
 			if _unit_overlaps_tile(world, Vector2i(x, y)):
 				return false
-	var depot := _living_player_depot(world)
-	if depot == null or depot.inventory == null:
-		return false
-	if not _can_afford(depot.inventory, price):
+	if not _can_pay_player(world, price):
 		return false
 	if world.buildings.size() >= Constants.MAX_BUILDINGS:
 		return false
@@ -75,8 +72,8 @@ static func can_place(world: World, sim: Sim, kind: int, tile: Vector2i) -> bool
 static func try_place(world: World, sim: Sim, kind: int, tile: Vector2i) -> bool:
 	if not can_place(world, sim, kind, tile):
 		return false
-	var depot := _living_player_depot(world)
-	_pay(depot.inventory, cost(kind))
+	if not pay_player(world, cost(kind)):
+		return false
 	var building := Building.new()
 	building.id = world.alloc_id()
 	building.kind = kind
@@ -85,30 +82,80 @@ static func try_place(world: World, sim: Sim, kind: int, tile: Vector2i) -> bool
 	building.hp = _hp_for(kind)
 	building.hp_max = building.hp
 	building.aim = Vector2(1, 0)
+	building.inventory = Building.inventory_for(kind)
+	building.ice_debt_timer = 0.0
 	world.buildings[building.id] = building
 	world.occupy(building)
 	return true
 
 
+static func living_player(world: World, kind: int) -> Array:
+	var out: Array = []
+	if world == null:
+		return out
+	for raw in world.buildings.values():
+		var building := raw as Building
+		if building == null or building.hp <= 0:
+			continue
+		if building.faction != Types.Faction.PLAYER or building.kind != kind:
+			continue
+		out.append(building)
+	out.sort_custom(func(a, b): return a.id < b.id)
+	return out
+
+
+static func player_pool_amount(world: World, kind: int) -> int:
+	var holders: Array = _pool_holders(world, kind)
+	var total := 0
+	for raw in holders:
+		var building := raw as Building
+		if building == null or building.inventory == null:
+			continue
+		total += _kind_amount(building.inventory, kind)
+	return total
+
+
+static func pay_player(world: World, price: Dictionary) -> bool:
+	if not _can_pay_player(world, price):
+		return false
+	for resource_kind in price.keys():
+		var remain := int(price[resource_kind])
+		if remain <= 0:
+			continue
+		for raw in _pool_holders(world, int(resource_kind)):
+			if remain <= 0:
+				break
+			var building := raw as Building
+			if building == null or building.inventory == null:
+				continue
+			remain -= building.inventory.remove(int(resource_kind), remain)
+	return true
+
+
 static func tick_life_support(sim: Sim) -> void:
-	if sim == null or sim.world == null or not sim.life is Dictionary:
+	if sim == null or sim.world == null:
 		return
+	var habitats: Array = []
 	for faction in [Types.Faction.PLAYER, Types.Faction.ENEMY]:
-		if _living_building(sim.world, faction, Types.BuildingKind.HABITAT) == null:
+		var group: Array = []
+		for raw in sim.world.buildings.values():
+			var building := raw as Building
+			if building == null or building.hp <= 0:
+				continue
+			if building.kind != Types.BuildingKind.HABITAT or building.faction != faction:
+				continue
+			group.append(building)
+		group.sort_custom(func(a, b): return a.id < b.id)
+		habitats.append_array(group)
+	for raw in habitats:
+		var building := raw as Building
+		building.ice_debt_timer += Constants.SIM_DT
+		var period := _ice_pull_period(building.faction)
+		if building.ice_debt_timer < period:
 			continue
-		var rec: Variant = sim.life.get(faction)
-		if rec == null:
-			continue
-		rec.ice_debt_timer += Constants.SIM_DT
-		var depot := _living_building(sim.world, faction, Types.BuildingKind.DEPOT)
-		if depot != null and depot.inventory != null and depot.inventory.ice == 0:
-			rec.zero_ice_timer += Constants.SIM_DT
-		var period := _ice_pull_period(faction)
-		if rec.ice_debt_timer >= period:
-			rec.ice_debt_timer -= period
-			if depot != null and depot.inventory != null and depot.inventory.ice >= 1:
-				depot.inventory.remove(Types.ResourceKind.ICE, 1)
-				rec.zero_ice_timer = 0.0
+		building.ice_debt_timer -= period
+		if building.inventory != null and building.inventory.ice >= 1:
+			building.inventory.remove(Types.ResourceKind.ICE, 1)
 
 
 static func habitat_gives_o2(building: Building) -> bool:
@@ -117,6 +164,8 @@ static func habitat_gives_o2(building: Building) -> bool:
 		and building.kind == Types.BuildingKind.HABITAT
 		and building.faction == Types.Faction.PLAYER
 		and building.hp > 0
+		and building.inventory != null
+		and building.inventory.ice >= 1
 	)
 
 
@@ -138,17 +187,17 @@ const _HAULABLES: Array[int] = [
 
 const _DEPOT_HAULABLES: Array[int] = [
 	Types.ResourceKind.SCRAP,
-	Types.ResourceKind.ICE,
 	Types.ResourceKind.ORE,
 	Types.ResourceKind.PARTS,
 ]
 
 const _PRI_DEPOT := 0
-const _PRI_LOOT := 1
-const _PRI_DEPOSIT := 2
-const _PRI_WORKSHOP := 3
-const _PRI_LAB := 4
-const _PRI_FARM := 5
+const _PRI_HABITAT := 1
+const _PRI_LOOT := 2
+const _PRI_DEPOSIT := 3
+const _PRI_WORKSHOP := 4
+const _PRI_LAB := 5
+const _PRI_FARM := 6
 
 
 static func resolve_interact(
@@ -180,6 +229,14 @@ static func resolve_interact(
 			best_dist = depot_dist
 			best_pri = _PRI_DEPOT
 			best_obj = depot
+	var habitat := _interact_habitat(world, unit.pos)
+	if habitat != null:
+		var habitat_dist := world.point_aabb_distance(unit.pos, world.footprint_aabb(habitat))
+		if _better_interact(habitat.id, habitat_dist, _PRI_HABITAT, best_id, best_dist, best_pri):
+			best_id = habitat.id
+			best_dist = habitat_dist
+			best_pri = _PRI_HABITAT
+			best_obj = habitat
 	var pile := _interact_loot(world, unit.pos)
 	if pile != null:
 		var loot_dist := unit.pos.distance_to(pile.pos)
@@ -230,6 +287,13 @@ static func resolve_interact(
 			unit.interact_progress = 0.0
 		_tick_depot_transfer(unit, chosen, withdrawing)
 		return chosen.id
+	if best_obj is Building and (best_obj as Building).kind == Types.BuildingKind.HABITAT:
+		var chosen_hab := best_obj as Building
+		var withdrawing_ice := cmd.withdraw and chosen_hab.faction == unit.faction
+		if chosen_hab.id != last_target_id or withdrawing_ice != last_withdraw:
+			unit.interact_progress = 0.0
+		_tick_habitat_transfer(unit, chosen_hab, withdrawing_ice)
+		return chosen_hab.id
 	if best_obj is Loot:
 		_begin_channel(unit, last_target_id, best_id)
 		_tick_loot(world, unit, best_obj as Loot, sim)
@@ -345,32 +409,28 @@ static func _tick_lab(sim: Sim) -> void:
 
 
 static func _pay_research(sim: Sim, kind: int) -> bool:
-	if sim == null or sim.world == null:
-		return false
-	var depot := _living_player_depot(sim.world)
-	if depot == null or depot.inventory == null:
-		return false
-	var price := Research.cost(kind)
-	if price.is_empty() or not _can_afford(depot.inventory, price):
-		return false
-	_pay(depot.inventory, price)
-	return true
+	return Research.try_pay(sim, kind)
 
 
-static func _can_afford(inv: Inventory, price: Dictionary) -> bool:
-	if inv == null:
+static func _can_pay_player(world: World, price: Dictionary) -> bool:
+	if world == null:
 		return false
 	for resource_kind in price.keys():
-		if _kind_amount(inv, int(resource_kind)) < int(price[resource_kind]):
+		if player_pool_amount(world, int(resource_kind)) < int(price[resource_kind]):
 			return false
 	return true
 
 
-static func _pay(inv: Inventory, price: Dictionary) -> void:
-	if inv == null:
-		return
-	for resource_kind in price.keys():
-		inv.remove(int(resource_kind), int(price[resource_kind]))
+static func _pool_holders(world: World, resource_kind: int) -> Array:
+	if resource_kind == Types.ResourceKind.ICE:
+		return living_player(world, Types.BuildingKind.HABITAT)
+	if (
+		resource_kind == Types.ResourceKind.SCRAP
+		or resource_kind == Types.ResourceKind.ORE
+		or resource_kind == Types.ResourceKind.PARTS
+	):
+		return living_player(world, Types.BuildingKind.DEPOT)
+	return []
 
 
 static func _interact_workshop(world: World, unit: Unit, recipe_unlocked: bool) -> Building:
@@ -414,6 +474,20 @@ static func _tick_depot_transfer(unit: Unit, depot: Building, withdrawing: bool)
 		unit.interact_progress -= Constants.TRANSFER_PERIOD
 		for kind in _DEPOT_HAULABLES:
 			_move_up_to(src, dest, kind, Constants.TRANSFER_BATCH)
+
+
+static func _tick_habitat_transfer(unit: Unit, habitat: Building, withdrawing: bool) -> void:
+	unit.interact_progress += Constants.SIM_DT
+	if habitat.inventory == null:
+		return
+	var src: Inventory = unit.inventory
+	var dest: Inventory = habitat.inventory
+	if habitat.faction != unit.faction or withdrawing:
+		src = habitat.inventory
+		dest = unit.inventory
+	while unit.interact_progress >= Constants.TRANSFER_PERIOD:
+		unit.interact_progress -= Constants.TRANSFER_PERIOD
+		_move_up_to(src, dest, Types.ResourceKind.ICE, Constants.TRANSFER_BATCH)
 
 
 static func _tick_loot(world: World, unit: Unit, pile: Loot, sim: Sim = null) -> void:
@@ -528,6 +602,25 @@ static func _interact_depot(world: World, pos: Vector2) -> Building:
 	return depot
 
 
+static func _interact_habitat(world: World, pos: Vector2) -> Building:
+	var best: Building = null
+	var best_dist := INF
+	for raw in world.buildings.values():
+		var building := raw as Building
+		if building == null or building.hp <= 0:
+			continue
+		if building.kind != Types.BuildingKind.HABITAT:
+			continue
+		var dist := world.point_aabb_distance(pos, world.footprint_aabb(building))
+		if dist > Constants.INTERACT_BUILDING_RANGE:
+			continue
+		if best != null and (dist > best_dist or (is_equal_approx(dist, best_dist) and building.id >= best.id)):
+			continue
+		best = building
+		best_dist = dist
+	return best
+
+
 static func _interact_loot(world: World, pos: Vector2) -> Loot:
 	var best: Loot = null
 	var best_dist := INF
@@ -578,24 +671,6 @@ static func _hp_for(kind: int) -> int:
 			return Constants.GATE_HP
 		_:
 			return 0
-
-
-static func _living_player_depot(world: World) -> Building:
-	return _living_building(world, Types.Faction.PLAYER, Types.BuildingKind.DEPOT)
-
-
-static func _living_building(world: World, faction: int, kind: int) -> Building:
-	if world == null:
-		return null
-	for building in world.buildings.values():
-		if building.kind != kind:
-			continue
-		if building.faction != faction:
-			continue
-		if building.hp <= 0:
-			continue
-		return building
-	return null
 
 
 static func _ice_pull_period(faction: int) -> float:

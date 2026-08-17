@@ -42,15 +42,16 @@ func _test_loot_channel(fails: PackedStringArray) -> void:
 		fails.append("loot test missing player depot")
 		return
 	var scrap0 := depot.inventory.scrap
-	var ice0 := depot.inventory.ice
 	var raider := _inject_raider(sim, sim.world.tile_center(
 		Constants.PLAYER_DEPOT_TILE.x + 2, Constants.PLAYER_DEPOT_TILE.y
 	))
 	_tick(sim, _ticks_for(Constants.RAIDER_LOOT_CHANNEL))
-	if raider.inventory.scrap <= 0 and raider.inventory.ice <= 0:
+	if raider.inventory.scrap <= 0:
 		fails.append("raider adjacent for 3s did not increase carry")
-	if depot.inventory.scrap >= scrap0 and depot.inventory.ice >= ice0:
+	if depot.inventory.scrap >= scrap0:
 		fails.append("raider adjacent for 3s did not reduce depot stock")
+	if raider.inventory.ice != 0:
+		fails.append("raider looted ice from a depot")
 
 
 func _test_next_wave_advances(fails: PackedStringArray) -> void:
@@ -306,6 +307,7 @@ func _test_first_raid_without_ore_survivable(fails: PackedStringArray) -> void:
 		return
 	if depot.inventory.ore != 0 or depot.inventory.parts != 0 or sim.techs_done != 0:
 		fails.append("turret placement spent ore/parts or unlocked tech")
+	depot.inventory.add(Types.ResourceKind.SCRAP, Constants.RAIDER_CARRY_SCRAP)
 	_banish_player(sim)
 	var stand := sim.world.tile_center(depot.origin_tile.x + 2, depot.origin_tile.y)
 	for _i in Constants.WAVE_BASE:

@@ -111,10 +111,14 @@ func _test_place_after_field_medicine(fails: PackedStringArray) -> void:
 	Research.mark_complete(sim, Types.TechKind.FIELD_MEDICINE)
 	if depot.inventory.scrap < Constants.MEDBAY_COST_SCRAP:
 		depot.inventory.add(Types.ResourceKind.SCRAP, Constants.MEDBAY_COST_SCRAP)
-	if depot.inventory.ice < Constants.MEDBAY_COST_ICE:
-		depot.inventory.add(Types.ResourceKind.ICE, Constants.MEDBAY_COST_ICE)
+	var habitat := _player_habitat(sim)
+	if habitat == null or habitat.inventory == null:
+		fails.append("place test missing player habitat")
+		return
+	if habitat.inventory.ice < Constants.MEDBAY_COST_ICE:
+		habitat.inventory.add(Types.ResourceKind.ICE, Constants.MEDBAY_COST_ICE)
 	var scrap_before := depot.inventory.scrap
-	var ice_before := depot.inventory.ice
+	var ice_before := habitat.inventory.ice
 	tile = _first_placeable(sim, Types.BuildingKind.MEDBAY)
 	if tile.x < 0:
 		fails.append("Field Medicine should make Medbay placeable")
@@ -127,10 +131,10 @@ func _test_place_after_field_medicine(fails: PackedStringArray) -> void:
 			"Medbay scrap is %d, expected %d"
 			% [depot.inventory.scrap, scrap_before - Constants.MEDBAY_COST_SCRAP]
 		)
-	if depot.inventory.ice != ice_before - Constants.MEDBAY_COST_ICE:
+	if habitat.inventory.ice != ice_before - Constants.MEDBAY_COST_ICE:
 		fails.append(
 			"Medbay ice is %d, expected %d"
-			% [depot.inventory.ice, ice_before - Constants.MEDBAY_COST_ICE]
+			% [habitat.inventory.ice, ice_before - Constants.MEDBAY_COST_ICE]
 		)
 	var building := sim.world.building_at(tile.x, tile.y)
 	if building == null or building.kind != Types.BuildingKind.MEDBAY:
@@ -226,6 +230,13 @@ func _tick_idle(sim: Sim, ticks: int) -> void:
 func _player_depot(sim: Sim) -> Building:
 	for building in sim.world.buildings.values():
 		if building.kind == Types.BuildingKind.DEPOT and building.faction == Types.Faction.PLAYER:
+			return building
+	return null
+
+
+func _player_habitat(sim: Sim) -> Building:
+	for building in sim.world.buildings.values():
+		if building.kind == Types.BuildingKind.HABITAT and building.faction == Types.Faction.PLAYER:
 			return building
 	return null
 
