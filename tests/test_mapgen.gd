@@ -155,6 +155,7 @@ func _test_deposit_minima(fails: PackedStringArray) -> void:
 		var world := Mapgen.generate(s)
 		var scrap_n := 0
 		var ice_n := 0
+		var ore_n := 0
 		for id in world.deposits:
 			var deposit: Deposit = world.deposits[id]
 			if not _deposit_placement_ok(fails, world, deposit, s):
@@ -169,6 +170,11 @@ func _test_deposit_minima(fails: PackedStringArray) -> void:
 				if deposit.remaining != Constants.ICE_DEPOSIT_AMOUNT:
 					fails.append("seed %d ice deposit remaining is %d" % [s, deposit.remaining])
 					return
+			elif deposit.kind == Types.ResourceKind.ORE:
+				ore_n += 1
+				if deposit.remaining != Constants.ORE_DEPOSIT_AMOUNT:
+					fails.append("seed %d ore deposit remaining is %d" % [s, deposit.remaining])
+					return
 			else:
 				fails.append("seed %d deposit has unknown kind %d" % [s, deposit.kind])
 				return
@@ -176,6 +182,10 @@ func _test_deposit_minima(fails: PackedStringArray) -> void:
 			fails.append("seed %d scrap deposits %d < MIN_SCRAP_DEPOSITS" % [s, scrap_n])
 		if ice_n < Constants.MIN_ICE_DEPOSITS:
 			fails.append("seed %d ice deposits %d < MIN_ICE_DEPOSITS" % [s, ice_n])
+		if ore_n < Constants.MIN_ORE_DEPOSITS:
+			fails.append("seed %d ore deposits %d < MIN_ORE_DEPOSITS" % [s, ore_n])
+		if ore_n > Constants.ORE_DEPOSIT_COUNT:
+			fails.append("seed %d ore deposits %d > ORE_DEPOSIT_COUNT" % [s, ore_n])
 
 
 func _deposit_placement_ok(fails: PackedStringArray, world: World, deposit: Deposit, seed: int) -> bool:

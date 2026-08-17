@@ -39,6 +39,8 @@ func _test_placeholder_pngs_load(fails: PackedStringArray) -> void:
 		fails.append("placeholder scrap.png failed to load")
 	if WorldView.load_png("res://assets/sprites/placeholder/ice.png") == null:
 		fails.append("placeholder ice.png failed to load")
+	if WorldView.load_png("res://assets/sprites/placeholder/ore.png") == null:
+		fails.append("placeholder ore.png failed to load")
 	if WorldView.load_png("res://assets/sprites/placeholder/player.png") == null:
 		fails.append("placeholder player.png failed to load")
 
