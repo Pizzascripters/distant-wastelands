@@ -320,8 +320,11 @@ func _test_hud_bar_colors(fails: PackedStringArray) -> void:
 func _sim_quiet() -> Sim:
 	var sim := Sim.new()
 	sim.setup(Constants.DEFAULT_SEED)
-	if sim.director != null:
-		sim.director.next_wave_at = 1.0e9
+	if sim.world != null:
+		for raw in sim.world.camps:
+			var camp := raw as World.Camp
+			if camp != null:
+				camp.next_raid_at = 1.0e9
 	return sim
 
 

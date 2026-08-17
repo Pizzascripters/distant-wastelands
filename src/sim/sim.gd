@@ -268,17 +268,33 @@ func _copy_gather_channel(snap: SimSnapshot, player: Unit) -> void:
 
 
 func _copy_director(snap: SimSnapshot) -> void:
-	if not "director" in self:
-		return
-	var director: Variant = get("director")
+	snap.next_raid_at = _min_living_camp_raid_at()
 	if director == null:
 		return
-	if "next_wave_at" in director:
-		snap.next_wave_at = float(director.next_wave_at)
-	if "wave_index" in director:
-		snap.wave_index = int(director.wave_index)
-	if "banner_timer" in director:
-		snap.banner_timer = float(director.banner_timer)
+	snap.wave_index = director.wave_index
+	snap.banner_timer = director.banner_timer
+
+
+func _min_living_camp_raid_at() -> float:
+	if world == null:
+		return 0.0
+	var found := false
+	var soonest := 0.0
+	for raw in world.camps:
+		var camp := raw as World.Camp
+		if camp == null or camp.depot_id <= 0:
+			continue
+		var depot := world.buildings.get(camp.depot_id) as Building
+		if depot == null or depot.hp <= 0:
+			continue
+		if depot.kind != Types.BuildingKind.DEPOT or depot.faction != Types.Faction.ENEMY:
+			continue
+		if not found or camp.next_raid_at < soonest:
+			soonest = camp.next_raid_at
+			found = true
+	if found:
+		return soonest
+	return 0.0
 
 
 func _apply_player_command(cmd: InputCommand) -> void:

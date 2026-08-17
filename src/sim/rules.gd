@@ -142,6 +142,20 @@ static func pay_player(world: World, price: Dictionary) -> bool:
 	return true
 
 
+static func can_spawn_enemy(world: World, tile: Vector2i) -> bool:
+	return enemy_density_cell(world, tile) + 1 <= Constants.ENEMY_DENSITY_CAP
+
+
+static func enemy_density_cell(world: World, tile: Vector2i) -> int:
+	if world == null:
+		return 0
+	if world.spatial == null:
+		world.rebuild_spatial()
+	var n := Constants.ENEMY_DENSITY_N
+	var origin := Vector2i((tile.x / n) * n, (tile.y / n) * n)
+	return world.spatial.enemy_units_in_aabb(Rect2i(origin, Vector2i(n, n)))
+
+
 static func tick_life_support(sim: Sim) -> void:
 	if sim == null or sim.world == null:
 		return
@@ -159,6 +173,8 @@ static func tick_life_support(sim: Sim) -> void:
 		habitats.append_array(group)
 	for raw in habitats:
 		var building := raw as Building
+		if building.faction == Types.Faction.ENEMY and not _enemy_habitat_ever_aggro(sim.world, building):
+			continue
 		building.ice_debt_timer += Constants.SIM_DT
 		var period := _ice_pull_period(building.faction)
 		if building.ice_debt_timer < period:
@@ -735,6 +751,16 @@ static func _hp_for(kind: int) -> int:
 			return Constants.DEPOT_HP
 		_:
 			return 0
+
+
+static func _enemy_habitat_ever_aggro(world: World, habitat: Building) -> bool:
+	if world == null or habitat == null:
+		return false
+	for raw in world.camps:
+		var camp := raw as World.Camp
+		if camp != null and camp.habitat_id == habitat.id:
+			return camp.ever_aggro
+	return false
 
 
 static func _ice_pull_period(faction: int) -> float:
