@@ -403,9 +403,13 @@ func _make_workshop_box() -> VBoxContainer:
 	box.mouse_filter = MOUSE_FILTER_IGNORE
 	box.visible = false
 	var recipe := HBoxContainer.new()
+	recipe.name = "WorkshopRecipe"
 	recipe.mouse_filter = MOUSE_FILTER_IGNORE
 	recipe.add_theme_constant_override("separation", 4)
-	for spec in [[_SCRAP, "3"], [_ORE, "2"]]:
+	for spec in [
+		[_SCRAP, str(Constants.WORKSHOP_SCRAP_COST)],
+		[_ORE, str(Constants.WORKSHOP_ORE_COST)],
+	]:
 		var icon := TextureRect.new()
 		icon.custom_minimum_size = Vector2(RES_ICON_PX, RES_ICON_PX)
 		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -428,7 +432,7 @@ func _make_workshop_box() -> VBoxContainer:
 	if parts_tex != null:
 		parts_icon.texture = parts_tex
 	recipe.add_child(parts_icon)
-	recipe.add_child(_label("1"))
+	recipe.add_child(_label(str(Constants.WORKSHOP_PARTS_OUT)))
 	box.add_child(recipe)
 	_workshop_lock = _label("locked")
 	_workshop_lock.name = "WorkshopLock"
