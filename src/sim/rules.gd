@@ -12,8 +12,8 @@ static func cost(kind: int) -> Dictionary:
 			return {Types.ResourceKind.SCRAP: Constants.WORKSHOP_COST}
 		Types.BuildingKind.LAB:
 			return {Types.ResourceKind.SCRAP: Constants.LAB_COST}
-		Types.BuildingKind.GREENHOUSE:
-			return {Types.ResourceKind.SCRAP: 12, Types.ResourceKind.ICE: 4}
+		Types.BuildingKind.FARM:
+			return {Types.ResourceKind.SCRAP: Constants.FARM_COST_SCRAP, Types.ResourceKind.ICE: Constants.FARM_COST_ICE}
 		Types.BuildingKind.MEDBAY:
 			return {
 				Types.ResourceKind.SCRAP: Constants.MEDBAY_COST_SCRAP,
@@ -116,6 +116,8 @@ static func evaluate_outcome(sim: Sim) -> Vector2i:
 		return Vector2i(Types.Outcome.NONE, Types.OutcomeReason.NONE)
 	if _living_building(sim.world, Types.Faction.PLAYER, Types.BuildingKind.HABITAT) == null:
 		return Vector2i(Types.Outcome.PLAYER_LOSE, Types.OutcomeReason.HABITAT_DESTROYED)
+	if bool(sim.hunger_failed):
+		return Vector2i(Types.Outcome.PLAYER_LOSE, Types.OutcomeReason.HUNGER)
 	if _zero_ice_timer(sim, Types.Faction.PLAYER) >= Constants.ZERO_ICE_LIMIT:
 		return Vector2i(Types.Outcome.PLAYER_LOSE, Types.OutcomeReason.LIFE_SUPPORT)
 	if _living_building(sim.world, Types.Faction.ENEMY, Types.BuildingKind.HABITAT) == null:
@@ -130,6 +132,7 @@ const _HAULABLES: Array[int] = [
 	Types.ResourceKind.ICE,
 	Types.ResourceKind.ORE,
 	Types.ResourceKind.PARTS,
+	Types.ResourceKind.FOOD,
 ]
 
 const _PRI_DEPOT := 0
@@ -137,6 +140,7 @@ const _PRI_LOOT := 1
 const _PRI_DEPOSIT := 2
 const _PRI_WORKSHOP := 3
 const _PRI_LAB := 4
+const _PRI_FARM := 5
 
 
 static func resolve_interact(
@@ -200,6 +204,14 @@ static func resolve_interact(
 			best_dist = lab_dist
 			best_pri = _PRI_LAB
 			best_obj = lab
+	var farm := _interact_farm(world, unit)
+	if farm != null:
+		var farm_dist := world.point_aabb_distance(unit.pos, world.footprint_aabb(farm))
+		if _better_interact(farm.id, farm_dist, _PRI_FARM, best_id, best_dist, best_pri):
+			best_id = farm.id
+			best_dist = farm_dist
+			best_pri = _PRI_FARM
+			best_obj = farm
 	if best_id == 0 or best_obj == null:
 		unit.interact_progress = 0.0
 		return 0
@@ -226,6 +238,12 @@ static func resolve_interact(
 		_begin_channel(unit, last_target_id, best_id)
 		_tick_lab(sim)
 		return best_id
+	if best_obj is Building and (best_obj as Building).kind == Types.BuildingKind.FARM:
+		var farm_b := best_obj as Building
+		if farm_b.id != last_target_id:
+			unit.interact_progress = 0.0
+		_tick_farm_harvest(unit, farm_b)
+		return farm_b.id
 	unit.interact_progress = 0.0
 	return 0
 
@@ -437,12 +455,49 @@ static func _kind_amount(inv: Inventory, kind: int) -> int:
 			return inv.ore
 		Types.ResourceKind.PARTS:
 			return inv.parts
+		Types.ResourceKind.FOOD:
+			return inv.food
 		_:
 			return 0
 
 
 static func _has_stock(inv: Inventory) -> bool:
-	return inv.scrap > 0 or inv.ice > 0 or inv.ore > 0 or inv.parts > 0
+	return inv.scrap > 0 or inv.ice > 0 or inv.ore > 0 or inv.parts > 0 or inv.food > 0
+
+
+static func _interact_farm(world: World, unit: Unit) -> Building:
+	var best: Building = null
+	var best_dist := INF
+	for raw in world.buildings.values():
+		var building := raw as Building
+		if building == null or building.hp <= 0:
+			continue
+		if building.kind != Types.BuildingKind.FARM:
+			continue
+		if building.faction != Types.Faction.PLAYER:
+			continue
+		var dist := world.point_aabb_distance(unit.pos, world.footprint_aabb(building))
+		if dist > Constants.INTERACT_BUILDING_RANGE:
+			continue
+		if best != null and (dist > best_dist or (is_equal_approx(dist, best_dist) and building.id >= best.id)):
+			continue
+		best = building
+		best_dist = dist
+	return best
+
+
+static func _tick_farm_harvest(unit: Unit, farm: Building) -> void:
+	unit.interact_progress += Constants.SIM_DT
+	if unit.inventory == null:
+		return
+	while unit.interact_progress >= Constants.TRANSFER_PERIOD:
+		unit.interact_progress -= Constants.TRANSFER_PERIOD
+		var amt := mini(Constants.TRANSFER_BATCH, farm.food_stock)
+		amt = mini(amt, unit.inventory.free_space(Types.ResourceKind.FOOD))
+		if amt <= 0:
+			continue
+		farm.food_stock -= amt
+		unit.inventory.add(Types.ResourceKind.FOOD, amt)
 
 
 static func _interact_depot(world: World, pos: Vector2) -> Building:
@@ -496,6 +551,8 @@ static func _hp_for(kind: int) -> int:
 			return Constants.WORKSHOP_HP
 		Types.BuildingKind.LAB:
 			return Constants.LAB_HP
+		Types.BuildingKind.FARM:
+			return Constants.FARM_HP
 		Types.BuildingKind.MEDBAY:
 			return Constants.MEDBAY_HP
 		Types.BuildingKind.GATE:

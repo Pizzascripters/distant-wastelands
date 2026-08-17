@@ -186,8 +186,8 @@ func _test_completion_unlocks(fails: PackedStringArray) -> void:
 		fails.append("finishing Hydroponics should set the bitmask")
 	if sim.research_selected != -1 or sim.research_progress != 0.0 or sim.research_paid:
 		fails.append("completion should clear the current research")
-	if not Research.building_unlocked(sim, Types.BuildingKind.GREENHOUSE):
-		fails.append("Hydroponics should unlock Greenhouse")
+	if not Research.building_unlocked(sim, Types.BuildingKind.FARM):
+		fails.append("Hydroponics should unlock Farm")
 	if Research.workshop_unlocked(sim):
 		fails.append("workshop recipe must stay locked until Metallurgy")
 	var depot := _player_depot(sim)

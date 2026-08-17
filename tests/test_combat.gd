@@ -16,6 +16,7 @@ func run() -> PackedStringArray:
 	_test_four_arg_spill_holds_ore(fails)
 	_test_player_on_gate_shot_lives(fails)
 	_test_muzzle_in_friendly_wall_eaten(fails)
+	_test_five_kind_spill_holds_food(fails)
 	return fails
 
 
@@ -230,6 +231,7 @@ func _test_four_arg_spill_holds_ore(fails: PackedStringArray) -> void:
 	)
 	depot.inventory.add(Types.ResourceKind.ORE, 6)
 	depot.inventory.add(Types.ResourceKind.PARTS, 2)
+	depot.inventory.add(Types.ResourceKind.FOOD, 4)
 	world.buildings[depot.id] = depot
 	world.occupy(depot)
 	Combat.apply_damage(depot, Constants.DEPOT_HP)
@@ -242,6 +244,46 @@ func _test_four_arg_spill_holds_ore(fails: PackedStringArray) -> void:
 		fails.append(
 			"four-arg spill ore/parts %d/%d, expected 6/2" % [pile.inventory.ore, pile.inventory.parts]
 		)
+	if pile.inventory.food != 0:
+		fails.append("four-arg spill accepted food %d" % pile.inventory.food)
+	var five := Inventory.new(
+		Constants.DEPOT_CAP_SCRAP,
+		Constants.DEPOT_CAP_ICE,
+		Constants.DEPOT_CAP_ORE,
+		Constants.DEPOT_CAP_PARTS,
+		Constants.DEPOT_CAP_FOOD
+	)
+	if five.add(Types.ResourceKind.FOOD, 4) != 0 or five.food != 4:
+		fails.append("five-arg depot bag rejected food")
+
+
+func _test_five_kind_spill_holds_food(fails: PackedStringArray) -> void:
+	var world := World.new()
+	var depot := Building.new()
+	depot.id = world.alloc_id()
+	depot.kind = Types.BuildingKind.DEPOT
+	depot.faction = Types.Faction.PLAYER
+	depot.origin_tile = Vector2i(10, 10)
+	depot.hp = Constants.DEPOT_HP
+	depot.hp_max = Constants.DEPOT_HP
+	depot.inventory = Inventory.new(
+		Constants.DEPOT_CAP_SCRAP,
+		Constants.DEPOT_CAP_ICE,
+		Constants.DEPOT_CAP_ORE,
+		Constants.DEPOT_CAP_PARTS,
+		Constants.DEPOT_CAP_FOOD
+	)
+	depot.inventory.add(Types.ResourceKind.FOOD, 7)
+	world.buildings[depot.id] = depot
+	world.occupy(depot)
+	Combat.apply_damage(depot, Constants.DEPOT_HP)
+	Combat.process_deaths(world)
+	if world.loot.size() != 1:
+		fails.append("five-kind depot spill piles: %d, expected 1" % world.loot.size())
+		return
+	var pile: Loot = world.loot.values()[0]
+	if pile.inventory.food != 7:
+		fails.append("five-kind spill food is %d, expected 7" % pile.inventory.food)
 
 
 func _test_player_on_gate_shot_lives(fails: PackedStringArray) -> void:

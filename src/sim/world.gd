@@ -86,6 +86,7 @@ static func footprint_span(kind: int) -> int:
 		kind == Types.BuildingKind.HABITAT
 		or kind == Types.BuildingKind.DEPOT
 		or kind == Types.BuildingKind.LAB
+		or kind == Types.BuildingKind.FARM
 	):
 		return 2
 	return 1

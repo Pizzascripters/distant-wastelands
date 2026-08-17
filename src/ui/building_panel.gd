@@ -15,11 +15,13 @@ const _WALL := "res://assets/sprites/placeholder/wall_player.png"
 const _TURRET := "res://assets/sprites/placeholder/turret_player.png"
 const _WORKSHOP := "res://assets/sprites/placeholder/workshop_player.png"
 const _LAB := "res://assets/sprites/placeholder/lab_player.png"
+const _FARM := "res://assets/sprites/placeholder/farm_player.png"
 const _MEDBAY := "res://assets/sprites/placeholder/medbay_player.png"
 const _SCRAP := "res://assets/sprites/placeholder/scrap.png"
 const _ICE := "res://assets/sprites/placeholder/ice.png"
 const _ORE := "res://assets/sprites/placeholder/ore.png"
 const _PARTS := "res://assets/sprites/placeholder/parts.png"
+const _FOOD := "res://assets/sprites/placeholder/food.png"
 
 var inspected_id: int = -1
 var withdraw: bool = false
@@ -43,6 +45,8 @@ var _lab_fill: ColorRect
 var _lab_progress: Label
 var _workshop_box: VBoxContainer
 var _workshop_lock: Label
+var _farm_box: VBoxContainer
+var _farm_stock: Label
 var _heal_hint: Label
 var _plain: StyleBoxFlat
 var _selected: StyleBoxFlat
@@ -141,9 +145,15 @@ func apply_record(rec: Dictionary) -> void:
 	_depot_box.visible = is_depot
 	if is_depot:
 		var inv := _inventory_from(rec.get("inventory", {}))
-		for key in ["scrap", "ice", "ore", "parts"]:
+		for key in ["scrap", "ice", "ore", "parts", "food"]:
 			var lab: Label = _depot_counts[key]
 			lab.text = "%d / %d" % [int(inv[key]), int(inv["cap_%s" % key])]
+	if _farm_box != null:
+		_farm_box.visible = _kind == Types.BuildingKind.FARM
+		if _farm_box.visible:
+			var stock := int(rec.get("food_stock", 0))
+			var cap := int(rec.get("food_stock_cap", Constants.FARM_FOOD_CAP))
+			_farm_stock.text = "%d / %d" % [stock, cap]
 	if _lab_box != null:
 		_lab_box.visible = _kind == Types.BuildingKind.LAB
 		if _lab_box.visible:
@@ -277,6 +287,8 @@ func _ensure_ui() -> void:
 	stats.add_child(_lab_box)
 	_workshop_box = _make_workshop_box()
 	stats.add_child(_workshop_box)
+	_farm_box = _make_farm_box()
+	stats.add_child(_farm_box)
 	_heal_hint = _label("+2 HP/s while adjacent")
 	_heal_hint.name = "HealHint"
 	_heal_hint.visible = false
@@ -324,6 +336,7 @@ func _make_depot_box() -> VBoxContainer:
 		["ice", _ICE],
 		["ore", _ORE],
 		["parts", _PARTS],
+		["food", _FOOD],
 	]:
 		var icon := TextureRect.new()
 		icon.name = "%sIcon" % (spec[0] as String).capitalize()
@@ -402,6 +415,31 @@ func _make_lab_box() -> VBoxContainer:
 	_lab_progress = _label("0 / 0")
 	_lab_progress.name = "LabProgress"
 	box.add_child(_lab_progress)
+	return box
+
+
+func _make_farm_box() -> VBoxContainer:
+	var box := VBoxContainer.new()
+	box.name = "FarmBox"
+	box.mouse_filter = MOUSE_FILTER_IGNORE
+	box.visible = false
+	var row := HBoxContainer.new()
+	row.mouse_filter = MOUSE_FILTER_IGNORE
+	row.add_theme_constant_override("separation", 6)
+	var icon := TextureRect.new()
+	icon.custom_minimum_size = Vector2(RES_ICON_PX, RES_ICON_PX)
+	icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.texture_filter = TEXTURE_FILTER_NEAREST
+	icon.mouse_filter = MOUSE_FILTER_IGNORE
+	var tex := WorldView.load_png(_FOOD)
+	if tex != null:
+		icon.texture = tex
+	row.add_child(icon)
+	_farm_stock = _label("0 / 0")
+	_farm_stock.name = "FarmStock"
+	row.add_child(_farm_stock)
+	box.add_child(row)
 	return box
 
 
@@ -527,6 +565,8 @@ func _icon_path(kind: int) -> String:
 			return _WORKSHOP
 		Types.BuildingKind.LAB:
 			return _LAB
+		Types.BuildingKind.FARM:
+			return _FARM
 		Types.BuildingKind.MEDBAY:
 			return _MEDBAY
 		_:
@@ -539,10 +579,12 @@ func _inventory_from(inv: Variant) -> Dictionary:
 		"ice": 0,
 		"ore": 0,
 		"parts": 0,
+		"food": 0,
 		"cap_scrap": 0,
 		"cap_ice": 0,
 		"cap_ore": 0,
 		"cap_parts": 0,
+		"cap_food": 0,
 	}
 	if inv is Dictionary:
 		for key in out.keys():

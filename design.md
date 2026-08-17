@@ -1024,7 +1024,7 @@ Evaluated at the end of every sim tick in `rules.evaluate_outcome(sim) -> (Outco
 
 ```
 enum Outcome { NONE, PLAYER_WIN, PLAYER_LOSE }
-enum OutcomeReason { NONE, HABITAT_DESTROYED, LIFE_SUPPORT }
+enum OutcomeReason { NONE, HABITAT_DESTROYED, LIFE_SUPPORT, HUNGER }
 ```
 
 Checks, in order:
