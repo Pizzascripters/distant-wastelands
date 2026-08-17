@@ -19,6 +19,7 @@ func run() -> PackedStringArray:
 	_test_gather(fails)
 	_test_steal(fails)
 	_test_ice_pull_decrements_habitat(fails)
+	_test_never_aggro_enemy_ice_frozen(fails)
 	_test_zero_ice_does_not_lose(fails)
 	_test_destroying_depot_is_not_a_lose(fails)
 	_test_missing_depot_never_starts_timer(fails)
@@ -361,6 +362,43 @@ func _test_ice_pull_decrements_habitat(fails: PackedStringArray) -> void:
 		fails.append("ice pull mutated depot ice %d -> %d" % [depot_ice, depot.inventory.ice])
 
 
+func _test_never_aggro_enemy_ice_frozen(fails: PackedStringArray) -> void:
+	var sim := Sim.new()
+	sim.setup(Constants.DEFAULT_SEED)
+	var camp := _never_aggro_camp(sim)
+	if camp == null:
+		fails.append("never-aggro ice test missing a far camp")
+		return
+	var habitat := sim.world.buildings.get(camp.habitat_id) as Building
+	if habitat == null or habitat.inventory == null:
+		fails.append("far camp missing habitat")
+		return
+	if habitat.inventory.ice != Constants.START_ENEMY_ICE:
+		fails.append(
+			"far camp ice started at %d, expected %d"
+			% [habitat.inventory.ice, Constants.START_ENEMY_ICE]
+		)
+	for _i in 5:
+		sim.tick()
+	if camp.ever_aggro:
+		fails.append("far camp should stay unaggro'd from the starter pad")
+		return
+	var ticks := _ticks_for(600.0)
+	for _i in ticks:
+		Rules.tick_life_support(sim)
+	sim.time = 600.0
+	if habitat.inventory.ice != Constants.START_ENEMY_ICE:
+		fails.append(
+			"never-aggro'd enemy Habitat at t=600s has ice %d, expected %d"
+			% [habitat.inventory.ice, Constants.START_ENEMY_ICE]
+		)
+	if habitat.ice_debt_timer != 0.0:
+		fails.append(
+			"never-aggro'd enemy Habitat ice_debt_timer is %s, expected 0"
+			% str(habitat.ice_debt_timer)
+		)
+
+
 func _test_zero_ice_does_not_lose(fails: PackedStringArray) -> void:
 	var sim := Sim.new()
 	sim.setup(Constants.DEFAULT_SEED)
@@ -409,7 +447,7 @@ func _test_habitat_ice_transfer(fails: PackedStringArray) -> void:
 	var sim := Sim.new()
 	sim.setup(Constants.DEFAULT_SEED)
 	if sim.director != null:
-		sim.director.next_wave_at = 1.0e9
+		_silence_raids(sim)
 	var player := sim.get_player()
 	var habitat := _faction_building(sim.world, Types.Faction.PLAYER, Types.BuildingKind.HABITAT)
 	if player == null or habitat == null or habitat.inventory == null:
@@ -544,7 +582,7 @@ func _test_same_tick_oxygen_and_habitat_death_is_suffocation(fails: PackedString
 	var sim := Sim.new()
 	sim.setup(Constants.DEFAULT_SEED)
 	if sim.director != null:
-		sim.director.next_wave_at = 1.0e9
+		_silence_raids(sim)
 	var player := sim.get_player()
 	var habitat := _faction_building(sim.world, Types.Faction.PLAYER, Types.BuildingKind.HABITAT)
 	if player == null or habitat == null:
@@ -567,7 +605,7 @@ func _test_same_tick_hunger_lethal_and_o2_is_suffocation(fails: PackedStringArra
 	var sim := Sim.new()
 	sim.setup(Constants.DEFAULT_SEED)
 	if sim.director != null:
-		sim.director.next_wave_at = 1.0e9
+		_silence_raids(sim)
 	var player := sim.get_player()
 	if player == null:
 		fails.append("same-tick hunger+o2 missing player")
@@ -870,7 +908,7 @@ func _test_farm_harvest_transfer(fails: PackedStringArray) -> void:
 	var sim := Sim.new()
 	sim.setup(Constants.DEFAULT_SEED)
 	if sim.director != null:
-		sim.director.next_wave_at = 1.0e9
+		_silence_raids(sim)
 	var player := sim.get_player()
 	var depot := _player_depot(sim.world)
 	if player == null or depot == null:
@@ -897,7 +935,7 @@ func _test_hunger_is_not_a_lose(fails: PackedStringArray) -> void:
 	var sim := Sim.new()
 	sim.setup(Constants.DEFAULT_SEED)
 	if sim.director != null:
-		sim.director.next_wave_at = 1.0e9
+		_silence_raids(sim)
 	var player := sim.get_player()
 	if player == null:
 		fails.append("hunger latch missing player")
@@ -914,7 +952,7 @@ func _test_depot_skips_food(fails: PackedStringArray) -> void:
 	var sim := Sim.new()
 	sim.setup(Constants.DEFAULT_SEED)
 	if sim.director != null:
-		sim.director.next_wave_at = 1.0e9
+		_silence_raids(sim)
 	var player := sim.get_player()
 	var depot := _player_depot(sim.world)
 	if player == null or depot == null:
@@ -1183,6 +1221,39 @@ func _test_last_depot_zero_scrap_spills_floor(fails: PackedStringArray) -> void:
 	Combat.process_deaths(world)
 	if world.loot.size() != before:
 		fails.append("non-last 0-scrap Depot should not spill LAST_DEPOT_SCRAP")
+
+
+func _never_aggro_camp(sim: Sim) -> World.Camp:
+	var habitat := _faction_building(sim.world, Types.Faction.PLAYER, Types.BuildingKind.HABITAT)
+	var habitat_tile := habitat.origin_tile if habitat != null else Constants.PLAYER_HABITAT_TILE
+	var player_tile := Constants.PLAYER_SPAWN_TILE
+	var player := sim.get_player()
+	if player != null:
+		player_tile = sim.world.world_to_tile(player.pos)
+	for raw in sim.world.camps:
+		var camp := raw as World.Camp
+		if camp == null:
+			continue
+		var d_player := maxi(
+			absi(camp.depot_tile.x - player_tile.x),
+			absi(camp.depot_tile.y - player_tile.y)
+		)
+		var d_hab := maxi(
+			absi(camp.depot_tile.x - habitat_tile.x),
+			absi(camp.depot_tile.y - habitat_tile.y)
+		)
+		if d_player > Constants.CAMP_AGGRO_TILES and d_hab > Constants.CAMP_AGGRO_TILES:
+			return camp
+	return null
+
+
+func _silence_raids(sim: Sim) -> void:
+	if sim == null or sim.world == null:
+		return
+	for raw in sim.world.camps:
+		var camp := raw as World.Camp
+		if camp != null:
+			camp.next_raid_at = 1.0e9
 
 
 func _tick_idle(sim: Sim, ticks: int) -> void:

@@ -22,6 +22,8 @@ var chase_timer: float = 0.0
 var stuck_timer: float = 0.0
 var stuck_last_pos: Vector2 = Vector2.ZERO
 var siege_target_id: int = 0
+var home_depot_id: int = 0
+var home_pos: Vector2 = Vector2.ZERO
 
 
 static func inventory_for(unit_kind: int) -> Inventory:

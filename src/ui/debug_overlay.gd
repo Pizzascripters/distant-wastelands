@@ -96,7 +96,7 @@ func _refresh() -> void:
 		["carry food  %d" % _carry_food(snap), TEXT],
 		["o2  %.2f" % _float_field(snap, "player_o2", Constants.PLAYER_O2_MAX), TEXT],
 		["research  %s" % _research_line(snap), TEXT],
-		["next wave  %.2f" % _float_field(snap, "next_wave_at", 0.0), TEXT],
+		["next wave  %.2f" % _float_field(snap, "next_raid_at", 0.0), TEXT],
 		[
 			"completed_this_tick  %d" % _int_field(snap, "completed_this_tick", 0),
 			TEXT,

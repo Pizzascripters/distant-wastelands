@@ -5,9 +5,11 @@ const _AWAKE := Vector2i(22, 176)
 
 func run() -> PackedStringArray:
 	var fails := PackedStringArray()
-	_test_wave_at_60(fails)
+	_test_first_local_raid(fails)
 	_test_loot_channel(fails)
-	_test_next_wave_advances(fails)
+	_test_next_raid_advances(fails)
+	_test_out_of_aggro_does_not_spawn(fails)
+	_test_habitat_only_aggro(fails)
 	_test_blocked_siege_damages_wall(fails)
 	_test_siege_commits_to_depot(fails)
 	_test_chase_does_not_leave_siege(fails)
@@ -23,17 +25,40 @@ func run() -> PackedStringArray:
 	return fails
 
 
-func _test_wave_at_60(fails: PackedStringArray) -> void:
+func _test_first_local_raid(fails: PackedStringArray) -> void:
 	var sim := _ready_sim()
+	var camp := _near_camp(sim.world)
+	if camp == null:
+		fails.append("first raid missing a near camp in [40, 48]")
+		return
 	var before := _raider_count(sim)
-	_tick(sim, _ticks_for(Constants.FIRST_WAVE_AT) - 1)
+	_tick(sim, _ticks_for(Constants.CAMP_RAID_FIRST) - 1)
 	if _raider_count(sim) != before:
-		fails.append("raiders spawned before t=60: %d" % _raider_count(sim))
+		fails.append("raiders spawned before t=CAMP_RAID_FIRST: %d" % _raider_count(sim))
 	_tick(sim, 1)
-	if not is_equal_approx(sim.time, Constants.FIRST_WAVE_AT):
-		fails.append("time after first-wave tick is %s, expected %s" % [sim.time, Constants.FIRST_WAVE_AT])
-	if _raider_count(sim) != before + 2:
-		fails.append("at t=60 expected 2 raiders, got %d" % _raider_count(sim))
+	if not is_equal_approx(sim.time, Constants.CAMP_RAID_FIRST):
+		fails.append(
+			"time after first-raid tick is %s, expected %s"
+			% [sim.time, Constants.CAMP_RAID_FIRST]
+		)
+	var spawned := _raiders_for_camp(sim, camp)
+	if spawned.size() == 0 or spawned.size() > Constants.CAMP_RAID_SIZE:
+		fails.append(
+			"near camp at t=CAMP_RAID_FIRST spawned %d, expected 1..%d"
+			% [spawned.size(), Constants.CAMP_RAID_SIZE]
+		)
+		return
+	var pos0: Array[Vector2] = []
+	for raider in spawned:
+		pos0.append(raider.pos)
+	_tick(sim, 8)
+	var moved := false
+	for i in spawned.size():
+		if spawned[i].pos != pos0[i]:
+			moved = true
+			break
+	if not moved:
+		fails.append("near-camp raiders did not change pos (should be awake at Chebyshev 40–48)")
 
 
 func _test_loot_channel(fails: PackedStringArray) -> void:
@@ -56,14 +81,24 @@ func _test_loot_channel(fails: PackedStringArray) -> void:
 		fails.append("raider looted ice from a depot")
 
 
-func _test_next_wave_advances(fails: PackedStringArray) -> void:
+func _test_next_raid_advances(fails: PackedStringArray) -> void:
 	var sim := _ready_sim()
-	_tick(sim, _ticks_for(Constants.FIRST_WAVE_AT))
-	var expected := Constants.FIRST_WAVE_AT + Constants.WAVE_PERIOD
-	if not is_equal_approx(sim.director.next_wave_at, expected):
+	var camp := _near_camp(sim.world)
+	if camp == null:
+		fails.append("next_raid_at test missing a near camp")
+		return
+	_tick(sim, _ticks_for(Constants.CAMP_RAID_FIRST))
+	var expected := Constants.CAMP_RAID_FIRST + Constants.CAMP_RAID_PERIOD
+	if not is_equal_approx(camp.next_raid_at, expected):
 		fails.append(
-			"next_wave_at is %s, expected %s"
-			% [sim.director.next_wave_at, expected]
+			"near camp next_raid_at is %s, expected %s"
+			% [camp.next_raid_at, expected]
+		)
+	var snap := sim.snapshot()
+	if not is_equal_approx(snap.next_raid_at, expected):
+		fails.append(
+			"snapshot next_raid_at is %s, expected %s"
+			% [snap.next_raid_at, expected]
 		)
 
 
@@ -189,16 +224,56 @@ func _test_missing_home_dead_drops(fails: PackedStringArray) -> void:
 
 func _test_skipped_spawn_advances_clock(fails: PackedStringArray) -> void:
 	var sim := _ready_sim()
-	_remove_enemy_depots(sim)
-	_tick(sim, _ticks_for(Constants.FIRST_WAVE_AT))
-	if _raider_count(sim) != 0:
-		fails.append("skipped spawn created %d raiders" % _raider_count(sim))
-	var expected := Constants.FIRST_WAVE_AT + Constants.WAVE_PERIOD
-	if not is_equal_approx(sim.director.next_wave_at, expected):
+	var camp := _far_camp(sim)
+	if camp == null:
+		fails.append("unaggro clock test missing a far camp")
+		return
+	var before := _raider_count(sim)
+	_tick(sim, _ticks_for(Constants.CAMP_RAID_FIRST))
+	if _raiders_for_camp(sim, camp).size() != 0:
+		fails.append("far camp dispatched while out of aggro")
+	if _raider_count(sim) < before:
+		fails.append("unaggro clock test lost raiders")
+	var expected := Constants.CAMP_RAID_FIRST + Constants.CAMP_RAID_PERIOD
+	if not is_equal_approx(camp.next_raid_at, expected):
 		fails.append(
-			"skipped spawn next_wave_at is %s, expected %s"
-			% [sim.director.next_wave_at, expected]
+			"unaggro'd camp next_raid_at is %s, expected %s"
+			% [camp.next_raid_at, expected]
 		)
+
+
+func _test_out_of_aggro_does_not_spawn(fails: PackedStringArray) -> void:
+	var sim := _ready_sim()
+	var camp := _far_camp(sim)
+	if camp == null:
+		fails.append("out-of-aggro test missing a far camp")
+		return
+	_tick(sim, _ticks_for(Constants.CAMP_RAID_FIRST))
+	if _raiders_for_camp(sim, camp).size() != 0:
+		fails.append("camp out of aggro spawned raiders")
+	if camp.ever_aggro:
+		fails.append("far camp should not be ever_aggro from the starter pad")
+
+
+func _test_habitat_only_aggro(fails: PackedStringArray) -> void:
+	var sim := _ready_sim()
+	var camp := _near_camp(sim.world)
+	if camp == null:
+		fails.append("habitat-only aggro missing a near camp")
+		return
+	var player := sim.get_player()
+	if player == null:
+		fails.append("habitat-only aggro missing player")
+		return
+	player.pos = _tile_chebyshev_away(sim.world, camp.depot_tile, 80)
+	_tick(sim, _ticks_for(Constants.CAMP_RAID_FIRST))
+	var spawned := _raiders_for_camp(sim, camp)
+	if spawned.is_empty():
+		return
+	for raider in spawned:
+		if sim.world.is_unit_asleep(raider):
+			fails.append("habitat-window raiders should stay active")
+			return
 
 
 func _test_siege_rifle_damages_from_range(fails: PackedStringArray) -> void:
@@ -307,7 +382,7 @@ func _test_first_raid_without_ore_survivable(fails: PackedStringArray) -> void:
 	depot.inventory.add(Types.ResourceKind.SCRAP, Constants.RAIDER_CARRY_SCRAP)
 	_banish_player(sim)
 	var stand := sim.world.tile_center(depot.origin_tile.x + 2, depot.origin_tile.y)
-	for _i in Constants.WAVE_BASE:
+	for _i in Constants.CAMP_RAID_SIZE:
 		_inject_raider(sim, stand)
 	var habitat_hp0 := habitat.hp
 	_tick(sim, _ticks_for(Constants.RAIDER_LOOT_CHANNEL))
@@ -458,6 +533,61 @@ func _raider_count(sim: Sim) -> int:
 		if unit.kind == Types.UnitKind.RAIDER:
 			n += 1
 	return n
+
+
+func _raiders_for_camp(sim: Sim, camp: World.Camp) -> Array[Unit]:
+	var out: Array[Unit] = []
+	for unit in sim.world.units.values():
+		if unit.kind != Types.UnitKind.RAIDER:
+			continue
+		if unit.home_depot_id == camp.depot_id:
+			out.append(unit)
+	return out
+
+
+func _near_camp(world: World) -> World.Camp:
+	for raw in world.camps:
+		var camp := raw as World.Camp
+		if camp == null:
+			continue
+		var d := _chebyshev(camp.depot_tile, Constants.PLAYER_SPAWN_TILE)
+		if d >= Constants.PLAYER_SAFE_RADIUS and d <= Constants.CAMP_AGGRO_TILES:
+			return camp
+	return null
+
+
+func _far_camp(sim: Sim) -> World.Camp:
+	var habitat := _living(sim.world, Types.Faction.PLAYER, Types.BuildingKind.HABITAT)
+	var habitat_tile := habitat.origin_tile if habitat != null else Constants.PLAYER_HABITAT_TILE
+	var player_tile := Constants.PLAYER_SPAWN_TILE
+	var player := sim.get_player()
+	if player != null:
+		player_tile = sim.world.world_to_tile(player.pos)
+	for raw in sim.world.camps:
+		var camp := raw as World.Camp
+		if camp == null:
+			continue
+		if _chebyshev(camp.depot_tile, player_tile) <= Constants.CAMP_AGGRO_TILES:
+			continue
+		if _chebyshev(camp.depot_tile, habitat_tile) <= Constants.CAMP_AGGRO_TILES:
+			continue
+		return camp
+	return null
+
+
+func _chebyshev(a: Vector2i, b: Vector2i) -> int:
+	return maxi(absi(a.x - b.x), absi(a.y - b.y))
+
+
+func _tile_chebyshev_away(world: World, origin: Vector2i, dist: int) -> Vector2:
+	var dirs: Array[Vector2i] = [
+		Vector2i(0, 1), Vector2i(0, -1), Vector2i(1, 0), Vector2i(-1, 0)
+	]
+	for d in dirs:
+		var tile := origin + d * dist
+		if world.in_bounds(tile.x, tile.y):
+			return world.tile_center(tile.x, tile.y)
+	return world.tile_center(0, 0)
 
 
 func _first_raider(sim: Sim) -> Unit:
