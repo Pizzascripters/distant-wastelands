@@ -11,6 +11,7 @@ func run() -> PackedStringArray:
 	_test_withdraw_or_and_hud_blocks_fire(fails)
 	_test_lab_panel_ignores_late_build_keys(fails)
 	_test_medbay_heal_hint(fails)
+	_test_farm_workshop_gate_fields(fails)
 	return fails
 
 
@@ -52,12 +53,14 @@ func _test_depot_toggle_defaults_and_withdraw(fails: PackedStringArray) -> void:
 		"Ice": panel.find_child("IceCount", true, false) as Label,
 		"Ore": panel.find_child("OreCount", true, false) as Label,
 		"Parts": panel.find_child("PartsCount", true, false) as Label,
+		"Food": panel.find_child("FoodCount", true, false) as Label,
 	}
 	var want := {
 		"Scrap": "15 / %d" % Constants.DEPOT_CAP_SCRAP,
 		"Ice": "4 / %d" % Constants.DEPOT_CAP_ICE,
 		"Ore": "2 / %d" % Constants.DEPOT_CAP_ORE,
 		"Parts": "1 / %d" % Constants.DEPOT_CAP_PARTS,
+		"Food": "3 / %d" % Constants.DEPOT_CAP_FOOD,
 	}
 	for key in want.keys():
 		var lab: Label = stocks[key]
@@ -377,6 +380,75 @@ func _make_game_view(fails: PackedStringArray) -> Node:
 	return view
 
 
+func _test_farm_workshop_gate_fields(fails: PackedStringArray) -> void:
+	var panel := BuildingPanel.new()
+	panel.open_building({
+		"id": 21,
+		"kind": Types.BuildingKind.FARM,
+		"faction": Types.Faction.PLAYER,
+		"hp": 70,
+		"hp_max": Constants.FARM_HP,
+		"origin_tile": Vector2i(12, 50),
+		"food_stock": 5,
+		"food_stock_cap": Constants.FARM_FOOD_CAP,
+	})
+	var farm_box := panel.find_child("FarmBox", true, false) as Control
+	var farm_stock := panel.find_child("FarmStock", true, false) as Label
+	if farm_box == null or not farm_box.visible:
+		fails.append("farm panel should show FarmBox")
+	if farm_stock == null or farm_stock.text != "5 / %d growing" % Constants.FARM_FOOD_CAP:
+		fails.append("farm stock is %s" % (farm_stock.text if farm_stock != null else "missing"))
+	panel.open_building({
+		"id": 21,
+		"kind": Types.BuildingKind.FARM,
+		"faction": Types.Faction.PLAYER,
+		"hp": 70,
+		"hp_max": Constants.FARM_HP,
+		"food_stock": Constants.FARM_FOOD_CAP,
+		"food_stock_cap": Constants.FARM_FOOD_CAP,
+	})
+	if farm_stock == null or farm_stock.text != "%d / %d full" % [Constants.FARM_FOOD_CAP, Constants.FARM_FOOD_CAP]:
+		fails.append("full farm stock is %s" % (farm_stock.text if farm_stock != null else "missing"))
+
+	panel.open_building({
+		"id": 22,
+		"kind": Types.BuildingKind.WORKSHOP,
+		"faction": Types.Faction.PLAYER,
+		"hp": Constants.WORKSHOP_HP,
+		"hp_max": Constants.WORKSHOP_HP,
+		"origin_tile": Vector2i(13, 50),
+	})
+	var shop := panel.find_child("WorkshopBox", true, false) as Control
+	var lock := panel.find_child("WorkshopLock", true, false) as Label
+	if shop == null or not shop.visible:
+		fails.append("workshop panel should show the recipe box")
+	if lock == null or not lock.visible:
+		fails.append("workshop panel should show the lock hint")
+
+	panel.open_building({
+		"id": 23,
+		"kind": Types.BuildingKind.GATE,
+		"faction": Types.Faction.PLAYER,
+		"hp": 40,
+		"hp_max": Constants.GATE_HP,
+		"origin_tile": Vector2i(14, 50),
+	})
+	var icon := panel.find_child("Icon", true, false) as TextureRect
+	var gate_tex := WorldView.load_png("res://assets/sprites/placeholder/gate_player.png")
+	if icon == null or icon.texture == null or gate_tex == null:
+		fails.append("gate panel should use the gate sprite")
+	elif icon.texture.get_width() != gate_tex.get_width() or icon.texture.get_height() != gate_tex.get_height():
+		fails.append("gate panel icon size is %dx%d" % [icon.texture.get_width(), icon.texture.get_height()])
+	var hp := panel.find_child("HpValue", true, false) as Label
+	if hp == null or hp.text != "40 / %d" % Constants.GATE_HP:
+		fails.append("gate HP text is %s" % (hp.text if hp != null else "missing"))
+	if farm_box != null and farm_box.visible:
+		fails.append("gate panel should hide farm stock")
+	if shop != null and shop.visible:
+		fails.append("gate panel should hide the workshop recipe")
+	panel.free()
+
+
 func _depot_rec(id: int, scrap: int, ice: int, ore: int, parts: int) -> Dictionary:
 	return {
 		"id": id,
@@ -390,9 +462,11 @@ func _depot_rec(id: int, scrap: int, ice: int, ore: int, parts: int) -> Dictiona
 			"ice": ice,
 			"ore": ore,
 			"parts": parts,
+			"food": 3,
 			"cap_scrap": Constants.DEPOT_CAP_SCRAP,
 			"cap_ice": Constants.DEPOT_CAP_ICE,
 			"cap_ore": Constants.DEPOT_CAP_ORE,
 			"cap_parts": Constants.DEPOT_CAP_PARTS,
+			"cap_food": Constants.DEPOT_CAP_FOOD,
 		},
 	}

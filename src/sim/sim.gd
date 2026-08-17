@@ -152,6 +152,8 @@ func snapshot() -> SimSnapshot:
 	snap.research_paid = research_paid
 	snap.techs_done = techs_done
 	snap.hunger_failed = hunger_failed
+	if path_queue != null:
+		snap.completed_this_tick = path_queue.completed_this_tick
 	return snap
 
 

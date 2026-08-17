@@ -31,3 +31,4 @@ var techs_done: int = 0
 var hunger_failed: bool = false
 var sim_ms: float = 0.0
 var view_ms: float = 0.0
+var completed_this_tick: int = 0

@@ -38,13 +38,13 @@ func run() -> PackedStringArray:
 		"hp": 50,
 		"hp_max": 50,
 		"alive": true,
-		"inventory": {"scrap": 3, "ice": 1, "ore": 2, "parts": 4},
+		"inventory": {"scrap": 3, "ice": 1, "ore": 2, "parts": 4, "food": 24},
 	}]
 	snap.buildings = [{
 		"kind": Types.BuildingKind.DEPOT,
 		"faction": Types.Faction.PLAYER,
 		"hp": 80,
-		"inventory": {"scrap": 15, "ice": 4, "ore": 0, "parts": 1},
+		"inventory": {"scrap": 15, "ice": 4, "ore": 0, "parts": 1, "food": 2},
 	}]
 	snap.player_zero_ice_timer = 0.0
 	snap.banner_timer = 1.5
@@ -57,8 +57,15 @@ func run() -> PackedStringArray:
 	depot = _counts(hud, "Depot")
 	if carry.get("Ore", "") != "2" or carry.get("Parts", "") != "4":
 		fails.append("carry ore/parts were %s" % str(carry))
+	if carry.get("Food", "") != "24":
+		fails.append("carry food was %s" % str(carry))
 	if depot.get("Ice", "") != "4" or depot.get("Parts", "") != "1":
 		fails.append("depot ice/parts were %s" % str(depot))
+	if depot.get("Food", "") != "2":
+		fails.append("depot food was %s" % str(depot))
+	var food_lab := _count_label(hud, "Depot", "Food")
+	if food_lab == null or food_lab.get_theme_color("font_color") != Color("E24A3B"):
+		fails.append("depot food <= FOOD_WARN should use the low-food color")
 	var ice_lab := _count_label(hud, "Depot", "Ice")
 	if ice_lab == null or ice_lab.get_theme_color("font_color") != Color("E24A3B"):
 		fails.append("depot ice <= 5 should use low-ice color")

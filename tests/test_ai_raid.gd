@@ -17,6 +17,7 @@ func run() -> PackedStringArray:
 	_test_boxed_in_by_workshop_while_hauling(fails)
 	_test_hauling_includes_food(fails)
 	_test_hauling_smashes_farm(fails)
+	_test_first_raid_without_ore_survivable(fails)
 	return fails
 
 
@@ -281,6 +282,45 @@ func _test_boxed_in_by_workshop_while_hauling(fails: PackedStringArray) -> void:
 		fails.append("hauling smash must not hit the player Depot")
 
 
+func _test_first_raid_without_ore_survivable(fails: PackedStringArray) -> void:
+	var sim := _ready_sim()
+	var depot := _living(sim.world, Types.Faction.PLAYER, Types.BuildingKind.DEPOT)
+	var habitat := _living(sim.world, Types.Faction.PLAYER, Types.BuildingKind.HABITAT)
+	if depot == null or habitat == null:
+		fails.append("first-raid setup missing depot/habitat")
+		return
+	if depot.inventory.ore != 0 or depot.inventory.parts != 0 or sim.techs_done != 0:
+		fails.append("start loadout should have no ore, parts, or tech")
+	if depot.inventory.scrap < Constants.TURRET_COST:
+		fails.append("start scrap %d cannot buy a turret" % depot.inventory.scrap)
+		return
+	var turret_tile := _first_placeable(sim, Types.BuildingKind.TURRET)
+	if turret_tile.x < 0 or not Rules.try_place(sim.world, sim, Types.BuildingKind.TURRET, turret_tile):
+		fails.append("could not place a start-scrap turret")
+		return
+	if depot.inventory.ore != 0 or depot.inventory.parts != 0 or sim.techs_done != 0:
+		fails.append("turret placement spent ore/parts or unlocked tech")
+	_banish_player(sim)
+	var stand := sim.world.tile_center(depot.origin_tile.x - 1, depot.origin_tile.y)
+	for _i in Constants.WAVE_BASE:
+		_inject_raider(sim, stand)
+	var habitat_hp0 := habitat.hp
+	_tick(sim, _ticks_for(Constants.RAIDER_LOOT_CHANNEL))
+	if habitat.hp <= 0 or not sim.world.buildings.has(habitat.id):
+		fails.append("first raid without ore destroyed the habitat")
+	if sim.outcome != Types.Outcome.NONE:
+		fails.append("first raid without ore locked outcome %d" % sim.outcome)
+	if habitat.hp < habitat_hp0 and habitat_hp0 - habitat.hp >= habitat_hp0:
+		fails.append("first raid stripped the habitat")
+	var hauled := false
+	for unit in sim.world.units.values():
+		if unit.kind == Types.UnitKind.RAIDER and AiRaider.is_hauling(unit):
+			hauled = true
+			break
+	if not hauled:
+		fails.append("open-road first raid should loot and leave")
+
+
 func _ready_sim() -> Sim:
 	var sim := Sim.new()
 	sim.setup(Constants.DEFAULT_SEED)
@@ -466,3 +506,12 @@ func _enemy_proj_count(sim: Sim) -> int:
 		if proj.faction == Types.Faction.ENEMY:
 			n += 1
 	return n
+
+
+func _first_placeable(sim: Sim, kind: int) -> Vector2i:
+	for y in Constants.MAP_H:
+		for x in Constants.MAP_W:
+			var tile := Vector2i(x, y)
+			if Rules.can_place(sim.world, sim, kind, tile):
+				return tile
+	return Vector2i(-1, -1)

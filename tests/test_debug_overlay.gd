@@ -10,12 +10,24 @@ func run() -> PackedStringArray:
 	var snap := SimSnapshot.new()
 	snap.tick = 7
 	snap.outcome = Types.Outcome.PLAYER_WIN
+	snap.player_o2 = 41.5
+	snap.research_selected = Types.TechKind.HYDROPONICS
+	snap.research_progress = 2.5
+	snap.techs_done = 1
+	snap.completed_this_tick = 1
 	var units: Array[Dictionary] = []
 	units.append({
 		"id": 1,
 		"kind": Types.UnitKind.PLAYER,
+		"inventory": {"food": 24},
 	})
 	snap.units = units
+	snap.buildings = [{
+		"kind": Types.BuildingKind.DEPOT,
+		"faction": Types.Faction.PLAYER,
+		"hp": 80,
+		"inventory": {"scrap": 15, "ice": 20, "ore": 3, "parts": 1, "food": 4},
+	}]
 	overlay.apply_snapshot(snap)
 	if overlay.visible:
 		fails.append("apply_snapshot must not show the overlay")
@@ -26,14 +38,20 @@ func run() -> PackedStringArray:
 	_expect_contains(fails, text, "sim_ms  ", "sim_ms")
 	_expect_contains(fails, text, "view_ms  ", "view_ms")
 	_expect_contains(fails, text, "units  1", "units")
-	_expect_contains(fails, text, "buildings  0", "buildings")
+	_expect_contains(fails, text, "buildings  1", "buildings")
 	_expect_contains(fails, text, "deposits  0", "deposits")
 	_expect_contains(fails, text, "loot  0", "loot")
 	_expect_contains(fails, text, "projectiles  0", "projectiles")
 	_expect_contains(fails, text, "outcome  PLAYER_WIN", "outcome")
-	_expect_contains(fails, text, "player depot  —", "player depot")
+	_expect_contains(
+		fails, text, "player depot  scrap 15  ice 20  ore 3  parts 1  food 4", "player depot"
+	)
 	_expect_contains(fails, text, "enemy depot  —", "enemy depot")
+	_expect_contains(fails, text, "carry food  24", "carry food")
+	_expect_contains(fails, text, "o2  41.50", "o2")
+	_expect_contains(fails, text, "research  HYDROPONICS  2.50  done 1", "research")
 	_expect_contains(fails, text, "next wave  0", "next wave")
+	_expect_contains(fails, text, "completed_this_tick  1", "completed_this_tick")
 	_expect_color(fails, overlay, "sim_ms", DebugOverlay.TEXT)
 	_expect_color(fails, overlay, "view_ms", DebugOverlay.TEXT)
 
