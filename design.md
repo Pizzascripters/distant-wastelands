@@ -82,7 +82,7 @@ Do **not** implement any of the following. They are listed so later work has a p
 | Command/tick contract | **Latest-held command; one enqueue per sim tick; consume on apply.** Pause and a locked outcome drop gameplay. | Catch-up ticks, pause, and one-shot `build_kind` / `research_kind` are otherwise unimplementable. Unchanged from the baseline, extended with a research latch. |
 | Sim vs view | **Authoritative fixed-tick sim** (20 Hz) as plain GDScript objects. Godot nodes are a view. | Scene-tree-as-sim is hostile to tests and host-auth netcode. |
 | Time / space | Real-time, `dt = 0.05s`. **64×64 tile occupancy**, free 2D pixel movement for units. | Survival raids need simultaneous movement. Tiles make building, pathing, and deposits trivial. |
-| Resources | **Exactly five haulable: Scrap, Ice, Ore, Parts, Food.** Five-integer `Inventory` with per-kind caps. No weight. Personal **oxygen is not a depot resource**. | Scrap is cheap construction. Ice is colony life. Ore is scarcer mid-tier. Parts are crafted-only premium. Food is personal rations grown at a Farm. A sixth haulable is not required. |
+| Resources | **Exactly five haulable: Scrap, Ice, Ore, Parts, Food.** Five-integer `Inventory` with per-kind caps. No weight. Personal **oxygen is not a depot resource**. **Food is not a depot resource** (carry / loot / Farm stock only). | Scrap is cheap construction. Ice is colony life. Ore is scarcer mid-tier. Parts are crafted-only premium. Food is personal rations grown at a Farm. Dumping dinner into the depot must not be possible. |
 | Buildings | Habitat + Depot pre-placed, not rebuildable. Player builds **Wall, Turret, Workshop, Farm, Lab, Medbay, Gate**. | Each has a unique job (see Buildings). Five new constructibles, no second turret, no belts. |
 | Tech tree | **Small bush:** Hydroponics, Metallurgy, Field Medicine in parallel; **Ballistics** behind Metallurgy (costs Parts). One selected research on `Sim`. Lab is scrap-only and start-unlocked. Workshop is start-placeable; **the Parts recipe is locked until Metallurgy**. Hydroponics unlocks the **Farm**. | Research can begin without a prior tech. Early raid still works with start scrap (Wall + Turret). Start Food covers the Hydroponics + Farm race. |
 | Oxygen | **60 s** full charge. Instant refill to max while adjacent to a living player **Habitat or Depot**. At 0: **1 HP every 5 ticks** (`PLAYER_O2_HP_PER_PULSE` / `PLAYER_O2_PULSE_TICKS`). | Habitat-or-Depot adjacency keeps the dump / turret stand off the suffocation clock. Off-pad gather drains; coming home to dump refills. 60 s is the **raid-out** budget. The Farm does **not** refill O2. |
@@ -95,7 +95,7 @@ Do **not** implement any of the following. They are listed so later work has a p
 | Ranged AI | Shooting is **orthogonal** to the state machine. Target priority: living player in range, else the tasked / siege building, else nearest player building. `CHASE_RADIUS` stays **96 px**. `SIEGE` still never chases. | Raising chase to 320 px would make every wave abandon loot to hunt the player across the map. Loot-and-return + committed smash stay. |
 | Ravage model | Open road: loot-and-return. Enter `SIEGE` when A* to the objective is **computed-empty** or stuck `RAIDER_STUCK_TIME`. Non-hauling `SIEGE` commits: blockers → Depot → Habitat. **Hauling smash = nearest solid player building that is not Depot/Habitat.** Chase does not preempt `SIEGE`. | A Workshop on the home road must be smashable while hauling or raiders sit forever. Every PR that adds a solid updates this smash set. |
 | Win/lose | Habitat HP 0; ice has been 0 for 30 s while that faction still has a living Depot; or the player misses a Food meal (`HUNGER`). Destroying a depot spills one loot pile and does **not** start or continue the ice starve clock. | Habitat and ice remain the colony clocks. Hunger is personal and does not respawn. |
-| UI | HUD resource **icons + counts** for carry and player depot (five kinds). Build bar is **building sprites**. **No Habitat/Depot HP on the HUD.** Inspect (`F`, or RMB on a player building when not in build mode) opens a building panel that owns HP. Personal O2 is on the HUD. Low carry Food uses the low-ice color. | Names are not the primary label. Building health is a building concern. LMB stays fire. |
+| UI | HUD resource **icons + counts** for carry (five kinds, including Food) and player depot (**four** kinds: Scrap, Ice, Ore, Parts — no Food). Build bar is **building sprites**. **No Habitat/Depot HP on the HUD.** Inspect (`F`, or RMB on a player building when not in build mode) opens a building panel that owns HP. Personal O2 is on the HUD. Low carry Food uses the low-ice color. | Names are not the primary label. Building health is a building concern. LMB stays fire. Food is personal carry, not a depot stock. |
 | Performance | Binding: heap A*, **1 new A\* per tick**, spawn stagger, pending ≠ empty, terrain cache, dirty `queue_redraw`. `4 ms` / `8 ms` are F3 **guidance** on the project Linux box (software GL, 1280×720, `gl_compatibility`), not failing test law. | Commit `4e4fa7c` already caches A* across thinks. The remaining hitch is N linear A* on the spawn tick plus the per-frame terrain redraw. |
 | Art | 32×32 pixel-art PNGs for `EMPTY` ground and `ROCK`. Everything else: colored primitives + 1 px outlines, or matching placeholder PNGs under `assets/sprites/placeholder/`, team stripe on buildings, damage flash on hit. | Same parseability bar as the baseline. New icons/buildings must meet it. |
 | Renderer | **`gl_compatibility`** | Broader Linux Mesa + older Windows GPU coverage. |
@@ -373,12 +373,12 @@ Algorithm:
 3. Place player camp in `PLAYER_CAMP_RECT`:
    - Habitat at `PLAYER_HABITAT_TILE` (2×2: that tile and `+ (1,0)`, `+(0,1)`, `+(1,1)`), faction `PLAYER`, HP full.
    - Depot at `PLAYER_DEPOT_TILE` (2×2), faction `PLAYER`, HP full.
-   - Starting stock in that depot: `START_PLAYER_SCRAP` Scrap, `START_PLAYER_ICE` Ice, `START_PLAYER_ORE` Ore, `START_PLAYER_PARTS` Parts, `START_PLAYER_DEPOT_FOOD` Food (0).
+   - Starting stock in that depot: `START_PLAYER_SCRAP` Scrap, `START_PLAYER_ICE` Ice, `START_PLAYER_ORE` Ore, `START_PLAYER_PARTS` Parts. No Food.
    - Player unit spawn world position: center of `PLAYER_SPAWN_TILE`. `o2 = PLAYER_O2_MAX`. Carry Food = `START_PLAYER_FOOD`. `food_debt_timer = 0`.
 4. Place enemy camp in `ENEMY_CAMP_RECT`:
    - Habitat at `ENEMY_HABITAT_TILE` (2×2), faction `ENEMY`, HP full.
    - Depot at `ENEMY_DEPOT_TILE` (2×2), faction `ENEMY`, HP full.
-   - Starting stock in that depot: `START_ENEMY_SCRAP` Scrap, `START_ENEMY_ICE` Ice, `START_ENEMY_ORE` Ore, `START_ENEMY_PARTS` Parts, `START_ENEMY_FOOD` Food (0).
+   - Starting stock in that depot: `START_ENEMY_SCRAP` Scrap, `START_ENEMY_ICE` Ice, `START_ENEMY_ORE` Ore, `START_ENEMY_PARTS` Parts. No Food.
    - Enemy turret at `ENEMY_TURRET_TILE`, faction `ENEMY`.
    - Guard unit at center of `ENEMY_GUARD_TILE`, faction `ENEMY`.
 5. **Always** carve the 3-wide L corridor (do not wait for a flood-fill failure):
@@ -469,16 +469,16 @@ Habitat and Medbay are **not** interact targets. Oxygen refill and Medbay heal a
 
 **Adjacency (buildings).** Used for player depot / workshop / lab / farm interact, oxygen refill, medbay heal, and raider loot / despawn: `distance(unit_center, footprint_aabb) <= INTERACT_BUILDING_RANGE`. Units cannot occupy a solid footprint (except the player on a Gate), so this means “stand next to it” (or on a Gate next to it). There is no second 40 px center-radius rule.
 
-**Deposit (own depot, default).** Default own-depot `E` is still **dump**: player → depot. Each tick while resolved and `cmd.withdraw == false`: `interact_progress += SIM_DT`. Whenever `interact_progress >= TRANSFER_PERIOD`, subtract `TRANSFER_PERIOD` and transfer up to `TRANSFER_BATCH` of each haulable in order **Scrap, Ice, Ore, Parts, Food** (player → depot, limited by source and dest free space). Food is last so a short dump does not immediately empty dinner. **First transfer occurs after one full `TRANSFER_PERIOD`**, not on the press frame.
+**Deposit (own depot, default).** Default own-depot `E` is still **dump**: player → depot. Each tick while resolved and `cmd.withdraw == false`: `interact_progress += SIM_DT`. Whenever `interact_progress >= TRANSFER_PERIOD`, subtract `TRANSFER_PERIOD` and transfer up to `TRANSFER_BATCH` of each depot haulable in order **Scrap, Ice, Ore, Parts** (player → depot, limited by source and dest free space). **Food is not a depot resource** and is never transferred. **First transfer occurs after one full `TRANSFER_PERIOD`**, not on the press frame.
 
-**Withdraw (own depot).** Own-depot transfer reverses when `cmd.withdraw == true`. Same cadence, same `TRANSFER_BATCH`, same Scrap → Ice → Ore → Parts → Food order, opposite direction (depot → player), limited by depot stock and carry caps. `cmd.withdraw` is held state. The view sets it when:
+**Withdraw (own depot).** Own-depot transfer reverses when `cmd.withdraw == true`. Same cadence, same `TRANSFER_BATCH`, same Scrap → Ice → Ore → Parts order, opposite direction (depot → player), limited by depot stock and carry caps. Food is never withdrawn because the depot never holds it. `cmd.withdraw` is held state. The view sets it when:
 
 - `withdraw` (Left or Right Shift) is held together with `interact`, **or**
 - the inspected **player Depot** panel’s Deposit/Withdraw toggle is **Withdraw** (toggle defaults to Deposit each time that panel opens).
 
 Shift and the toggle OR together; either is enough. Switching direction mid-channel resets `interact_progress`. There is no per-kind filter in v0.1 — withdraw is the full bag, same as deposit. Withdraw pulls **leftover / dumped** stock. It is **not** a refund of Metallurgy’s 6 Ore (that payment is consumed). After paying the tech, craft still needs a later 2 Ore in carry (second gather trip, or ore dumped and not spent).
 
-**Steal (enemy depot).** Same cadence and batch as deposit, opposite direction (depot → player). Same order: Scrap, then Ice, then Ore, then Parts, then Food, each up to `TRANSFER_BATCH`. `withdraw` is **ignored** on an enemy depot (steal is already depot → player). This is the primary “steal supplies” action.
+**Steal (enemy depot).** Same cadence and batch as deposit, opposite direction (depot → player). Same order: Scrap, then Ice, then Ore, then Parts, each up to `TRANSFER_BATCH`. Food is never stolen from a depot. `withdraw` is **ignored** on an enemy depot (steal is already depot → player). This is the primary “steal supplies” action.
 
 **Gather.** Same hold. After an uninterrupted `GATHER_CHANNEL`, transfer `1` unit from the deposit to the player inventory, then reset `interact_progress` (repeat while held). When `remaining` hits 0, remove the deposit entity. Ore deposits use the same channel and range as Scrap and Ice.
 
@@ -505,7 +505,7 @@ Shift and the toggle OR together; either is enough. Switching direction mid-chan
 | Kind | Footprint | Max HP | Cost | Buildable? | Solid | Unique feeling |
 | --- | --- | --- | --- | --- | --- | --- |
 | Habitat | 2×2 | 200 | — | No (pre-placed) | Yes | Loss-condition target. O2 refill (with Depot). Does not store resources. |
-| Depot | 2×2 | 100 | — | No (pre-placed) | Yes | Stores **all five** haulables. Caps 50 / 50 / 30 / 20 / 30. Raid / steal target. O2 refill (camp workplace). |
+| Depot | 2×2 | 100 | — | No (pre-placed) | Yes | Stores Scrap, Ice, Ore, Parts. Caps 50 / 50 / 30 / 20 / **0 Food**. Raid / steal target. O2 refill (camp workplace). |
 | Wall | 1×1 | 60 | 5 Scrap | Yes, start | Yes | Projectile **cover** + path block. More important now that raiders shoot. |
 | Turret | 1×1 | 80 | 15 Scrap | Yes, start | Yes | Auto-fires at opposing **units**. Start-unlocked so the 60 s first raid is survivable. |
 | Workshop | 1×1 | 70 | 10 Scrap | Yes, start | Yes | Player-present workbench. Placeable immediately; **cannot craft until Metallurgy**. |
@@ -572,18 +572,18 @@ Two-argument `Inventory.new(a, b)` remains valid and sets ore/parts/food caps to
 | `Unit.inventory_for(PLAYER)` | `Inventory.new(PLAYER_CARRY_SCRAP, PLAYER_CARRY_ICE, PLAYER_CARRY_ORE, PLAYER_CARRY_PARTS, PLAYER_CARRY_FOOD)` |
 | `Unit.inventory_for(RAIDER)` | `Inventory.new(RAIDER_CARRY_SCRAP, RAIDER_CARRY_ICE, RAIDER_CARRY_ORE, RAIDER_CARRY_PARTS, RAIDER_CARRY_FOOD)` |
 | `Unit.inventory_for(GUARD)` | `Inventory.new(0, 0, 0, 0, 0)` (or two-arg; zero food) |
-| `Mapgen` player + enemy depots | `Inventory.new(DEPOT_CAP_SCRAP, DEPOT_CAP_ICE, DEPOT_CAP_ORE, DEPOT_CAP_PARTS, DEPOT_CAP_FOOD)` |
+| `Mapgen` player + enemy depots | `Inventory.new(DEPOT_CAP_SCRAP, DEPOT_CAP_ICE, DEPOT_CAP_ORE, DEPOT_CAP_PARTS, 0)` — Food cap **must** be 0 |
 | `Loot._init` | `Inventory.new(999, 999, 999, 999, 999)` |
 | Combat depot spill / unit death drop / DeadDrop / home leftover | same five-cap 999 loot pile |
 
-`test_inventory.gd` / `test_combat.gd` must assert that `Inventory.new(999, 999)` **rejects** ore, parts, and food; that a four-arg bag **rejects** food; and that `Loot` / depot / player / raider five-arg bags accept food.
+`test_inventory.gd` / `test_combat.gd` must assert that `Inventory.new(999, 999)` **rejects** ore, parts, and food; that a four-arg bag **rejects** food; that `Loot` / player / raider five-arg bags accept food; and that a **depot** inventory **rejects** Food (`cap_food == 0`).
 
 | Holder | cap_scrap | cap_ice | cap_ore | cap_parts | cap_food |
 | --- | --- | --- | --- | --- | --- |
 | Player unit | 10 | 10 | 6 | 5 | 24 |
 | Raider | 5 | 3 | 2 | 2 | 3 |
 | Guard | 0 | 0 | 0 | 0 | 0 |
-| Depot | 50 | 50 | 30 | 20 | 30 |
+| Depot | 50 | 50 | 30 | 20 | **0** |
 | Loot pile | 999 | 999 | 999 | 999 | 999 |
 | Farm stock | — | — | — | — | `FARM_FOOD_CAP` (12) (not an `Inventory`) |
 | Deposit | remaining is a single kind; not an Inventory. Parts and Food have no deposits. |
@@ -596,11 +596,11 @@ Two-argument `Inventory.new(a, b)` remains valid and sets ore/parts/food caps to
 | Ice | World deposits (`ICE_DEPOSIT_*`). Start depot 20. | Colony life-support pull. Hydroponics / Field Medicine / Farm **build** cost. Medbay cost. |
 | Ore | World deposits (`ORE_DEPOSIT_*`), scarcer. Start depot 0. Enemy start 6. | Metallurgy cost. Workshop input. Meaningfully rarer than scrap, not a luck gate. |
 | Parts | **Crafted only** at the Workshop after Metallurgy. Never a world deposit. Start 0. | Gate cost. Ballistics cost. The premium sink. |
-| Food | **Grown only** at a Farm. Never a world deposit. Start **24 on player carry**, 0 in both depots. | Personal hunger. Auto-eaten from carry. Missing a meal is a lose. |
+| Food | **Grown only** at a Farm. Never a world deposit. Never stored in a depot. Start **24 on player carry**. | Personal hunger. Auto-eaten from carry. Missing a meal is a lose. |
 
 **Personal oxygen** is a float seconds-remaining on the player unit (`unit.o2`). It is not a `ResourceKind`, does not enter `Inventory`, cannot be stolen, deposited, or dropped.
 
-**Food** is a `ResourceKind`. It lives in `Inventory` like the other haulables. Hunger consumes carry Food; it is not a second personal float.
+**Food** is a `ResourceKind`. It lives in **player / raider / loot** inventories, and in Farm `food_stock`. It does **not** live in a Depot. Hunger consumes carry Food; it is not a second personal float.
 
 ### Life support (maintain pillar)
 
@@ -651,13 +651,13 @@ Off-pad gathering (deposits are forbidden inside `PLAYER_CAMP_RECT`) drains O2. 
 
 Player-only. Food is eaten from **carry**, not from the depot and not from a Farm stock.
 
-- **Start:** player carry Food = `START_PLAYER_FOOD` (24). `food_debt_timer = 0`. Depot Food starts at 0.
+- **Start:** player carry Food = `START_PLAYER_FOOD` (24). `food_debt_timer = 0`. Depots do not store Food.
 - **Meal:** every `FOOD_EAT_PERIOD` (15.0 s) of living time, remove 1 Food from carry. That is 24 meals = **360 s / 6 minutes** before the first Farm must have been harvested.
 - **Budget:** Hydroponics is 8 Ice from the start depot plus 20 s at a Lab. Farm costs 12 Scrap + 4 Ice. Start depot ice covers both Ice payments. If the player spent start scrap on a turret, they must gather scrap for the Lab and Farm. Six minutes is the intended slack for that path; do not silently retune if a playtest is slow — change this document first.
 - **Missed meal:** if a meal is due and carry Food is 0, set `sim.hunger_failed = true`. Step 16 writes `(PLAYER_LOSE, HUNGER)`. This is **not** combat death: no corpse drop from the hunger fail itself, no respawn, session over.
 - **Combat death:** carry (including leftover Food) drops as loot. Respawn carry is empty and `food_debt_timer = 0`, so the next meal is a full period later. Pick up the pile or harvest a Farm before that meal.
-- **Dumping Food** into the depot is legal and is a starve risk. Withdraw exists. Transfer order puts Food last so a short dump empties scrap/ice/ore/parts first.
-- **HUD:** carry Food uses the low-ice color `#E24A3B` when `food <= FOOD_WARN` (4). Depot Food is an ordinary icon + count.
+- **Depots reject Food.** Own-depot dump / withdraw / steal never move Food. `DEPOT_CAP_FOOD` is 0. A dump cannot empty dinner.
+- **HUD:** carry Food uses the low-ice color `#E24A3B` when `food <= FOOD_WARN` (4). The depot row has no Food icon.
 - **Farm growth vs hunger:** one Farm grows 1 Food / 10 s (6 / min) up to 12. The player eats 4 / min. A living Farm is a surplus once you harvest it.
 
 **Farm vs colony ice.** Colony pull is 1 / 15 s. Farm growth is 1 / 10 s per living farm, stock 12. Filling a stock and walking away does not feed the player — harvest is visit-gated. Colony ice stays the habitat clock; Food is the personal clock.
@@ -715,7 +715,7 @@ Metallurgy **consumes** 6 Ore from the living player depot on the first Lab-chan
 
 **Depot caps.** 50/50/30/20. Scrap and ice caps stay 50 so steal-to-starve math is unchanged (enemy 40 ice, raider 3 ice/trip). Ore 30 holds a mid-session stockpile without letting one depot-snipe dump the whole map’s ore as a 999-cap pile (the pile is 999, the depot is 30). Parts 20 is more than Ballistics + several Gates.
 
-**Raider steal.** Carry 5/3/2/2/3. `hauling` is now `scrap > 0 or ice > 0 or ore > 0 or parts > 0 or food > 0`. Loot channel still 3.0 s, transfers all five kinds into remaining space.
+**Raider steal.** Carry 5/3/2/2/3. `hauling` is now `scrap > 0 or ice > 0 or ore > 0 or parts > 0 or food > 0`. Loot channel still 3.0 s. From a depot it transfers Scrap, Ice, Ore, Parts only — Food never leaves a depot because a depot never holds it. Raider Food comes from corpse / leftover piles, not from depot loot.
 
 **Ranged DPS (must not delete a Habitat).** Player effective range is `PLAYER_PROJ_SPEED * PLAYER_PROJ_LIFE` = 400 × 0.8 = **320 px**. Enemies use that same product (`ENEMY_RIFLE_RANGE`). They must **not** use player DPS.
 
@@ -802,7 +802,7 @@ If none, `fire_target_id = 0`. They never fire at enemy buildings, deposits, or 
 
 Primary order on an **open road** is loot the player depot and return. `SIEGE` is a blocked-path state that, for a non-hauling raider, **commits to a smash**. Habitat-HP lose is a live path: a sealed corridor is not a delay before more looting; the raiders finish the colony.
 
-**`hauling`:** a raider is hauling iff `inventory.scrap > 0 or ice > 0 or ore > 0 or parts > 0`.
+**`hauling`:** a raider is hauling iff `inventory.scrap > 0 or ice > 0 or ore > 0 or parts > 0 or food > 0`.
 
 Each tick, the current state's transition list is evaluated **in the written order**. Take the first match. Do not evaluate later arrows.
 
@@ -866,7 +866,7 @@ There is **no** `SIEGE → PATH_TO_DEPOT` arrow. A loot path opening does not ex
   5. Else follow A* toward the player depot.
 - **`PATH_HOME` priority:**
   1. Enemy depot missing → `DEAD_DROP`.
-  2. Adjacent to the enemy depot → `Despawn` (add carry to that depot, all five kinds; leftover becomes loot at the depot center; delete the raider).
+  2. Adjacent to the enemy depot → `Despawn` (add Scrap/Ice/Ore/Parts carry to that depot; leftover, **including all Food**, becomes loot at the depot center; delete the raider).
   3. A* to the enemy depot is computed-empty, **or** stuck → `SIEGE`.
   4. Else if a living player is within `RAIDER_CHASE_RADIUS` → `CHASE` (resume = `PATH_HOME`).
   5. Else follow A* home.
@@ -884,7 +884,7 @@ There is **no** `SIEGE → PATH_TO_DEPOT` arrow. A loot path opening does not ex
     3. Else the player Habitat if alive.
   - After the last blocker dies, the target **becomes the Depot even if a walkable loot path exists**. After the Depot dies, the target **becomes the Habitat**. Raiders in this smash do not `LOOT`.
   - Move toward `siege_target_id` (A* to a walkable neighbor tile if one exists; else straight-line + slide). Shoot / melee by the range rules. If the target is the Habitat and the raider is adjacent, transition to `ATTACK_HABITAT`.
-- **Loot:** `RAIDER_LOOT_CHANNEL` while in `LOOT`. At the end, `remove` from the player depot up to the raider’s remaining carry of each kind (Scrap, Ice, Ore, Parts, Food) and `add` to the raider. If the player depot dies mid-channel → `PATH_TO_HABITAT`. Else if carry is full (all five resources at cap) **or** the depot has 0 of every kind the raider can still carry → `PATH_HOME`. Else if a living player is within `RAIDER_CHASE_RADIUS` → `CHASE` (progress resets; resume = `PATH_TO_DEPOT`). Else keep channeling. (A player outside chase radius but inside rifle range is shot; loot continues.)
+- **Loot:** `RAIDER_LOOT_CHANNEL` while in `LOOT`. At the end, `remove` from the player depot up to the raider’s remaining carry of Scrap, Ice, Ore, and Parts and `add` to the raider. Food is not taken from the depot. If the player depot dies mid-channel → `PATH_TO_HABITAT`. Else if carry is full for every depot kind the raider can still hold **or** the depot has 0 Scrap, Ice, Ore, and Parts → `PATH_HOME`. Else if a living player is within `RAIDER_CHASE_RADIUS` → `CHASE` (progress resets; resume = `PATH_TO_DEPOT`). Else keep channeling. (A player outside chase radius but inside rifle range is shot; loot continues.)
 - **`DeadDrop`:** drop carry as loot at the raider’s feet (all five kinds) and delete the raider. One-tick transition. Do not idle. Do not fire.
 - **ChasePlayer:** move toward the player; shoot / melee by range. `chase_timer` increments by `SIM_DT` while distance `> RAIDER_CHASE_RADIUS`, else resets to 0. After `chase_timer >= RAIDER_CHASE_GIVEUP`, resume: `PATH_HOME` if hauling, else `PATH_TO_DEPOT` if the player depot exists, else `PATH_TO_HABITAT`. Chase is never entered from `SIEGE`.
 - **`ATTACK_HABITAT`:** smash the habitat until it dies (player lose) or the raider dies. If a living player is within `RAIDER_CHASE_RADIUS`, `CHASE` (resume = `PATH_TO_HABITAT`).
@@ -952,7 +952,7 @@ The session hitches when the first wave (and later waves) spawn. This is a v0.1 
 
 **HUD (`src/ui/hud.gd`, `scenes/ui/hud.tscn`)**
 
-- Resource readouts are a row of **icons + integer counts**, not `"Carry scrap"` / `"Depot ice"` strings as the primary label. Two groups: **Carry** and **Depot**. Five icons each: Scrap, Ice, Ore, Parts, Food.
+- Resource readouts are a row of **icons + integer counts**, not `"Carry scrap"` / `"Depot ice"` strings as the primary label. Two groups: **Carry** (Scrap, Ice, Ore, Parts, Food) and **Depot** (Scrap, Ice, Ore, Parts — **no Food**).
 - Icons are the same placeholder sprites as the world (`assets/sprites/placeholder/scrap.png`, `ice.png`, `ore.png`, `parts.png`, `food.png`), drawn nearest-neighbor at 16–20 px.
 - Missing depot: depot counts show `—`.
 - Ice count uses the low-ice color rule above. Carry Food uses the same `#E24A3B` when `food <= FOOD_WARN` (4).
@@ -983,7 +983,7 @@ Inspecting a living **player** building opens a panel (bottom-center or next to 
 - Kind-appropriate stats (cost is not repeated unless useful; range on turrets; recipe on workshop).
 - **HP bar** (`hp / hp_max`) — this is where Habitat and Depot HP live.
 - Kind state:
-  - Depot: five resource icons + counts / caps, plus a **Deposit / Withdraw** toggle. Default **Deposit** each time the panel opens. While Withdraw is selected, held `E` sets `cmd.withdraw` (see Player interaction). The toggle is view state; it is not a sim field.
+  - Depot: four resource icons + counts / caps (Scrap, Ice, Ore, Parts — no Food), plus a **Deposit / Withdraw** toggle. Default **Deposit** each time the panel opens. While Withdraw is selected, held `E` sets `cmd.withdraw` (see Player interaction). The toggle is view state; it is not a sim field.
   - Farm: Food stock / `FARM_FOOD_CAP`, growing or full.
   - Lab: four tech icons; selected highlight; progress bar `research_progress / duration`; completed techs marked; Ballistics disabled until Metallurgy; LMB or keys 1–4 select.
   - Workshop: recipe `3 scrap-icon + 2 ore-icon → 1 parts-icon`; locked hint if Metallurgy is incomplete.
@@ -1455,7 +1455,7 @@ All live in `res://src/core/constants.gd`. Implementers must not invent addition
 | `DEPOT_HP` | 100 |
 | `DEPOT_CAP_SCRAP`, `DEPOT_CAP_ICE` | 50, 50 |
 | `DEPOT_CAP_ORE`, `DEPOT_CAP_PARTS` | 30, 20 |
-| `DEPOT_CAP_FOOD` | 30 |
+| `DEPOT_CAP_FOOD` | **0** (depots never store Food; keep the constant so a missed 0 is a test failure) |
 | `WALL_HP` / `WALL_COST` | 60 / 5 |
 | `TURRET_HP` / `TURRET_COST` | 80 / 15 |
 | `TURRET_RANGE` | 160.0 |
@@ -1483,10 +1483,10 @@ All live in `res://src/core/constants.gd`. Implementers must not invent addition
 | `START_PLAYER_SCRAP`, `START_PLAYER_ICE` | 15, 20 |
 | `START_PLAYER_ORE`, `START_PLAYER_PARTS` | 0, 0 |
 | `START_PLAYER_FOOD` | 24 (player carry, not depot) |
-| `START_PLAYER_DEPOT_FOOD` | 0 |
+| `START_PLAYER_DEPOT_FOOD` | unused; depots do not store Food |
 | `START_ENEMY_SCRAP`, `START_ENEMY_ICE` | 20, 40 |
 | `START_ENEMY_ORE`, `START_ENEMY_PARTS` | 6, 0 |
-| `START_ENEMY_FOOD` | 0 |
+| `START_ENEMY_FOOD` | unused; depots do not store Food |
 | `ICE_PULL_PLAYER` | 15.0 |
 | `ICE_PULL_ENEMY` | 20.0 |
 | `ZERO_ICE_LIMIT` | 30.0 |
@@ -1604,7 +1604,7 @@ This is a local game, not a service. Observability is for developers and playtes
 
 | Signal | How |
 | --- | --- |
-| FPS, tick, `sim_ms`, `view_ms`, entity counts, outcome, depot stocks (five resources), carry Food, `player_o2`, research selected/progress/done, next wave, `PathQueue.completed_this_tick` | F3 debug overlay (`ui/debug_overlay.gd`), drawn only when toggled |
+| FPS, tick, `sim_ms`, `view_ms`, entity counts, outcome, depot stocks (four resources; no Food), carry Food, `player_o2`, research selected/progress/done, next wave, `PathQueue.completed_this_tick` | F3 debug overlay (`ui/debug_overlay.gd`), drawn only when toggled |
 | Failed asserts in sim (negative inventory, occupancy mismatch, path-pending treated as empty) | `push_error` + in debug builds `assert` |
 | Automated tests | `./tools/test.sh` → stdout `PASS` / `FAIL` lines; process exit code |
 | Player-facing errors | None beyond “could not initialize renderer” from Godot |
@@ -1666,8 +1666,8 @@ Required cases (baseline cases stay; new cases are marked ★):
 
 | File | Cases |
 | --- | --- |
-| `test_inventory.gd` | add/remove/clamp for all **five** kinds; leftover on overflow; empty remove returns 0; two-arg ctor still zeros ore/parts/food caps **and rejects ore/parts/food**; four-arg ctor sets ore/parts and **rejects food**; five-arg ctor sets food; `Loot` / player / raider / depot five-arg bags accept food |
-| `test_rules.gd` | `can_place` rejects rock, overlap, enemy rect, unaffordable, max buildings, missing depot, **locked tech ★**; ice pull decrements depot; with depot ice at 0, `zero_ice_timer` increases by `SIM_DT` each tick and hits `ZERO_ICE_LIMIT` in exactly 600 ticks → lose; destroying the depot **stops** further `zero_ice_timer` growth; a missing depot from t=0 never starts the timer; enemy habitat 0 → win; same-tick both habitats dead → player lose; build deducts the full multi-resource cost ★; first depot transfer occurs after one `TRANSFER_PERIOD`, amount `TRANSFER_BATCH`, order scrap/ice/ore/parts/food ★; **own-depot `withdraw` reverses the same batch ★**; **farm harvest moves `TRANSFER_BATCH` Food per `TRANSFER_PERIOD` ★**; **player in the overlap of depot + workshop (workshop closer, Metallurgy done, full recipe in carry) crafts, does not deposit ★**; player integrates onto a Gate tile, a raider with the same velocity is blocked ★ |
+| `test_inventory.gd` | add/remove/clamp for all **five** kinds; leftover on overflow; empty remove returns 0; two-arg ctor still zeros ore/parts/food caps **and rejects ore/parts/food**; four-arg ctor sets ore/parts and **rejects food**; five-arg ctor sets food; `Loot` / player / raider five-arg bags accept food; **depot `cap_food == 0` rejects Food ★** |
+| `test_rules.gd` | `can_place` rejects rock, overlap, enemy rect, unaffordable, max buildings, missing depot, **locked tech ★**; ice pull decrements depot; with depot ice at 0, `zero_ice_timer` increases by `SIM_DT` each tick and hits `ZERO_ICE_LIMIT` in exactly 600 ticks → lose; destroying the depot **stops** further `zero_ice_timer` growth; a missing depot from t=0 never starts the timer; enemy habitat 0 → win; same-tick both habitats dead → player lose; build deducts the full multi-resource cost ★; first depot transfer occurs after one `TRANSFER_PERIOD`, amount `TRANSFER_BATCH`, order scrap/ice/ore/parts ★; **Food is not transferred to or from a depot ★**; **own-depot `withdraw` reverses the same batch ★**; **farm harvest moves `TRANSFER_BATCH` Food per `TRANSFER_PERIOD` ★**; **player in the overlap of depot + workshop (workshop closer, Metallurgy done, full recipe in carry) crafts, does not deposit ★**; player integrates onto a Gate tile, a raider with the same velocity is blocked ★ |
 | `test_mapgen.gd` | seed 1 is deterministic (tile hash equal across two runs); seeds 1–5 pass the connectivity assert **without** additional carving; deposit minima met **including ore ★**; no Parts deposits ★; camps in reserved rects; starting stocks match constants (including ore/parts); L-corridor tiles that are not footprints are `EMPTY` |
 | `test_combat.gd` | projectile damages opposing unit; does not damage same faction; two overlapping units → lowest `entity_id` is hit; melee respects cooldown; death at 0; depot death spills loot equal to remaining **five** stocks and does not by itself set `LIFE_SUPPORT`; two-arg `Inventory.new(999, 999)` spill/loot **cannot** hold ore, four-arg loot can ★; enemy projectile uses friendly-fire-off ★; projectile hitting a player Wall/Gate is eaten ★; **player centered on a Gate, fire +X into empty ground, shot lives after first integrate ★**; **player on a Gate (or hugging a Wall) with a friendly Wall in the muzzle tile, shot is eaten on the first integrate ★**; **projectile and unit in adjacent tiles whose circles overlap is a hit ★** |
 | `test_pathfind.gd` | A* finds a path on an empty map; returns empty on boxed-in start; does not cut a diagonal through two corner rocks; heap implementation matches those results |
@@ -1675,13 +1675,13 @@ Required cases (baseline cases stay; new cases are marked ★):
 | `test_ai_ranged.gd` ★ | a raider with a living player in `ENEMY_RIFLE_RANGE` and `weapon_cooldown = 0` spawns an enemy projectile on the **first** tick (still in `PATH_TO_DEPOT`, player outside `RAIDER_CHASE_RADIUS`); a raider/guard with **no** player in range and a player building in range fires at that building; they do **not** need to enter `CHASE` or melee first; a guard idle at home fires at a player who is inside rifle range but outside `GUARD_AGGRO`; a 2×2 Habitat whose AABB is inside 320 px and whose center is outside 320 px **is** in range (point-to-AABB) ★; friendly-fire-off holds |
 | `test_research.gd` ★ | Lab interact advances `research_progress` only while standing still; walking away pauses (does not reset); payment deducts from the depot on the first progress tick and not before; cannot select Ballistics before Metallurgy; completion sets the bitmask and unlocks the building / recipe / turret range; switching discards unpaid/paid progress with no refund |
 | `test_oxygen.gd` ★ | `o2` starts at `PLAYER_O2_MAX`; adjacent to Habitat refills; adjacent to Depot refills; adjacent to a Farm does **not**; at 0, HP drops 1 when `tick_index % PLAYER_O2_PULSE_TICKS == 0`; a lethal pulse while adjacent to a Medbay is **not** healed — the player dies that tick ★; death drops carry and respawns with full O2 |
-| `test_food.gd` ★ | start carry Food is 24; after `FOOD_EAT_PERIOD` / `SIM_DT` ticks, carry Food is 23; a Farm with `food_stock = 0` gains 1 after `FARM_GROW_PERIOD` / `SIM_DT` ticks and stops at `FARM_FOOD_CAP`; harvest after one `TRANSFER_PERIOD` moves `TRANSFER_BATCH` Food farm → carry; meal with 0 carry Food sets `hunger_failed` and `evaluate_outcome` is `(PLAYER_LOSE, HUNGER)` — no respawn; Farm does not refill `o2` |
-| `test_hud.gd` ★ | existing icon / no-building-HP cases stay; add `apply_snapshot` shows player `hp / hp_max`; fill is empty and the number is `0 / hp_max` when the player is dead or `hp <= 0` |
+| `test_food.gd` ★ | start carry Food is 24; after `FOOD_EAT_PERIOD` / `SIM_DT` ticks, carry Food is 23; a Farm with `food_stock = 0` gains 1 after `FARM_GROW_PERIOD` / `SIM_DT` ticks and stops at `FARM_FOOD_CAP`; harvest after one `TRANSFER_PERIOD` moves `TRANSFER_BATCH` Food farm → carry; meal with 0 carry Food sets `hunger_failed` and `evaluate_outcome` is `(PLAYER_LOSE, HUNGER)` — no respawn; Farm does not refill `o2`; **depot dump leaves carry Food unchanged ★** |
+| `test_hud.gd` ★ | existing icon / no-building-HP / player HP bar cases stay; carry row has Food; **depot row has Scrap/Ice/Ore/Parts and no Food ★** |
 | `test_workshop.gd` ★ | craft does not run before Metallurgy; 1.5 s channel with 3 scrap + 2 ore in carry produces 1 part; walking away resets; missing inputs reset; no Parts space does not consume; **deposit leftover ore that was not spent on Metallurgy, withdraw it, then craft ★** (do **not** test “withdraw the 6 Ore tech payment”) |
 | `test_medbay.gd` ★ | 10 ticks adjacent to one Medbay → +1 HP; two Medbays still +1 per `MEDBAY_HEAL_PERIOD`; walking away resets `medbay_heal_acc`; `hp <= 0` skips heal |
 | `test_perf.gd` ★ | `WAVE_CAP` simultaneous path requests complete at most `MAX_PATHS_PER_TICK` per tick; a pending path is not treated as SIEGE-empty. Does **not** assert wall-clock ms. |
 | `test_snapshot.gd` | five-resource inventory copied; `player_o2`, carry Food, and research fields present ★ |
-| `test_building_panel.gd` ★ | panel model (pure logic if extracted) maps depot/farm/lab/workshop/medbay/gate to the specified fields; HUD snapshot helpers do not read Habitat/Depot HP into HUD strings; pointer-over-panel must not set `cmd.fire` |
+| `test_building_panel.gd` ★ | panel model (pure logic if extracted) maps depot/farm/lab/workshop/medbay/gate to the specified fields; **depot inspect is four stocks (no Food) ★**; HUD snapshot helpers do not read Habitat/Depot HP into HUD strings; pointer-over-panel must not set `cmd.fire` |
 
 Tests construct `Sim` / `Inventory` / `World` directly. They must not create a `game.tscn` tree.
 
@@ -1690,14 +1690,14 @@ Tests construct `Sim` / `Inventory` / `World` directly. They must not create a `
 Play on default seed `1`, default window 1280×720.
 
 1. Main menu shows New Game and Quit. Quit closes the process.
-2. New Game spawns the player in the SW camp; Habitat and Depot are visible with teal stripes. HUD shows **icons** for carry and depot (scrap, ice, ore, parts, food), carry Food at 24, an O2 bar at full, a player HP bar at `50 / 50`, and **no** Habitat HP / Depot HP numbers.
+2. New Game spawns the player in the SW camp; Habitat and Depot are visible with teal stripes. HUD shows **icons** for carry (scrap, ice, ore, parts, food) and depot (scrap, ice, ore, parts — **no food**), carry Food at 24, an O2 bar at full, a player HP bar at `50 / 50`, and **no** Habitat HP / Depot HP numbers.
 3. WASD moves; mouse-aim notch follows the cursor; wheel zooms and clamps.
 4. Holding E on a scrap, ice, or ore pile **while standing still** increments carry by 1/s; a short bar fills above the pile during the channel and hides when walking or the pile is gone; walking cancels the channel; the pile empties and disappears.
-5. Holding E on the player depot (stand next to it) moves carry into the HUD depot counts in batches of 5 after 0.2 s, all five kinds, Food last. **Shift+E** (or the depot panel Withdraw toggle + E) pulls leftover dumped stock back out. After dumping extra ore you can withdraw it and craft. Metallurgy’s 6 Ore payment is consumed and cannot be withdrawn. Dumping all Food is a starve risk.
+5. Holding E on the player depot (stand next to it) moves Scrap, Ice, Ore, and Parts into the HUD depot counts in batches of 5 after 0.2 s. **Carry Food does not move.** **Shift+E** (or the depot panel Withdraw toggle + E) pulls leftover dumped stock back out. After dumping extra ore you can withdraw it and craft. Metallurgy’s 6 Ore payment is consumed and cannot be withdrawn.
 6. 1 then click on a valid tile spends 5 scrap and places a wall (icon on the build bar, not the word “Wall”); invalid tiles flash red and spend nothing.
 7. 2 then click places a turret for 15 scrap. The turret fires at a raider during the first wave without further input; its barrel tracks the target.
 8. LMB fires teal projectiles that kill a raider in several hits. Hits flash the target. LMB never opens inspect.
-9. `F` next to the Habitat opens a building panel with an HP bar. RMB on the Depot (not in build mode) opens the Depot panel with five stocks. Q / `F` / RMB on dirt closes it. HUD still has no Habitat/Depot HP.
+9. `F` next to the Habitat opens a building panel with an HP bar. RMB on the Depot (not in build mode) opens the Depot panel with four stocks (Scrap, Ice, Ore, Parts — **no Food**). Q / `F` / RMB on dirt closes it. HUD still has no Habitat/Depot HP.
 10. First raid banner appears at ~60 s; raiders path toward the depot; they **shoot the player and/or buildings as soon as they are in 320 px**, including while still pathing, without waiting to melee.
 11. A raider that reaches the depot and lives 3 s reduces depot stock.
 12. 3 places a Workshop (10 scrap). 4 places a Lab (8 scrap). Standing at the Lab and selecting Hydroponics spends 8 ice from the depot and fills a progress bar only while you stand there; walking pauses it.
@@ -1708,7 +1708,7 @@ Play on default seed `1`, default window 1280×720.
 17. Life-support **lose** is unit-tested (do not idle 5 minutes in manual play). Manual only: when player depot ice is 0, HUD shows a per-frame 30 s countdown; destroying a depot does not start that countdown.
 18. Destroying the enemy habitat shows the win screen with `Enemy habitat destroyed`. Play Again starts a fresh sim.
 19. Escape pauses movement, raid timers, O2 drain, hunger, farm growth, and research; Resume continues.
-20. F3 toggles an overlay that shows tick, FPS, `sim_ms`, depot five-counts, carry Food, O2, research, next wave. Linux and Windows exports both boot to the menu.
+20. F3 toggles an overlay that shows tick, FPS, `sim_ms`, depot four-counts (no Food), carry Food, O2, research, next wave. Linux and Windows exports both boot to the menu.
 21. Walling the L-corridor causes raiders to enter `SIEGE` and smash the blocking walls (now also by rifle), **then the depot, then the habitat**, even if the player stands at the wall (chase does not pull them off) and even after the corridor is walkable again (they do not resume looting). If they finish the habitat, the lose screen shows `Habitat destroyed`.
 22. A first raid with only start scrap (a turret and/or walls, **no** Ore/Parts/tech) is survivable.
 23. Opening a wave does not hitch the window. F3 `sim_ms` / `view_ms` are **guidance** (amber near 4 / 8 on the software-GL Linux box), not a fail gate.
@@ -1751,7 +1751,7 @@ If a later playtest shows Ballistics-at-224 px makes player turrets delete waves
 | Personal O2 makes camp gather-and-defend a timer minigame | High (was) | Habitat-**or-Depot** refill. Corridor-side depot stand is in the bubble. 60 s is raid-out only. |
 | Personal O2 makes the NE raid-out feel like a timer minigame | Medium | 60 s covers a clean 49 s walk; no mid-map O2 station; 1 HP / 5 ticks after 0 |
 | Hunger ends the session before Hydroponics + Farm | High | Start 24 carry Food = 6 minutes; Hydroponics ice is already in the depot; playtest 13 |
-| Dumping start Food into the depot causes an accidental starve | Medium | Transfer order puts Food last; withdraw exists; HUD low-food color at ≤ 4 |
+| Dumping start Food into the depot causes an accidental starve | High (was) | Depots cannot store Food (`cap_food == 0`). Dump/withdraw/steal skip Food. HUD depot has no Food icon. |
 | Player seals the corridor with 3 walls | Medium | Non-hauling `SIEGE` still commits, now also from rifle range |
 | Lab-rush starves the first-raid defense | Low (intended) | 15 start scrap cannot buy Lab + turret; this is a choice, not a trap. First raid is still winnable with rifle + 3 walls or a turret |
 | Parts have only Gate + Ballistics as sinks | Medium | Two Gates + Ballistics = 8 Parts = 16 ore at the bench, plus Metallurgy 6. Enough for a mid-session. Do not add a sixth resource to invent more sinks |
@@ -1874,6 +1874,12 @@ Same-file work is serial: **PR 1 then PR 3a** on `sim.gd` / `ai_raider.gd` / `sn
 - **Depends on:** PR 7, PR 8
 - **What:** `ResourceKind.FOOD` as the fifth haulable. 2×2 Farm after Hydroponics. Stock grows 1 / 10 s to cap 12 (passive). Hold E to harvest Food into carry. Player eats 1 carry Food / 15 s; missed meal is `PLAYER_LOSE` / `HUNGER` (no respawn). Start carry 24 Food. Farm is not an O2 station and not a Scrap/Ice/Ore/Parts depot. Death does not spill farm stock. Smash-set update is required in this PR.
 
+### PR 10b — Depots do not store Food
+
+- **Files:** `src/core/constants.gd` (`DEPOT_CAP_FOOD = 0`), `src/sim/mapgen.gd` (depot ctor), `src/sim/rules.gd` (depot transfer / steal / withdraw skip Food), `src/sim/ai_raider.gd` (depot loot and home despawn skip Food), `src/ui/hud.gd`, `src/ui/building_panel.gd`, `src/ui/debug_overlay.gd`, `tests/test_food.gd`, `tests/test_inventory.gd`, `tests/test_rules.gd`, `tests/test_hud.gd`, `tests/test_building_panel.gd`
+- **Depends on:** PR 10
+- **What:** Depot `cap_food` is 0. Own-depot dump, withdraw, and steal never move Food. Raider depot loot and home-despawn do not put Food into a depot (Food leftover becomes loot). HUD and depot inspect show four kinds. Carry still shows Food. A dump cannot empty dinner.
+
 ### PR 11 — Medbay
 
 - **Files:** `src/core/constants.gd`, `src/core/types.gd`, `src/sim/rules.gd`, `src/sim/sim.gd` (heal **after movement**, with oxygen), `src/sim/ai_raider.gd` (**smash set includes Medbay**), `src/view/building_view.gd`, `src/ui/build_bar.gd`, `src/ui/building_panel.gd`, `assets/sprites/placeholder/medbay_player.png`, `tests/test_medbay.gd` (new), `tests/run.gd`
@@ -1895,5 +1901,5 @@ Same-file work is serial: **PR 1 then PR 3a** on `sim.gd` / `ai_raider.gd` / `sn
 ### PR 14 — Playtest polish and remaining tests
 
 - **Files:** `tests/run.gd` (confirm every new script is listed), any leftover `test_*.gd` gaps, `src/ui/debug_overlay.gd` (ore/parts/o2/research/`sim_ms`), placeholder PNG fill-ins
-- **Depends on:** PR 1–13 and PR 7b
+- **Depends on:** PR 1–13, PR 7b, and PR 10b
 - **What:** Close checklist holes (icon parseability, first-raid-without-ore, O2 telegraph, player HP bar, withdraw, F3 fields). No new rules. If a number in this document is wrong in play, change **this document** in a follow-up — do not silently retune.
