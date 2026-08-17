@@ -32,7 +32,7 @@ func _try_spawn_wave(sim: Sim) -> bool:
 	var n := wave_index + 1
 	var count := mini(Constants.WAVE_CAP, Constants.WAVE_BASE + int((n - 1) / 2))
 	for i in count:
-		_spawn_raider(sim.world, tiles[i % tiles.size()])
+		_spawn_raider(sim.world, tiles[i % tiles.size()], i)
 	return count > 0
 
 
@@ -75,7 +75,7 @@ func _adjacent_walkable(world: World, depot: Building) -> Array[Vector2i]:
 	return tiles
 
 
-func _spawn_raider(world: World, tile: Vector2i) -> void:
+func _spawn_raider(world: World, tile: Vector2i, index: int) -> void:
 	var raider := Unit.new()
 	raider.id = world.alloc_id()
 	raider.kind = Types.UnitKind.RAIDER
@@ -88,4 +88,5 @@ func _spawn_raider(world: World, tile: Vector2i) -> void:
 	raider.alive = true
 	raider.inventory = Unit.inventory_for(Types.UnitKind.RAIDER)
 	raider.stuck_last_pos = raider.pos
+	raider.path_recalc_in = float(index) * Constants.PATH_STAGGER
 	world.units[raider.id] = raider

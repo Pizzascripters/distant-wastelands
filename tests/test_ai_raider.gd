@@ -19,6 +19,7 @@ func run() -> PackedStringArray:
 	_test_loot_one_resource_goes_home(fails)
 	_test_loot_depot_died(fails)
 	_test_stuck_enters_siege(fails)
+	_test_stagger_does_not_siege(fails)
 	return fails
 
 
@@ -27,17 +28,21 @@ func _test_spawned_paths_to_depot(fails: PackedStringArray) -> void:
 	var raider := _raider(ctx)
 	_place_depot(ctx, Types.Faction.PLAYER, Constants.PLAYER_DEPOT_TILE, 10, 10)
 	raider.pos = _world(ctx).tile_center(20, 52)
-	AiRaider.think(raider, _sim(ctx))
+	_pump(ctx)
 	if raider.ai_state != Types.RaiderState.PATH_TO_DEPOT:
 		fails.append("SPAWNED should enter PATH_TO_DEPOT, got %d" % raider.ai_state)
-	if raider.vel == Vector2.ZERO:
-		fails.append("PATH_TO_DEPOT should seek along A*")
 	if raider.path.is_empty():
 		fails.append("PATH_TO_DEPOT should cache an A* path")
 	if not is_equal_approx(raider.path_recalc_in, Constants.PATH_RECALC):
 		fails.append("path_recalc_in is %s, expected %s" % [str(raider.path_recalc_in), str(Constants.PATH_RECALC)])
+	_pump(ctx)
+	if raider.vel == Vector2.ZERO:
+		fails.append("PATH_TO_DEPOT should seek along A*")
 	var cached: Array[Vector2i] = raider.path.duplicate()
-	AiRaider.think(raider, _sim(ctx))
+	var recalc := raider.path_recalc_in
+	_pump(ctx)
+	if raider.path_recalc_in != recalc:
+		fails.append("cached path think should not reset path_recalc_in")
 	if raider.path != cached:
 		fails.append("second think should reuse the cached path")
 
@@ -68,7 +73,8 @@ func _test_blocked_path_enters_siege(fails: PackedStringArray) -> void:
 	_place_depot(ctx, Types.Faction.PLAYER, Constants.PLAYER_DEPOT_TILE, 10, 10)
 	_box_in(_world(ctx), 20, 20)
 	raider.pos = _world(ctx).tile_center(20, 20)
-	AiRaider.think(raider, _sim(ctx))
+	_pump(ctx)
+	_pump(ctx)
 	if raider.ai_state != Types.RaiderState.SIEGE:
 		fails.append("boxed-in raider should enter SIEGE, got %d" % raider.ai_state)
 
@@ -136,7 +142,8 @@ func _test_hauling_siege_goes_home(fails: PackedStringArray) -> void:
 	raider.ai_state = Types.RaiderState.SIEGE
 	raider.inventory.scrap = 2
 	raider.pos = _world(ctx).tile_center(20, 52)
-	AiRaider.think(raider, _sim(ctx))
+	_pump(ctx)
+	_pump(ctx)
 	if raider.ai_state != Types.RaiderState.PATH_HOME:
 		fails.append("hauling SIEGE with open home A* should PATH_HOME, got %d" % raider.ai_state)
 	var player_depot := _living_player_depot(ctx)
@@ -156,13 +163,13 @@ func _test_hauling_siege_rechecks_home(fails: PackedStringArray) -> void:
 	raider.ai_state = Types.RaiderState.SIEGE
 	raider.inventory.scrap = 2
 	raider.pos = world.tile_center(20, 52)
-	AiRaider.think(raider, _sim(ctx))
+	_pump(ctx)
 	if raider.ai_state != Types.RaiderState.SIEGE:
 		fails.append("hauling SIEGE should stay while home A* is empty, got %d" % raider.ai_state)
 	_unseal_building(world, Constants.ENEMY_DEPOT_TILE, 2)
-	var wait := int(Constants.PATH_RECALC / Constants.SIM_DT) + 1
+	var wait := int(Constants.PATH_RECALC / Constants.SIM_DT) + 2
 	for _i in wait:
-		AiRaider.think(raider, _sim(ctx))
+		_pump(ctx)
 	if raider.ai_state != Types.RaiderState.PATH_HOME:
 		fails.append("hauling SIEGE should PATH_HOME after home A* reopens, got %d" % raider.ai_state)
 	if raider.siege_target_id == wall.id and raider.ai_state == Types.RaiderState.SIEGE:
@@ -295,6 +302,21 @@ func _test_loot_depot_died(fails: PackedStringArray) -> void:
 		fails.append("loot with dead depot should PATH_TO_HABITAT, got %d" % raider.ai_state)
 
 
+func _test_stagger_does_not_siege(fails: PackedStringArray) -> void:
+	var ctx := _context()
+	var raider := _raider(ctx)
+	_place_depot(ctx, Types.Faction.PLAYER, Constants.PLAYER_DEPOT_TILE, 10, 10)
+	raider.pos = _world(ctx).tile_center(20, 52)
+	raider.path_recalc_in = Constants.PATH_STAGGER
+	AiRaider.think(raider, _sim(ctx))
+	if raider.ai_state == Types.RaiderState.SIEGE:
+		fails.append("staggered raider must not SIEGE before a path request completes")
+	if raider.path_pending:
+		fails.append("staggered raider should not enqueue until path_recalc_in hits 0")
+	if raider.ai_state != Types.RaiderState.PATH_TO_DEPOT:
+		fails.append("staggered raider should stay PATH_TO_DEPOT, got %d" % raider.ai_state)
+
+
 func _test_stuck_enters_siege(fails: PackedStringArray) -> void:
 	var ctx := _context()
 	var raider := _raider(ctx)
@@ -304,6 +326,13 @@ func _test_stuck_enters_siege(fails: PackedStringArray) -> void:
 	AiRaider.think(raider, _sim(ctx))
 	if raider.ai_state != Types.RaiderState.SIEGE:
 		fails.append("stuck detector should enter SIEGE, got %d" % raider.ai_state)
+
+
+func _pump(ctx: Dictionary) -> void:
+	var sim := _sim(ctx)
+	AiRaider.think(_raider(ctx), sim)
+	if sim.path_queue != null:
+		sim.path_queue.service(_world(ctx))
 
 
 func _context() -> Dictionary:
