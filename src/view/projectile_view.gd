@@ -11,6 +11,8 @@ var fill: Color = PLAYER_FILL
 var _faction: int = Types.Faction.PLAYER
 var _tex: Texture2D
 var _tex_faction: int = -999
+var _applied: bool = false
+var _redraws: int = 0
 
 
 func _ready() -> void:
@@ -20,13 +22,18 @@ func _ready() -> void:
 
 func apply_record(rec: Dictionary) -> void:
 	position = rec["pos"]
-	_faction = rec["faction"]
+	var faction: int = rec["faction"]
+	var dirty := not _applied or _faction != faction
+	_applied = true
+	_faction = faction
 	if _faction == Types.Faction.PLAYER:
 		fill = PLAYER_FILL
 	else:
 		fill = ENEMY_FILL
 	_ensure_texture()
-	queue_redraw()
+	if dirty:
+		_redraws += 1
+		queue_redraw()
 
 
 func _draw() -> void:

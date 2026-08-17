@@ -27,6 +27,8 @@ var _hp: int = -1
 var _flash_left: float = 0.0
 var _tex: Texture2D
 var _tex_key: String = ""
+var _applied: bool = false
+var _redraws: int = 0
 
 
 func _ready() -> void:
@@ -36,23 +38,40 @@ func _ready() -> void:
 
 
 func apply_record(rec: Dictionary) -> void:
-	_kind = rec.get("kind", Types.BuildingKind.WALL)
-	_faction = rec.get("faction", Types.Faction.PLAYER)
-	_aim = rec.get("aim", Vector2.RIGHT)
+	var kind: int = rec.get("kind", Types.BuildingKind.WALL)
+	var faction: int = rec.get("faction", Types.Faction.PLAYER)
+	var aim: Vector2 = rec.get("aim", Vector2.RIGHT)
+	var dirty := not _applied
+	_applied = true
+	if _kind != kind:
+		_kind = kind
+		dirty = true
+	if _faction != faction:
+		_faction = faction
+		dirty = true
+	if _kind == Types.BuildingKind.TURRET and not _aim.is_equal_approx(aim):
+		dirty = true
+	_aim = aim
 	_ensure_texture()
 	# Local origin is the footprint top-left.
+	var origin := position
 	if rec.has("origin_tile"):
 		var tile: Vector2i = rec["origin_tile"]
-		position = Vector2(tile) * float(Constants.TILE)
+		origin = Vector2(tile) * float(Constants.TILE)
 	elif rec.has("pos"):
-		position = rec["pos"]
+		origin = rec["pos"]
+	if not position.is_equal_approx(origin):
+		position = origin
+		dirty = true
 	if rec.has("hp"):
 		var hp: int = rec["hp"]
 		if _hp >= 0 and hp < _hp:
 			_flash_left = Constants.HIT_FLASH
 			set_process(true)
+			dirty = true
 		_hp = hp
-	queue_redraw()
+	if dirty:
+		_queue_visual_redraw()
 
 
 func _process(delta: float) -> void:
@@ -62,6 +81,11 @@ func _process(delta: float) -> void:
 	_flash_left = maxf(0.0, _flash_left - delta)
 	if _flash_left <= 0.0:
 		set_process(false)
+	_queue_visual_redraw()
+
+
+func _queue_visual_redraw() -> void:
+	_redraws += 1
 	queue_redraw()
 
 

@@ -21,14 +21,14 @@ var _ground_tex: Texture2D
 var _rock_tex: Texture2D
 var _scrap_tex: Texture2D
 var _ice_tex: Texture2D
+var _textures_ready: bool = false
+var _terrain_tex: ImageTexture
+var _overlay_redraws: int = 0
 
 
 func _ready() -> void:
 	texture_filter = TEXTURE_FILTER_NEAREST
-	_ground_tex = load_png(GROUND_PATH)
-	_rock_tex = load_png(ROCK_PATH)
-	_scrap_tex = load_png(SCRAP_PATH)
-	_ice_tex = load_png(ICE_PATH)
+	_ensure_textures()
 
 
 static func load_png(path: String) -> Texture2D:
@@ -46,41 +46,111 @@ static func load_png(path: String) -> Texture2D:
 
 func rebuild(snap: SimSnapshot) -> void:
 	_tiles = snap.tiles
+	_ensure_textures()
+	_rebuild_terrain_cache()
 	apply_deposits(snap)
-
-
-func apply_deposits(snap: SimSnapshot) -> void:
-	_deposits = snap.deposits.duplicate()
 	queue_redraw()
 
 
-func _draw() -> void:
-	var world_w := Constants.MAP_W * Constants.TILE
-	var world_h := Constants.MAP_H * Constants.TILE
+func apply_deposits(snap: SimSnapshot) -> void:
+	if _deposits_match(snap.deposits):
+		return
+	_deposits = snap.deposits.duplicate()
+	_overlay_redraws += 1
+	queue_redraw()
+
+
+func _deposits_match(next: Array) -> bool:
+	if next.size() != _deposits.size():
+		return false
+	var prev_remaining := {}
+	for rec in _deposits:
+		prev_remaining[int(rec.get("id", 0))] = int(rec.get("remaining", 0))
+	var seen := {}
+	for rec in next:
+		var id := int(rec.get("id", 0))
+		if seen.has(id) or not prev_remaining.has(id):
+			return false
+		if int(rec.get("remaining", 0)) != int(prev_remaining[id]):
+			return false
+		seen[id] = true
+	return seen.size() == prev_remaining.size()
+
+
+func _ensure_textures() -> void:
+	if _textures_ready:
+		return
+	_ground_tex = load_png(GROUND_PATH)
+	_rock_tex = load_png(ROCK_PATH)
+	_scrap_tex = load_png(SCRAP_PATH)
+	_ice_tex = load_png(ICE_PATH)
+	_textures_ready = true
+
+
+func _rebuild_terrain_cache() -> void:
 	var tile := Constants.TILE
-	if _ground_tex != null:
+	var w := Constants.MAP_W * tile
+	var h := Constants.MAP_H * tile
+	var img := Image.create(w, h, false, Image.FORMAT_RGBA8)
+	var ground_src := _tile_image(_ground_tex, tile)
+	if ground_src != null:
 		for y in Constants.MAP_H:
 			for x in Constants.MAP_W:
-				draw_texture_rect(_ground_tex, Rect2(x * tile, y * tile, tile, tile), false)
+				img.blit_rect(ground_src, Rect2i(0, 0, tile, tile), Vector2i(x * tile, y * tile))
 	else:
-		draw_rect(Rect2(0, 0, world_w, world_h), GROUND_FILL)
+		img.fill(GROUND_FILL)
 	for i in Constants.MAP_W + 1:
-		var x := i * tile
-		draw_line(Vector2(x, 0), Vector2(x, world_h), GRID, 1.0)
+		img.fill_rect(Rect2i(mini(i * tile, w - 1), 0, 1, h), GRID)
 	for j in Constants.MAP_H + 1:
-		var y := j * tile
-		draw_line(Vector2(0, y), Vector2(world_w, y), GRID, 1.0)
+		img.fill_rect(Rect2i(0, mini(j * tile, h - 1), w, 1), GRID)
 	if not _tiles.is_empty():
+		var rock_src := _tile_image(_rock_tex, tile)
 		for y in Constants.MAP_H:
 			for x in Constants.MAP_W:
 				if _tiles[y * Constants.MAP_W + x] != Types.TileTerrain.ROCK:
 					continue
-				if _rock_tex != null:
-					draw_texture_rect(_rock_tex, Rect2(x * tile, y * tile, tile, tile), false)
+				var origin := Vector2i(x * tile, y * tile)
+				if rock_src != null:
+					img.blit_rect(rock_src, Rect2i(0, 0, tile, tile), origin)
 				else:
-					var r := Rect2(x * tile + 1, y * tile + 1, tile - 2, tile - 2)
-					draw_rect(r, ROCK_FILL, true)
-					draw_rect(r, ROCK_OUTLINE, false, 1.0)
+					_stamp_primitive_rock(img, origin, tile)
+	_terrain_tex = ImageTexture.create_from_image(img)
+
+
+func _tile_image(tex: Texture2D, tile: int) -> Image:
+	var src := _image_from_tex(tex)
+	if src == null:
+		return null
+	if src.get_width() == tile and src.get_height() == tile:
+		return src
+	var scaled := src.duplicate()
+	scaled.resize(tile, tile, Image.INTERPOLATE_NEAREST)
+	return scaled
+
+
+func _image_from_tex(tex: Texture2D) -> Image:
+	if tex == null:
+		return null
+	var img := tex.get_image()
+	if img == null:
+		return null
+	if img.is_compressed():
+		img.decompress()
+	return img
+
+
+func _stamp_primitive_rock(img: Image, origin: Vector2i, tile: int) -> void:
+	var r := Rect2i(origin.x + 1, origin.y + 1, tile - 2, tile - 2)
+	img.fill_rect(r, ROCK_FILL)
+	img.fill_rect(Rect2i(r.position.x, r.position.y, r.size.x, 1), ROCK_OUTLINE)
+	img.fill_rect(Rect2i(r.position.x, r.end.y - 1, r.size.x, 1), ROCK_OUTLINE)
+	img.fill_rect(Rect2i(r.position.x, r.position.y, 1, r.size.y), ROCK_OUTLINE)
+	img.fill_rect(Rect2i(r.end.x - 1, r.position.y, 1, r.size.y), ROCK_OUTLINE)
+
+
+func _draw() -> void:
+	if _terrain_tex != null:
+		draw_texture(_terrain_tex, Vector2.ZERO)
 	_draw_deposits()
 
 
