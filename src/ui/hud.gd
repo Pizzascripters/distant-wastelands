@@ -7,11 +7,15 @@ const RAID_BANNER := Color("E24A3B")
 const O2_FULL := Color("3DDC97")
 const O2_WARN := Color("E2C044")
 const O2_LOW := Color("E24A3B")
+const HP_HIGH := Color("E07A5F")
+const HP_MID := Color("E2C044")
+const HP_LOW := Color("E24A3B")
 const PANEL := Color(0, 0, 0, 0.65)
 const FONT_SIZE := 16
 const ICON_PX := 18
 const MISSING := "—"
 const PLACEHOLDER_O2_TEXT := "60 / 60"
+const PLACEHOLDER_HP_TEXT := "50 / 50"
 
 const _SCRAP_PATH := "res://assets/sprites/placeholder/scrap.png"
 const _ICE_PATH := "res://assets/sprites/placeholder/ice.png"
@@ -24,6 +28,9 @@ var _ice_countdown: Label
 var _o2_track: ColorRect
 var _o2_fill: ColorRect
 var _o2_value: Label
+var _hp_track: ColorRect
+var _hp_fill: ColorRect
+var _hp_value: Label
 var _raid_banner: Label
 var _o2: float = Constants.PLAYER_O2_MAX
 var _o2_max: float = Constants.PLAYER_O2_MAX
@@ -61,6 +68,7 @@ func apply_snapshot(snap: SimSnapshot) -> void:
 			_ice_countdown.text = str(maxi(ceili(Constants.ZERO_ICE_LIMIT - zero_ice), 0))
 
 	_apply_o2(snap)
+	_apply_hp(snap)
 
 	var banner := _float_field(snap, "banner_timer", 0.0)
 	_raid_banner.visible = banner > 0.0
@@ -98,6 +106,7 @@ func _ensure_ui() -> void:
 	_ice_countdown.visible = false
 	vbox.add_child(_ice_countdown)
 	vbox.add_child(_make_o2_row())
+	vbox.add_child(_make_hp_row())
 	panel.add_child(vbox)
 	add_child(panel)
 	_raid_banner = _label("Raid incoming")
@@ -143,27 +152,43 @@ func _resource_row(title: String) -> Dictionary:
 
 
 func _make_o2_row() -> HBoxContainer:
+	var meter := _make_meter_row("O2", PLACEHOLDER_O2_TEXT, O2_FULL)
+	_o2_track = meter["track"]
+	_o2_fill = meter["fill"]
+	_o2_value = meter["value"]
+	return meter["row"]
+
+
+func _make_hp_row() -> HBoxContainer:
+	var meter := _make_meter_row("HP", PLACEHOLDER_HP_TEXT, HP_HIGH)
+	_hp_track = meter["track"]
+	_hp_fill = meter["fill"]
+	_hp_value = meter["value"]
+	return meter["row"]
+
+
+func _make_meter_row(row_name: String, placeholder: String, fill_color: Color) -> Dictionary:
 	var row := HBoxContainer.new()
-	row.name = "O2"
+	row.name = row_name
 	row.mouse_filter = MOUSE_FILTER_IGNORE
 	row.add_theme_constant_override("separation", 6)
-	row.add_child(_label("O2"))
-	_o2_track = ColorRect.new()
-	_o2_track.name = "O2Track"
-	_o2_track.color = Color(0, 0, 0, 0.65)
-	_o2_track.custom_minimum_size = Vector2(72, 10)
-	_o2_track.mouse_filter = MOUSE_FILTER_IGNORE
-	_o2_fill = ColorRect.new()
-	_o2_fill.name = "O2Fill"
-	_o2_fill.color = O2_FULL
-	_o2_fill.mouse_filter = MOUSE_FILTER_IGNORE
-	_o2_fill.set_anchors_preset(PRESET_FULL_RECT)
-	_o2_track.add_child(_o2_fill)
-	row.add_child(_o2_track)
-	_o2_value = _label(PLACEHOLDER_O2_TEXT)
-	_o2_value.name = "O2Value"
-	row.add_child(_o2_value)
-	return row
+	row.add_child(_label(row_name))
+	var track := ColorRect.new()
+	track.name = "%sTrack" % row_name
+	track.color = Color(0, 0, 0, 0.65)
+	track.custom_minimum_size = Vector2(72, 10)
+	track.mouse_filter = MOUSE_FILTER_IGNORE
+	var fill := ColorRect.new()
+	fill.name = "%sFill" % row_name
+	fill.color = fill_color
+	fill.mouse_filter = MOUSE_FILTER_IGNORE
+	fill.set_anchors_preset(PRESET_FULL_RECT)
+	track.add_child(fill)
+	row.add_child(track)
+	var value := _label(placeholder)
+	value.name = "%sValue" % row_name
+	row.add_child(value)
+	return {"row": row, "track": track, "fill": fill, "value": value}
 
 
 func _apply_o2(snap: SimSnapshot) -> void:
@@ -188,6 +213,34 @@ func _o2_bar_color(o2: float) -> Color:
 	if o2 > 10.0:
 		return O2_WARN
 	return O2_LOW
+
+
+func _apply_hp(snap: SimSnapshot) -> void:
+	var rec := _player_unit(snap)
+	var hp_max := Constants.PLAYER_HP
+	var hp := Constants.PLAYER_HP
+	var alive := true
+	if not rec.is_empty():
+		hp_max = int(rec.get("hp_max", Constants.PLAYER_HP))
+		if hp_max <= 0:
+			hp_max = Constants.PLAYER_HP
+		hp = int(rec.get("hp", Constants.PLAYER_HP))
+		if rec.has("alive"):
+			alive = bool(rec["alive"])
+	var empty := not alive or hp <= 0
+	var shown := 0 if empty else hp
+	var ratio := 0.0 if empty else clampf(float(hp) / float(hp_max), 0.0, 1.0)
+	_hp_fill.anchor_right = ratio
+	_hp_fill.color = _hp_bar_color(shown, hp_max)
+	_hp_value.text = "%d / %d" % [shown, hp_max]
+
+
+func _hp_bar_color(hp: int, hp_max: int) -> Color:
+	if hp * 2 > hp_max:
+		return HP_HIGH
+	if hp > 10 and hp * 2 <= hp_max:
+		return HP_MID
+	return HP_LOW
 
 
 func _process(_delta: float) -> void:
@@ -230,10 +283,14 @@ func _set_missing(group: Dictionary) -> void:
 
 
 func _player_inventory(snap: SimSnapshot) -> Dictionary:
+	return _inventory_from(_player_unit(snap).get("inventory", {}))
+
+
+func _player_unit(snap: SimSnapshot) -> Dictionary:
 	for rec in snap.units:
 		if rec.get("kind", -1) == Types.UnitKind.PLAYER:
-			return _inventory_from(rec.get("inventory", {}))
-	return _inventory_from({})
+			return rec
+	return {}
 
 
 func _player_building(snap: SimSnapshot, kind: int) -> Dictionary:
