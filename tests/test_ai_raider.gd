@@ -11,6 +11,7 @@ func run() -> PackedStringArray:
 	_test_non_hauling_siege_commits_to_depot(fails)
 	_test_hauling_definition(fails)
 	_test_hauling_siege_goes_home(fails)
+	_test_hauling_siege_rechecks_home(fails)
 	_test_hauling_stuck_stays_siege(fails)
 	_test_dead_drop_on_missing_home(fails)
 	_test_home_despawn_deposits_and_leftover(fails)
@@ -31,6 +32,14 @@ func _test_spawned_paths_to_depot(fails: PackedStringArray) -> void:
 		fails.append("SPAWNED should enter PATH_TO_DEPOT, got %d" % raider.ai_state)
 	if raider.vel == Vector2.ZERO:
 		fails.append("PATH_TO_DEPOT should seek along A*")
+	if raider.path.is_empty():
+		fails.append("PATH_TO_DEPOT should cache an A* path")
+	if not is_equal_approx(raider.path_recalc_in, Constants.PATH_RECALC):
+		fails.append("path_recalc_in is %s, expected %s" % [str(raider.path_recalc_in), str(Constants.PATH_RECALC)])
+	var cached: Array[Vector2i] = raider.path.duplicate()
+	AiRaider.think(raider, _sim(ctx))
+	if raider.path != cached:
+		fails.append("second think should reuse the cached path")
 
 
 func _test_missing_depot_goes_to_habitat(fails: PackedStringArray) -> void:
@@ -133,6 +142,31 @@ func _test_hauling_siege_goes_home(fails: PackedStringArray) -> void:
 	var player_depot := _living_player_depot(ctx)
 	if raider.siege_target_id == player_depot.id:
 		fails.append("hauling raider should not melee the player depot")
+
+
+func _test_hauling_siege_rechecks_home(fails: PackedStringArray) -> void:
+	var ctx := _context()
+	var raider := _raider(ctx)
+	var world := _world(ctx)
+	_place_depot(ctx, Types.Faction.PLAYER, Constants.PLAYER_DEPOT_TILE, 10, 10)
+	_place_depot(ctx, Types.Faction.ENEMY, Constants.ENEMY_DEPOT_TILE, 20, 20)
+	var wall := _place_wall(ctx, Vector2i(5, 5))
+	_box_in(world, 5, 5)
+	_seal_building(world, Constants.ENEMY_DEPOT_TILE, 2)
+	raider.ai_state = Types.RaiderState.SIEGE
+	raider.inventory.scrap = 2
+	raider.pos = world.tile_center(20, 52)
+	AiRaider.think(raider, _sim(ctx))
+	if raider.ai_state != Types.RaiderState.SIEGE:
+		fails.append("hauling SIEGE should stay while home A* is empty, got %d" % raider.ai_state)
+	_unseal_building(world, Constants.ENEMY_DEPOT_TILE, 2)
+	var wait := int(Constants.PATH_RECALC / Constants.SIM_DT) + 1
+	for _i in wait:
+		AiRaider.think(raider, _sim(ctx))
+	if raider.ai_state != Types.RaiderState.PATH_HOME:
+		fails.append("hauling SIEGE should PATH_HOME after home A* reopens, got %d" % raider.ai_state)
+	if raider.siege_target_id == wall.id and raider.ai_state == Types.RaiderState.SIEGE:
+		fails.append("empty smash path must not block the home A* recheck")
 
 
 func _test_hauling_stuck_stays_siege(fails: PackedStringArray) -> void:
@@ -365,6 +399,25 @@ func _box_in(world: World, x: int, y: int) -> void:
 	world.set_terrain(x - 1, y, Types.TileTerrain.ROCK)
 	world.set_terrain(x, y + 1, Types.TileTerrain.ROCK)
 	world.set_terrain(x, y - 1, Types.TileTerrain.ROCK)
+
+
+func _seal_building(world: World, origin: Vector2i, span: int) -> void:
+	for dy in span:
+		for dx in span:
+			for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+				var n := Vector2i(origin.x + dx + d.x, origin.y + dy + d.y)
+				if n.x < origin.x or n.y < origin.y or n.x >= origin.x + span or n.y >= origin.y + span:
+					if world.in_bounds(n.x, n.y) and world.is_walkable(n.x, n.y):
+						world.set_terrain(n.x, n.y, Types.TileTerrain.ROCK)
+
+
+func _unseal_building(world: World, origin: Vector2i, span: int) -> void:
+	for dy in range(-1, span + 1):
+		for dx in range(-1, span + 1):
+			var n := Vector2i(origin.x + dx, origin.y + dy)
+			if n.x < origin.x or n.y < origin.y or n.x >= origin.x + span or n.y >= origin.y + span:
+				if world.in_bounds(n.x, n.y) and world.get_terrain(n.x, n.y) == Types.TileTerrain.ROCK:
+					world.set_terrain(n.x, n.y, Types.TileTerrain.EMPTY)
 
 
 func _living_player_depot(ctx: Dictionary) -> Building:
