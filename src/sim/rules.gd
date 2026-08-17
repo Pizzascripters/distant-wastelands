@@ -24,6 +24,10 @@ static func cost(kind: int) -> Dictionary:
 				Types.ResourceKind.SCRAP: Constants.GATE_COST_SCRAP,
 				Types.ResourceKind.PARTS: Constants.GATE_COST_PARTS,
 			}
+		Types.BuildingKind.HABITAT:
+			return {Types.ResourceKind.SCRAP: Constants.HABITAT_COST_SCRAP}
+		Types.BuildingKind.DEPOT:
+			return {Types.ResourceKind.SCRAP: Constants.DEPOT_COST_SCRAP}
 		_:
 			return {}
 
@@ -62,7 +66,7 @@ static func can_place(world: World, sim: Sim, kind: int, tile: Vector2i) -> bool
 				return false
 			if _unit_overlaps_tile(world, Vector2i(x, y)):
 				return false
-	if not _can_pay_player(world, price):
+	if not _can_afford_place(world, kind, price):
 		return false
 	if world.buildings.size() >= Constants.MAX_BUILDINGS:
 		return false
@@ -72,8 +76,12 @@ static func can_place(world: World, sim: Sim, kind: int, tile: Vector2i) -> bool
 static func try_place(world: World, sim: Sim, kind: int, tile: Vector2i) -> bool:
 	if not can_place(world, sim, kind, tile):
 		return false
-	if not pay_player(world, cost(kind)):
+	if not _pay_place(world, kind, cost(kind)):
 		return false
+	var seed_ice := (
+		kind == Types.BuildingKind.HABITAT
+		and living_player(world, Types.BuildingKind.HABITAT).is_empty()
+	)
 	var building := Building.new()
 	building.id = world.alloc_id()
 	building.kind = kind
@@ -84,6 +92,8 @@ static func try_place(world: World, sim: Sim, kind: int, tile: Vector2i) -> bool
 	building.aim = Vector2(1, 0)
 	building.inventory = Building.inventory_for(kind)
 	building.ice_debt_timer = 0.0
+	if seed_ice and building.inventory != null:
+		building.inventory.add(Types.ResourceKind.ICE, Constants.LAST_HABITAT_ICE)
 	world.buildings[building.id] = building
 	world.occupy(building)
 	return true
@@ -421,6 +431,56 @@ static func _can_pay_player(world: World, price: Dictionary) -> bool:
 	return true
 
 
+static func _can_afford_place(world: World, kind: int, price: Dictionary) -> bool:
+	if _uses_last_pad_carry(world, kind):
+		var player := _player_unit(world)
+		if player == null or player.inventory == null:
+			return false
+		return player.inventory.scrap >= _last_pad_scrap(kind)
+	return _can_pay_player(world, price)
+
+
+static func _pay_place(world: World, kind: int, price: Dictionary) -> bool:
+	if _uses_last_pad_carry(world, kind):
+		var player := _player_unit(world)
+		var need := _last_pad_scrap(kind)
+		if player == null or player.inventory == null or player.inventory.scrap < need:
+			return false
+		player.inventory.remove(Types.ResourceKind.SCRAP, need)
+		return true
+	return pay_player(world, price)
+
+
+static func _uses_last_pad_carry(world: World, kind: int) -> bool:
+	if kind == Types.BuildingKind.DEPOT:
+		return living_player(world, Types.BuildingKind.DEPOT).is_empty()
+	if kind == Types.BuildingKind.HABITAT:
+		if not living_player(world, Types.BuildingKind.HABITAT).is_empty():
+			return false
+		return not _can_pay_player(world, cost(kind))
+	return false
+
+
+static func _last_pad_scrap(kind: int) -> int:
+	if kind == Types.BuildingKind.HABITAT:
+		return Constants.LAST_PAD_HABITAT_SCRAP
+	if kind == Types.BuildingKind.DEPOT:
+		return Constants.LAST_PAD_DEPOT_SCRAP
+	return 0
+
+
+static func _player_unit(world: World) -> Unit:
+	if world == null:
+		return null
+	for raw in world.units.values():
+		var unit := raw as Unit
+		if unit == null or not unit.alive:
+			continue
+		if unit.kind == Types.UnitKind.PLAYER:
+			return unit
+	return null
+
+
 static func _pool_holders(world: World, resource_kind: int) -> Array:
 	if resource_kind == Types.ResourceKind.ICE:
 		return living_player(world, Types.BuildingKind.HABITAT)
@@ -669,6 +729,10 @@ static func _hp_for(kind: int) -> int:
 			return Constants.MEDBAY_HP
 		Types.BuildingKind.GATE:
 			return Constants.GATE_HP
+		Types.BuildingKind.HABITAT:
+			return Constants.HABITAT_HP
+		Types.BuildingKind.DEPOT:
+			return Constants.DEPOT_HP
 		_:
 			return 0
 

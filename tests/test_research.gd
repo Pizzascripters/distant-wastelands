@@ -3,6 +3,7 @@ extends RefCounted
 
 func run() -> PackedStringArray:
 	var fails := PackedStringArray()
+	_test_pads_start_unlocked(fails)
 	_test_select_and_ignore_rules(fails)
 	_test_lab_advances_only_while_still(fails)
 	_test_walk_pauses_without_reset(fails)
@@ -168,6 +169,18 @@ func _test_switch_discards_without_refund(fails: PackedStringArray) -> void:
 		fails.append("switch should discard paid incomplete progress")
 	if habitat.inventory.ice != after_pay:
 		fails.append("switch refunded ice %d -> %d" % [after_pay, habitat.inventory.ice])
+
+
+func _test_pads_start_unlocked(fails: PackedStringArray) -> void:
+	var sim := _fresh()
+	if not Research.building_unlocked(sim, Types.BuildingKind.HABITAT):
+		fails.append("Habitat should start unlocked")
+	if not Research.building_unlocked(sim, Types.BuildingKind.DEPOT):
+		fails.append("Depot should start unlocked")
+	if not Research.building_unlocked_bits(0, Types.BuildingKind.HABITAT):
+		fails.append("Habitat should unlock with no techs")
+	if not Research.building_unlocked_bits(0, Types.BuildingKind.DEPOT):
+		fails.append("Depot should unlock with no techs")
 
 
 func _test_completion_unlocks(fails: PackedStringArray) -> void:
