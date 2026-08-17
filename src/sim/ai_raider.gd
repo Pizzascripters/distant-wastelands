@@ -58,7 +58,9 @@ static func think(unit: Unit, sim: Sim) -> void:
 
 static func is_hauling(unit: Unit) -> bool:
 	var inv := unit.inventory
-	return inv != null and (inv.scrap > 0 or inv.ice > 0 or inv.ore > 0 or inv.parts > 0)
+	return inv != null and (
+		inv.scrap > 0 or inv.ice > 0 or inv.ore > 0 or inv.parts > 0 or inv.food > 0
+	)
 
 
 static func _write_ranged_intent(unit: Unit, sim: Sim) -> void:
@@ -378,6 +380,7 @@ static func _transfer_loot(unit: Unit, depot: Building) -> void:
 		Types.ResourceKind.ICE,
 		Types.ResourceKind.ORE,
 		Types.ResourceKind.PARTS,
+		Types.ResourceKind.FOOD,
 	]:
 		var taken := stock.remove(kind, carry.free_space(kind))
 		carry.add(kind, taken)
@@ -385,48 +388,58 @@ static func _transfer_loot(unit: Unit, depot: Building) -> void:
 
 static func _apply_home_despawn(unit: Unit, sim: Sim, home: Building) -> void:
 	var carry: Inventory = unit.inventory
-	var leftover := Inventory.new(999, 999, 999, 999)
+	var leftover := Inventory.new(999, 999, 999, 999, 999)
 	if carry != null and home.inventory != null:
 		leftover.add(Types.ResourceKind.SCRAP, home.inventory.add(Types.ResourceKind.SCRAP, carry.scrap))
 		leftover.add(Types.ResourceKind.ICE, home.inventory.add(Types.ResourceKind.ICE, carry.ice))
 		leftover.add(Types.ResourceKind.ORE, home.inventory.add(Types.ResourceKind.ORE, carry.ore))
 		leftover.add(Types.ResourceKind.PARTS, home.inventory.add(Types.ResourceKind.PARTS, carry.parts))
+		leftover.add(Types.ResourceKind.FOOD, home.inventory.add(Types.ResourceKind.FOOD, carry.food))
 		carry.scrap = 0
 		carry.ice = 0
 		carry.ore = 0
 		carry.parts = 0
+		carry.food = 0
 	elif carry != null:
 		leftover.add(Types.ResourceKind.SCRAP, carry.scrap)
 		leftover.add(Types.ResourceKind.ICE, carry.ice)
 		leftover.add(Types.ResourceKind.ORE, carry.ore)
 		leftover.add(Types.ResourceKind.PARTS, carry.parts)
+		leftover.add(Types.ResourceKind.FOOD, carry.food)
 		carry.scrap = 0
 		carry.ice = 0
 		carry.ore = 0
 		carry.parts = 0
+		carry.food = 0
 	_drop_loot(sim.world, sim.world.footprint_aabb(home).get_center(), leftover)
 	_delete_raider(sim.world, unit)
 
 
 static func _apply_dead_drop(unit: Unit, sim: Sim) -> void:
 	var carry: Inventory = unit.inventory
-	var leftover := Inventory.new(999, 999, 999, 999)
+	var leftover := Inventory.new(999, 999, 999, 999, 999)
 	if carry != null:
 		leftover.add(Types.ResourceKind.SCRAP, carry.scrap)
 		leftover.add(Types.ResourceKind.ICE, carry.ice)
 		leftover.add(Types.ResourceKind.ORE, carry.ore)
 		leftover.add(Types.ResourceKind.PARTS, carry.parts)
+		leftover.add(Types.ResourceKind.FOOD, carry.food)
 		carry.scrap = 0
 		carry.ice = 0
 		carry.ore = 0
 		carry.parts = 0
+		carry.food = 0
 	_drop_loot(sim.world, unit.pos, leftover)
 	_delete_raider(sim.world, unit)
 
 
 static func _drop_loot(world: World, pos: Vector2, leftover: Inventory) -> void:
 	if leftover == null or (
-		leftover.scrap <= 0 and leftover.ice <= 0 and leftover.ore <= 0 and leftover.parts <= 0
+		leftover.scrap <= 0
+		and leftover.ice <= 0
+		and leftover.ore <= 0
+		and leftover.parts <= 0
+		and leftover.food <= 0
 	):
 		return
 	var pile := Loot.new()
@@ -440,6 +453,8 @@ static func _drop_loot(world: World, pos: Vector2, leftover: Inventory) -> void:
 		pile.inventory.add(Types.ResourceKind.ORE, leftover.ore)
 	if leftover.parts > 0:
 		pile.inventory.add(Types.ResourceKind.PARTS, leftover.parts)
+	if leftover.food > 0:
+		pile.inventory.add(Types.ResourceKind.FOOD, leftover.food)
 	world.loot[pile.id] = pile
 
 
@@ -452,7 +467,7 @@ static func _is_smash_blocker(kind: int) -> bool:
 	match kind:
 		Types.BuildingKind.WALL, Types.BuildingKind.TURRET, Types.BuildingKind.WORKSHOP:
 			return true
-		Types.BuildingKind.GREENHOUSE, Types.BuildingKind.LAB, Types.BuildingKind.MEDBAY:
+		Types.BuildingKind.FARM, Types.BuildingKind.LAB, Types.BuildingKind.MEDBAY:
 			return true
 		Types.BuildingKind.GATE:
 			return true
@@ -462,7 +477,7 @@ static func _is_smash_blocker(kind: int) -> bool:
 
 static func _nearest_player_wall_or_turret(world: World, unit: Unit) -> Building:
 	# Hauling smash set: nearest solid player building that is not Depot/Habitat
-	# (Wall, Turret, Gate, Workshop, Greenhouse, Lab, Medbay).
+	# (Wall, Turret, Gate, Workshop, Farm, Lab, Medbay).
 	var best: Building = null
 	var best_d := INF
 	for raw in world.buildings.values():
@@ -521,6 +536,7 @@ static func _can_loot_more(unit: Unit, depot: Building) -> bool:
 		Types.ResourceKind.ICE,
 		Types.ResourceKind.ORE,
 		Types.ResourceKind.PARTS,
+		Types.ResourceKind.FOOD,
 	]:
 		if _kind_amount(stock, kind) > 0 and carry.free_space(kind) > 0:
 			return true
@@ -537,6 +553,8 @@ static func _kind_amount(inv: Inventory, kind: int) -> int:
 			return inv.ore
 		Types.ResourceKind.PARTS:
 			return inv.parts
+		Types.ResourceKind.FOOD:
+			return inv.food
 		_:
 			return 0
 

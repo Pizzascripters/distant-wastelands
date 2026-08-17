@@ -15,6 +15,8 @@ func run() -> PackedStringArray:
 	_test_skipped_spawn_advances_clock(fails)
 	_test_siege_rifle_damages_from_range(fails)
 	_test_boxed_in_by_workshop_while_hauling(fails)
+	_test_hauling_includes_food(fails)
+	_test_hauling_smashes_farm(fails)
 	return fails
 
 
@@ -217,6 +219,42 @@ func _test_siege_rifle_damages_from_range(fails: PackedStringArray) -> void:
 		fails.append("siege wall lost %d hp, expected rifle damage" % (hp0 - wall.hp))
 
 
+func _test_hauling_includes_food(fails: PackedStringArray) -> void:
+	var sim := _ready_sim()
+	var raider := _inject_raider(sim, sim.world.tile_center(20, 20))
+	raider.inventory.scrap = 0
+	raider.inventory.ice = 0
+	raider.inventory.ore = 0
+	raider.inventory.parts = 0
+	raider.inventory.food = 1
+	if not AiRaider.is_hauling(raider):
+		fails.append("food > 0 should be hauling")
+
+
+func _test_hauling_smashes_farm(fails: PackedStringArray) -> void:
+	var sim := _ready_sim()
+	_banish_player(sim)
+	var tile := Vector2i(20, 20)
+	sim.world.set_terrain(tile.x, tile.y, Types.TileTerrain.EMPTY)
+	var farm := _place_farm(sim, Vector2i(21, 20))
+	if farm == null:
+		fails.append("could not place a farm for smash test")
+		return
+	var raider := _inject_raider(sim, sim.world.tile_center(tile.x, tile.y))
+	raider.inventory.food = 1
+	raider.ai_state = Types.RaiderState.SIEGE
+	var hp0 := farm.hp
+	_tick(sim, 6)
+	if not sim.world.units.has(raider.id):
+		fails.append("hauling raider next to a farm was deleted")
+		return
+	if farm.hp >= hp0:
+		fails.append("hauling raider did not smash the farm")
+	var depot := _living(sim.world, Types.Faction.PLAYER, Types.BuildingKind.DEPOT)
+	if depot != null and depot.hp < Constants.DEPOT_HP:
+		fails.append("hauling smash must not hit the player Depot")
+
+
 func _test_boxed_in_by_workshop_while_hauling(fails: PackedStringArray) -> void:
 	var sim := _ready_sim()
 	_banish_player(sim)
@@ -318,6 +356,29 @@ func _box_with_workshops(sim: Sim, tile: Vector2i) -> Array[Building]:
 			sim.world.buildings.erase(occupant.id)
 		shops.append(_place_workshop(sim, at))
 	return shops
+
+
+func _place_farm(sim: Sim, tile: Vector2i) -> Building:
+	sim.world.set_terrain(tile.x, tile.y, Types.TileTerrain.EMPTY)
+	sim.world.set_terrain(tile.x + 1, tile.y, Types.TileTerrain.EMPTY)
+	sim.world.set_terrain(tile.x, tile.y + 1, Types.TileTerrain.EMPTY)
+	sim.world.set_terrain(tile.x + 1, tile.y + 1, Types.TileTerrain.EMPTY)
+	for dy in 2:
+		for dx in 2:
+			var occupant := sim.world.building_at(tile.x + dx, tile.y + dy)
+			if occupant != null:
+				sim.world.vacate(occupant)
+				sim.world.buildings.erase(occupant.id)
+	var building := Building.new()
+	building.id = sim.world.alloc_id()
+	building.kind = Types.BuildingKind.FARM
+	building.faction = Types.Faction.PLAYER
+	building.origin_tile = tile
+	building.hp = Constants.FARM_HP
+	building.hp_max = Constants.FARM_HP
+	sim.world.buildings[building.id] = building
+	sim.world.occupy(building)
+	return building
 
 
 func _place_workshop(sim: Sim, tile: Vector2i) -> Building:

@@ -6,7 +6,7 @@ func run() -> PackedStringArray:
 	_test_starts_at_max(fails)
 	_test_habitat_refill(fails)
 	_test_depot_refill(fails)
-	_test_greenhouse_hook(fails)
+	_test_farm_does_not_refill(fails)
 	_test_drain_away_from_camp(fails)
 	_test_enemy_buildings_do_not_refill(fails)
 	_test_dead_player_does_not_drain(fails)
@@ -64,15 +64,16 @@ func _test_depot_refill(fails: PackedStringArray) -> void:
 		fails.append("depot east-face adjacency left o2 at %s" % str(player.o2))
 
 
-func _test_greenhouse_hook(fails: PackedStringArray) -> void:
+func _test_farm_does_not_refill(fails: PackedStringArray) -> void:
 	var sim := _sim_quiet()
 	var player := sim.get_player()
-	var standin := _inject_building(sim, Types.BuildingKind.TURRET, Vector2i(20, 20), Constants.TURRET_HP)
-	player.pos = _adjacent_pos(sim, standin)
+	var farm := _inject_building(sim, Types.BuildingKind.FARM, Vector2i(20, 20), Constants.FARM_HP)
+	farm.food_stock = Constants.FARM_FOOD_CAP
+	player.pos = _adjacent_pos(sim, farm)
 	player.o2 = 8.0
 	sim.tick()
 	if not is_equal_approx(player.o2, 8.0 - Constants.SIM_DT):
-		fails.append("non-habitat/depot building refilled o2 to %s" % str(player.o2))
+		fails.append("farm refilled o2 to %s" % str(player.o2))
 
 
 func _test_drain_away_from_camp(fails: PackedStringArray) -> void:

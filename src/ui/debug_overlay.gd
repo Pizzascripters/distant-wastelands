@@ -140,8 +140,8 @@ func _depot_line(snap: SimSnapshot, faction: int) -> String:
 	if rec.is_empty():
 		return MISSING
 	var inv := _inventory_from(rec.get("inventory", {}))
-	return "scrap %d  ice %d  ore %d  parts %d" % [
-		inv["scrap"], inv["ice"], inv["ore"], inv["parts"]
+	return "scrap %d  ice %d  ore %d  parts %d  food %d" % [
+		inv["scrap"], inv["ice"], inv["ore"], inv["parts"], inv["food"]
 	]
 
 
@@ -160,12 +160,13 @@ func _living_depot(snap: SimSnapshot, faction: int) -> Dictionary:
 
 
 func _inventory_from(inv: Variant) -> Dictionary:
-	var out := {"scrap": 0, "ice": 0, "ore": 0, "parts": 0}
+	var out := {"scrap": 0, "ice": 0, "ore": 0, "parts": 0, "food": 0}
 	if inv is Dictionary:
 		out["scrap"] = int(inv.get("scrap", 0))
 		out["ice"] = int(inv.get("ice", 0))
 		out["ore"] = int(inv.get("ore", 0))
 		out["parts"] = int(inv.get("parts", 0))
+		out["food"] = int(inv.get("food", 0))
 	elif inv is Object:
 		if "scrap" in inv:
 			out["scrap"] = int(inv.scrap)
@@ -175,6 +176,8 @@ func _inventory_from(inv: Variant) -> Dictionary:
 			out["ore"] = int(inv.ore)
 		if "parts" in inv:
 			out["parts"] = int(inv.parts)
+		if "food" in inv:
+			out["food"] = int(inv.food)
 	return out
 
 

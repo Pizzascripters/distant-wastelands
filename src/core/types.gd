@@ -1,13 +1,13 @@
 class_name Types
 
 enum Faction { PLAYER, ENEMY }
-enum BuildingKind { HABITAT, DEPOT, WALL, TURRET, WORKSHOP, GREENHOUSE, LAB, MEDBAY, GATE }
+enum BuildingKind { HABITAT, DEPOT, WALL, TURRET, WORKSHOP, FARM, LAB, MEDBAY, GATE }
 enum UnitKind { PLAYER, RAIDER, GUARD }
-enum ResourceKind { SCRAP, ICE, ORE, PARTS }
+enum ResourceKind { SCRAP, ICE, ORE, PARTS, FOOD }
 enum TechKind { HYDROPONICS, METALLURGY, FIELD_MEDICINE, BALLISTICS }
 enum TileTerrain { EMPTY, ROCK }
 enum Outcome { NONE, PLAYER_WIN, PLAYER_LOSE }
-enum OutcomeReason { NONE, HABITAT_DESTROYED, LIFE_SUPPORT }
+enum OutcomeReason { NONE, HABITAT_DESTROYED, LIFE_SUPPORT, HUNGER }
 enum RaiderState {
 	SPAWNED,
 	PATH_TO_DEPOT,

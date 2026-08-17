@@ -5,17 +5,26 @@ var scrap: int = 0
 var ice: int = 0
 var ore: int = 0
 var parts: int = 0
+var food: int = 0
 var cap_scrap: int = 0
 var cap_ice: int = 0
 var cap_ore: int = 0
 var cap_parts: int = 0
+var cap_food: int = 0
 
 
-func _init(p_cap_scrap: int = 0, p_cap_ice: int = 0, p_cap_ore: int = 0, p_cap_parts: int = 0) -> void:
+func _init(
+	p_cap_scrap: int = 0,
+	p_cap_ice: int = 0,
+	p_cap_ore: int = 0,
+	p_cap_parts: int = 0,
+	p_cap_food: int = 0
+) -> void:
 	cap_scrap = maxi(p_cap_scrap, 0)
 	cap_ice = maxi(p_cap_ice, 0)
 	cap_ore = maxi(p_cap_ore, 0)
 	cap_parts = maxi(p_cap_parts, 0)
+	cap_food = maxi(p_cap_food, 0)
 
 
 func free_space(kind: int) -> int:
@@ -54,6 +63,8 @@ func _amount(kind: int) -> int:
 			return ore
 		Types.ResourceKind.PARTS:
 			return parts
+		Types.ResourceKind.FOOD:
+			return food
 		_:
 			return 0
 
@@ -68,6 +79,8 @@ func _cap(kind: int) -> int:
 			return cap_ore
 		Types.ResourceKind.PARTS:
 			return cap_parts
+		Types.ResourceKind.FOOD:
+			return cap_food
 		_:
 			return 0
 
@@ -82,3 +95,5 @@ func _set_amount(kind: int, value: int) -> void:
 			ore = value
 		Types.ResourceKind.PARTS:
 			parts = value
+		Types.ResourceKind.FOOD:
+			food = value

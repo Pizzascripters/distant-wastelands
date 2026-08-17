@@ -47,6 +47,8 @@ func _reason_line(outcome: int, reason: int) -> String:
 		return "Habitat destroyed"
 	if outcome == Types.Outcome.PLAYER_LOSE and reason == Types.OutcomeReason.LIFE_SUPPORT:
 		return "Life support failed"
+	if outcome == Types.Outcome.PLAYER_LOSE and reason == Types.OutcomeReason.HUNGER:
+		return "Starved"
 	return ""
 
 

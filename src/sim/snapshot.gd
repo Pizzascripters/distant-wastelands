@@ -28,5 +28,6 @@ var research_selected: int = -1
 var research_progress: float = 0.0
 var research_paid: bool = false
 var techs_done: int = 0
+var hunger_failed: bool = false
 var sim_ms: float = 0.0
 var view_ms: float = 0.0

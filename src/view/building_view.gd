@@ -21,6 +21,8 @@ const TURRET_PLAYER := "res://assets/sprites/placeholder/turret_player.png"
 const TURRET_ENEMY := "res://assets/sprites/placeholder/turret_enemy.png"
 const WORKSHOP_PLAYER := "res://assets/sprites/placeholder/workshop_player.png"
 const LAB_PLAYER := "res://assets/sprites/placeholder/lab_player.png"
+const FARM_PLAYER := "res://assets/sprites/placeholder/farm_player.png"
+const FARM_CROP := Color("6B8F3A")
 const MEDBAY_PLAYER := "res://assets/sprites/placeholder/medbay_player.png"
 const GATE_PLAYER := "res://assets/sprites/placeholder/gate_player.png"
 const CROSS := Color("E24A3B")
@@ -118,6 +120,8 @@ func _draw() -> void:
 			_draw_lab(fill, stripe)
 		Types.BuildingKind.WORKSHOP:
 			_draw_workshop(fill, stripe)
+		Types.BuildingKind.FARM:
+			_draw_farm(fill, stripe)
 		Types.BuildingKind.MEDBAY:
 			_draw_medbay(fill, stripe)
 		Types.BuildingKind.GATE:
@@ -143,6 +147,8 @@ func _ensure_texture() -> void:
 			path = WORKSHOP_PLAYER
 		Types.BuildingKind.LAB:
 			path = LAB_PLAYER
+		Types.BuildingKind.FARM:
+			path = FARM_PLAYER
 		Types.BuildingKind.MEDBAY:
 			path = MEDBAY_PLAYER
 		Types.BuildingKind.GATE:
@@ -182,6 +188,18 @@ func _draw_lab(fill: Color, stripe: Color) -> void:
 
 func _draw_workshop(fill: Color, stripe: Color) -> void:
 	_draw_wall(fill, stripe)
+
+
+func _draw_farm(fill: Color, stripe: Color) -> void:
+	var tile := float(Constants.TILE)
+	var size := tile * 2.0
+	var box := Rect2(0.0, 0.0, size, size)
+	draw_rect(box, fill, true)
+	draw_rect(Rect2(0.0, 0.0, size, STRIPE_H), stripe, true)
+	for i in 3:
+		var y := 14.0 + float(i) * 14.0
+		draw_rect(Rect2(8.0, y, size - 16.0, 6.0), FARM_CROP, true)
+	draw_rect(box, OUTLINE, false, 1.0)
 
 
 func _draw_medbay(fill: Color, stripe: Color) -> void:

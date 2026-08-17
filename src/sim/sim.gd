@@ -20,6 +20,7 @@ var research_progress: float = 0.0
 var research_paid: bool = false
 var techs_done: int = 0
 var medbay_heal_acc: float = 0.0
+var hunger_failed: bool = false
 var _interact_target_id: int = 0
 var _interact_withdraw: bool = false
 
@@ -39,6 +40,7 @@ func setup(p_seed: int) -> void:
 	research_paid = false
 	techs_done = 0
 	medbay_heal_acc = 0.0
+	hunger_failed = false
 	_queue.clear()
 	player_id = 0
 	last_tick_usec = 0
@@ -75,6 +77,8 @@ func tick() -> void:
 
 	_decrement_cooldowns()
 	Rules.tick_life_support(self)
+	_tick_farms()
+	_tick_hunger()
 
 	var cmd: InputCommand = null
 	if not _queue.is_empty():
@@ -147,6 +151,7 @@ func snapshot() -> SimSnapshot:
 	snap.research_progress = research_progress
 	snap.research_paid = research_paid
 	snap.techs_done = techs_done
+	snap.hunger_failed = hunger_failed
 	return snap
 
 
@@ -188,6 +193,8 @@ func _building_record(building: Building) -> Dictionary:
 		"hp_max": building.hp_max,
 		"aim": building.aim,
 		"inventory": _inventory_record(building.inventory),
+		"food_stock": building.food_stock,
+		"food_stock_cap": Constants.FARM_FOOD_CAP if building.kind == Types.BuildingKind.FARM else 0,
 	}
 
 
@@ -224,20 +231,24 @@ func _inventory_record(inv: Inventory) -> Dictionary:
 			"ice": 0,
 			"ore": 0,
 			"parts": 0,
+			"food": 0,
 			"cap_scrap": 0,
 			"cap_ice": 0,
 			"cap_ore": 0,
 			"cap_parts": 0,
+			"cap_food": 0,
 		}
 	return {
 		"scrap": inv.scrap,
 		"ice": inv.ice,
 		"ore": inv.ore,
 		"parts": inv.parts,
+		"food": inv.food,
 		"cap_scrap": inv.cap_scrap,
 		"cap_ice": inv.cap_ice,
 		"cap_ore": inv.cap_ore,
 		"cap_parts": inv.cap_parts,
+		"cap_food": inv.cap_food,
 	}
 
 
@@ -590,6 +601,8 @@ func _drop_unit_carry(unit: Unit) -> void:
 
 
 func _maybe_respawn_player() -> void:
+	if hunger_failed:
+		return
 	var player := get_player()
 	if player == null or player.alive or player.respawn_timer > 0.0:
 		return
@@ -599,6 +612,7 @@ func _maybe_respawn_player() -> void:
 	player.pos = world.tile_center(tile.x, tile.y)
 	player.hp = player.hp_max
 	player.o2 = Constants.PLAYER_O2_MAX
+	player.food_debt_timer = 0.0
 	player.alive = true
 	player.vel = Vector2.ZERO
 	player.weapon_cooldown = 0.0
@@ -674,7 +688,7 @@ func _own_depot_withdrawing(cmd: InputCommand, target_id: int) -> bool:
 
 
 func _inventory_has_stock(inv: Inventory) -> bool:
-	return inv.scrap > 0 or inv.ice > 0 or inv.ore > 0 or inv.parts > 0
+	return inv.scrap > 0 or inv.ice > 0 or inv.ore > 0 or inv.parts > 0 or inv.food > 0
 
 
 func _copy_stock(src: Inventory, dest: Inventory) -> void:
@@ -686,6 +700,8 @@ func _copy_stock(src: Inventory, dest: Inventory) -> void:
 		dest.add(Types.ResourceKind.ORE, src.ore)
 	if src.parts > 0:
 		dest.add(Types.ResourceKind.PARTS, src.parts)
+	if src.food > 0:
+		dest.add(Types.ResourceKind.FOOD, src.food)
 
 
 func _clear_stock(inv: Inventory) -> void:
@@ -697,6 +713,31 @@ func _clear_stock(inv: Inventory) -> void:
 		inv.remove(Types.ResourceKind.ORE, inv.ore)
 	if inv.parts > 0:
 		inv.remove(Types.ResourceKind.PARTS, inv.parts)
+	if inv.food > 0:
+		inv.remove(Types.ResourceKind.FOOD, inv.food)
+
+
+func _tick_farms() -> void:
+	for building in world.buildings.values():
+		if building.kind != Types.BuildingKind.FARM or building.hp <= 0:
+			continue
+		building.food_grow_timer += Constants.SIM_DT
+		if building.food_grow_timer >= Constants.FARM_GROW_PERIOD:
+			building.food_grow_timer -= Constants.FARM_GROW_PERIOD
+			if building.food_stock < Constants.FARM_FOOD_CAP:
+				building.food_stock += 1
+
+
+func _tick_hunger() -> void:
+	var player := get_player()
+	if player == null or not player.alive:
+		return
+	player.food_debt_timer += Constants.SIM_DT
+	if player.food_debt_timer < Constants.FOOD_EAT_PERIOD:
+		return
+	player.food_debt_timer -= Constants.FOOD_EAT_PERIOD
+	if player.inventory == null or player.inventory.remove(Types.ResourceKind.FOOD, 1) < 1:
+		hunger_failed = true
 
 
 func _player_habitat() -> Building:

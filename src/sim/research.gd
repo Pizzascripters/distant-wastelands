@@ -47,7 +47,7 @@ static func building_unlocked_bits(techs_done: int, building_kind: int) -> bool:
 	match building_kind:
 		Types.BuildingKind.WALL, Types.BuildingKind.TURRET, Types.BuildingKind.WORKSHOP, Types.BuildingKind.LAB:
 			return true
-		Types.BuildingKind.GREENHOUSE:
+		Types.BuildingKind.FARM:
 			return _bit(techs_done, Types.TechKind.HYDROPONICS)
 		Types.BuildingKind.GATE:
 			return _bit(techs_done, Types.TechKind.METALLURGY)

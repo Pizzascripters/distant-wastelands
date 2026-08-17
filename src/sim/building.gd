@@ -10,3 +10,5 @@ var hp_max: int = 0
 var inventory: Inventory = Inventory.new()
 var fire_cooldown: float = 0.0
 var aim: Vector2 = Vector2(1, 0)
+var food_stock: int = 0
+var food_grow_timer: float = 0.0

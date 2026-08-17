@@ -7,8 +7,11 @@ func run() -> PackedStringArray:
 	_test_empty_remove(fails)
 	_test_unit_carry_caps(fails)
 	_test_four_kinds(fails)
+	_test_five_kinds(fails)
 	_test_two_arg_rejects_ore(fails)
 	_test_four_arg_bags_accept_ore(fails)
+	_test_four_arg_rejects_food(fails)
+	_test_five_arg_bags_accept_food(fails)
 	return fails
 
 
@@ -109,6 +112,12 @@ func _test_unit_carry_caps(fails: PackedStringArray) -> void:
 		)
 	if guard.cap_ore != 0 or guard.cap_parts != 0:
 		fails.append("guard ore/parts caps were %d/%d, expected 0/0" % [guard.cap_ore, guard.cap_parts])
+	if player.cap_food != Constants.PLAYER_CARRY_FOOD:
+		fails.append("player food cap was %d, expected %d" % [player.cap_food, Constants.PLAYER_CARRY_FOOD])
+	if raider.cap_food != Constants.RAIDER_CARRY_FOOD:
+		fails.append("raider food cap was %d, expected %d" % [raider.cap_food, Constants.RAIDER_CARRY_FOOD])
+	if guard.cap_food != 0:
+		fails.append("guard food cap was %d, expected 0" % guard.cap_food)
 
 
 func _test_four_kinds(fails: PackedStringArray) -> void:
@@ -159,3 +168,48 @@ func _test_four_arg_bags_accept_ore(fails: PackedStringArray) -> void:
 	)
 	if depot.add(Types.ResourceKind.ORE, 6) != 0 or depot.ore != 6:
 		fails.append("depot four-arg bag rejected ore")
+
+
+func _test_five_kinds(fails: PackedStringArray) -> void:
+	var inv := Inventory.new(4, 4, 4, 4, 4)
+	var leftover := inv.add(Types.ResourceKind.FOOD, 3)
+	if leftover != 0 or inv.food != 3:
+		fails.append("add food 3 leftover/food %d/%d, expected 0/3" % [leftover, inv.food])
+	leftover = inv.add(Types.ResourceKind.FOOD, 5)
+	if leftover != 4 or inv.food != 4:
+		fails.append("food overflow leftover %d food %d, expected 4/4" % [leftover, inv.food])
+	var taken := inv.remove(Types.ResourceKind.FOOD, 1)
+	if taken != 1 or inv.food != 3:
+		fails.append("remove food 1 took %d leaving %d, expected 1/3" % [taken, inv.food])
+
+
+func _test_four_arg_rejects_food(fails: PackedStringArray) -> void:
+	var inv := Inventory.new(999, 999, 999, 999)
+	if inv.cap_food != 0:
+		fails.append("four-arg food cap is %d, expected 0" % inv.cap_food)
+	var leftover := inv.add(Types.ResourceKind.FOOD, 1)
+	if leftover != 1 or inv.food != 0:
+		fails.append("four-arg add food leftover/food %d/%d, expected 1/0" % [leftover, inv.food])
+	if inv.can_add(Types.ResourceKind.FOOD, 1):
+		fails.append("four-arg can_add food 1 should be false")
+
+
+func _test_five_arg_bags_accept_food(fails: PackedStringArray) -> void:
+	var pile := Loot.new()
+	if pile.inventory.add(Types.ResourceKind.FOOD, 3) != 0 or pile.inventory.food != 3:
+		fails.append("Loot five-arg bag rejected food")
+	var player := Unit.inventory_for(Types.UnitKind.PLAYER)
+	if player.add(Types.ResourceKind.FOOD, Constants.PLAYER_CARRY_FOOD) != 0:
+		fails.append("player bag rejected a full food pack")
+	var raider := Unit.inventory_for(Types.UnitKind.RAIDER)
+	if raider.add(Types.ResourceKind.FOOD, Constants.RAIDER_CARRY_FOOD) != 0:
+		fails.append("raider bag rejected food")
+	var depot := Inventory.new(
+		Constants.DEPOT_CAP_SCRAP,
+		Constants.DEPOT_CAP_ICE,
+		Constants.DEPOT_CAP_ORE,
+		Constants.DEPOT_CAP_PARTS,
+		Constants.DEPOT_CAP_FOOD
+	)
+	if depot.add(Types.ResourceKind.FOOD, 6) != 0 or depot.food != 6:
+		fails.append("depot five-arg bag rejected food")

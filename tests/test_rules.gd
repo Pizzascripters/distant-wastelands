@@ -29,6 +29,9 @@ func run() -> PackedStringArray:
 	_test_lab_closer_wins_when_research_selected(fails)
 	_test_locked_buildings_not_placeable(fails)
 	_test_player_slides_onto_gate_raider_blocked(fails)
+	_test_place_farm_after_hydroponics(fails)
+	_test_farm_harvest_transfer(fails)
+	_test_hunger_lose(fails)
 	return fails
 
 
@@ -585,21 +588,21 @@ func _test_locked_buildings_not_placeable(fails: PackedStringArray) -> void:
 	var world := _world_with_depot(50)
 	var sim := Sim.new()
 	sim.world = world
-	if Research.building_unlocked(sim, Types.BuildingKind.GREENHOUSE):
-		fails.append("Greenhouse should start locked")
+	if Research.building_unlocked(sim, Types.BuildingKind.FARM):
+		fails.append("Farm should start locked")
 	if Research.building_unlocked(sim, Types.BuildingKind.GATE):
 		fails.append("Gate should start locked")
 	if Research.building_unlocked(sim, Types.BuildingKind.MEDBAY):
 		fails.append("Medbay should start locked")
-	if Rules.can_place(world, sim, Types.BuildingKind.GREENHOUSE, _TILE):
-		fails.append("locked Greenhouse should not be placeable")
+	if Rules.can_place(world, sim, Types.BuildingKind.FARM, _TILE):
+		fails.append("locked Farm should not be placeable")
 	if not Research.building_unlocked(sim, Types.BuildingKind.WALL):
 		fails.append("Wall should start unlocked")
 	if not Research.building_unlocked(sim, Types.BuildingKind.LAB):
 		fails.append("Lab should start unlocked")
 	Research.mark_complete(sim, Types.TechKind.HYDROPONICS)
-	if not Research.building_unlocked(sim, Types.BuildingKind.GREENHOUSE):
-		fails.append("Hydroponics should unlock Greenhouse")
+	if not Research.building_unlocked(sim, Types.BuildingKind.FARM):
+		fails.append("Hydroponics should unlock Farm")
 	Research.mark_complete(sim, Types.TechKind.METALLURGY)
 	if not Research.building_unlocked(sim, Types.BuildingKind.GATE):
 		fails.append("Metallurgy should unlock Gate")
@@ -659,6 +662,82 @@ func _place_gate(world: World, tile: Vector2i) -> Building:
 	world.buildings[gate.id] = gate
 	world.occupy(gate)
 	return gate
+
+
+func _test_place_farm_after_hydroponics(fails: PackedStringArray) -> void:
+	var sim := Sim.new()
+	sim.setup(Constants.DEFAULT_SEED)
+	var world := sim.world
+	var depot := _player_depot(world)
+	if depot == null:
+		fails.append("farm place missing depot")
+		return
+	depot.inventory.add(Types.ResourceKind.SCRAP, Constants.FARM_COST_SCRAP)
+	depot.inventory.add(Types.ResourceKind.ICE, Constants.FARM_COST_ICE)
+	var tile := _first_placeable(world, Types.BuildingKind.FARM, sim)
+	if tile.x >= 0:
+		fails.append("Farm should not be placeable before Hydroponics")
+	Research.mark_complete(sim, Types.TechKind.HYDROPONICS)
+	tile = _first_placeable(world, Types.BuildingKind.FARM, sim)
+	if tile.x < 0:
+		fails.append("no placeable farm tile after Hydroponics")
+		return
+	if not Rules.try_place(world, sim, Types.BuildingKind.FARM, tile):
+		fails.append("try_place farm should succeed after Hydroponics")
+		return
+	var farm := world.building_at(tile.x, tile.y)
+	if farm == null or farm.kind != Types.BuildingKind.FARM:
+		fails.append("placed farm missing from occupancy")
+		return
+	if farm.hp != Constants.FARM_HP or farm.food_stock != 0:
+		fails.append("farm hp/stock is %d/%d" % [farm.hp, farm.food_stock])
+	if world.footprint_span(Types.BuildingKind.FARM) != 2:
+		fails.append("farm footprint should be 2x2")
+	if world.building_at(tile.x + 1, tile.y + 1) != farm:
+		fails.append("farm should occupy 2x2")
+
+
+func _test_farm_harvest_transfer(fails: PackedStringArray) -> void:
+	var sim := Sim.new()
+	sim.setup(Constants.DEFAULT_SEED)
+	if sim.director != null:
+		sim.director.next_wave_at = 1.0e9
+	var player := sim.get_player()
+	var depot := _player_depot(sim.world)
+	if player == null or depot == null:
+		fails.append("farm harvest missing player or depot")
+		return
+	Research.mark_complete(sim, Types.TechKind.HYDROPONICS)
+	depot.inventory.add(Types.ResourceKind.SCRAP, Constants.FARM_COST_SCRAP)
+	depot.inventory.add(Types.ResourceKind.ICE, Constants.FARM_COST_ICE)
+	var tile := _first_placeable(sim.world, Types.BuildingKind.FARM, sim)
+	if tile.x < 0 or not Rules.try_place(sim.world, sim, Types.BuildingKind.FARM, tile):
+		fails.append("farm harvest could not place a farm")
+		return
+	var farm := sim.world.building_at(tile.x, tile.y)
+	player.inventory.remove(Types.ResourceKind.FOOD, player.inventory.food)
+	farm.food_stock = 8
+	_stand_beside(player, sim.world, farm)
+	_hold_interact(sim, 4)
+	if player.inventory.food != Constants.TRANSFER_BATCH:
+		fails.append("farm harvest food is %d, expected %d" % [player.inventory.food, Constants.TRANSFER_BATCH])
+	if farm.food_stock != 8 - Constants.TRANSFER_BATCH:
+		fails.append("farm stock after harvest is %d" % farm.food_stock)
+
+
+func _test_hunger_lose(fails: PackedStringArray) -> void:
+	var sim := Sim.new()
+	sim.setup(Constants.DEFAULT_SEED)
+	if sim.director != null:
+		sim.director.next_wave_at = 1.0e9
+	var player := sim.get_player()
+	if player == null:
+		fails.append("hunger lose missing player")
+		return
+	player.inventory.remove(Types.ResourceKind.FOOD, player.inventory.food)
+	_tick_idle(sim, _ticks_for(Constants.FOOD_EAT_PERIOD))
+	if sim.outcome != Types.Outcome.PLAYER_LOSE or sim.outcome_reason != Types.OutcomeReason.HUNGER:
+		fails.append("missed meal outcome is %d/%d" % [sim.outcome, sim.outcome_reason])
 
 
 func _tick_idle(sim: Sim, ticks: int) -> void:
@@ -766,10 +845,10 @@ func _player_depot(world: World) -> Building:
 	return null
 
 
-func _first_placeable(world: World, kind: int) -> Vector2i:
+func _first_placeable(world: World, kind: int, sim: Sim = null) -> Vector2i:
 	for y in Constants.MAP_H:
 		for x in Constants.MAP_W:
 			var tile := Vector2i(x, y)
-			if Rules.can_place(world, null, kind, tile):
+			if Rules.can_place(world, sim, kind, tile):
 				return tile
 	return Vector2i(-1, -1)

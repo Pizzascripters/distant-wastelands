@@ -270,8 +270,11 @@ func _apply_build_hotkeys(cmd: InputCommand) -> void:
 		_try_build_kind(Types.BuildingKind.WORKSHOP)
 	elif Input.is_action_just_pressed("build_lab"):
 		_try_build_kind(Types.BuildingKind.LAB)
-	elif Input.is_action_just_pressed("build_greenhouse"):
-		_try_build_kind(Types.BuildingKind.GREENHOUSE)
+	elif (
+		Input.is_action_just_pressed("build_greenhouse")
+		or Input.is_action_just_pressed("build_farm")
+	):
+		_try_build_kind(Types.BuildingKind.FARM)
 	elif Input.is_action_just_pressed("build_gate"):
 		_try_build_kind(Types.BuildingKind.GATE)
 	elif Input.is_action_just_pressed("build_medbay"):
@@ -518,6 +521,7 @@ func _ensure_actions() -> void:
 	_bind_keys("build_workshop", [KEY_3])
 	_bind_keys("build_lab", [KEY_4])
 	_bind_keys("build_greenhouse", [KEY_5])
+	_bind_keys("build_farm", [KEY_5])
 	_bind_keys("build_gate", [KEY_6])
 	_bind_keys("build_medbay", [KEY_7])
 	_bind_keys("inspect", [KEY_F])

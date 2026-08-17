@@ -9,6 +9,7 @@ var weapon_cooldown: float = 0.0
 var alive: bool = true
 var respawn_timer: float = 0.0
 var o2: float = Constants.PLAYER_O2_MAX
+var food_debt_timer: float = 0.0
 var fire_target_id: int = 0
 var ai_state: int = Types.RaiderState.SPAWNED
 var ai_state_time: float = 0.0
@@ -30,14 +31,16 @@ static func inventory_for(unit_kind: int) -> Inventory:
 				Constants.PLAYER_CARRY_SCRAP,
 				Constants.PLAYER_CARRY_ICE,
 				Constants.PLAYER_CARRY_ORE,
-				Constants.PLAYER_CARRY_PARTS
+				Constants.PLAYER_CARRY_PARTS,
+				Constants.PLAYER_CARRY_FOOD
 			)
 		Types.UnitKind.RAIDER:
 			return Inventory.new(
 				Constants.RAIDER_CARRY_SCRAP,
 				Constants.RAIDER_CARRY_ICE,
 				Constants.RAIDER_CARRY_ORE,
-				Constants.RAIDER_CARRY_PARTS
+				Constants.RAIDER_CARRY_PARTS,
+				Constants.RAIDER_CARRY_FOOD
 			)
 		_:
-			return Inventory.new(0, 0, 0, 0)
+			return Inventory.new(0, 0, 0, 0, 0)

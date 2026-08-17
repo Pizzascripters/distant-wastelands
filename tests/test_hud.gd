@@ -24,7 +24,7 @@ func run() -> PackedStringArray:
 
 	var carry := _counts(hud, "Carry")
 	var depot := _counts(hud, "Depot")
-	for key in ["Scrap", "Ice", "Ore", "Parts"]:
+	for key in ["Scrap", "Ice", "Ore", "Parts", "Food"]:
 		if not carry.has(key):
 			fails.append("carry missing %s count" % key)
 		if not depot.has(key):
@@ -143,7 +143,7 @@ func _counts(hud: Hud, group: String) -> Dictionary:
 	if row == null:
 		return {}
 	var out := {}
-	for kind in ["Scrap", "Ice", "Ore", "Parts"]:
+	for kind in ["Scrap", "Ice", "Ore", "Parts", "Food"]:
 		var lab := row.find_child("%sCount" % kind, true, false) as Label
 		if lab != null:
 			out[kind] = lab.text

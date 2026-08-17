@@ -21,6 +21,7 @@ const _SCRAP_PATH := "res://assets/sprites/placeholder/scrap.png"
 const _ICE_PATH := "res://assets/sprites/placeholder/ice.png"
 const _ORE_PATH := "res://assets/sprites/placeholder/ore.png"
 const _PARTS_PATH := "res://assets/sprites/placeholder/parts.png"
+const _FOOD_PATH := "res://assets/sprites/placeholder/food.png"
 
 var _carry: Dictionary = {}
 var _depot: Dictionary = {}
@@ -131,6 +132,7 @@ func _resource_row(title: String) -> Dictionary:
 		["ice", _ICE_PATH],
 		["ore", _ORE_PATH],
 		["parts", _PARTS_PATH],
+		["food", _FOOD_PATH],
 	]:
 		var icon := TextureRect.new()
 		icon.name = "%sIcon" % kind[0].capitalize()
@@ -267,16 +269,20 @@ func _label(text: String) -> Label:
 
 func _set_counts(group: Dictionary, inv: Dictionary, low_ice: bool) -> void:
 	var counts: Dictionary = group["counts"]
-	for key in ["scrap", "ice", "ore", "parts"]:
+	for key in ["scrap", "ice", "ore", "parts", "food"]:
 		var lab: Label = counts[key]
 		lab.text = str(int(inv.get(key, 0)))
-		var color := LOW_ICE if key == "ice" and low_ice else TEXT
+		var color := TEXT
+		if key == "ice" and low_ice:
+			color = LOW_ICE
+		elif key == "food" and int(inv.get("food", 0)) <= Constants.FOOD_WARN:
+			color = LOW_ICE
 		lab.add_theme_color_override("font_color", color)
 
 
 func _set_missing(group: Dictionary) -> void:
 	var counts: Dictionary = group["counts"]
-	for key in ["scrap", "ice", "ore", "parts"]:
+	for key in ["scrap", "ice", "ore", "parts", "food"]:
 		var lab: Label = counts[key]
 		lab.text = MISSING
 		lab.add_theme_color_override("font_color", TEXT)
@@ -330,12 +336,13 @@ func _float_field(snap: SimSnapshot, key: String, fallback: float) -> float:
 
 
 func _inventory_from(inv: Variant) -> Dictionary:
-	var out := {"scrap": 0, "ice": 0, "ore": 0, "parts": 0}
+	var out := {"scrap": 0, "ice": 0, "ore": 0, "parts": 0, "food": 0}
 	if inv is Dictionary:
 		out["scrap"] = int(inv.get("scrap", 0))
 		out["ice"] = int(inv.get("ice", 0))
 		out["ore"] = int(inv.get("ore", 0))
 		out["parts"] = int(inv.get("parts", 0))
+		out["food"] = int(inv.get("food", 0))
 	elif inv is Object:
 		for key in out.keys():
 			if key in inv:
