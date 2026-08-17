@@ -22,9 +22,13 @@ const _PARTS := "res://assets/sprites/placeholder/parts.png"
 
 var inspected_id: int = -1
 var withdraw: bool = false
+var pending_research_kind: int = -1
 
 var _kind: int = -1
 var _faction: int = Types.Faction.PLAYER
+var _research_selected: int = -1
+var _research_progress: float = 0.0
+var _techs_done: int = 0
 var _icon: TextureRect
 var _hp_fill: ColorRect
 var _hp_value: Label
@@ -32,6 +36,12 @@ var _depot_box: VBoxContainer
 var _depot_counts: Dictionary = {}
 var _deposit_btn: Button
 var _withdraw_btn: Button
+var _lab_box: VBoxContainer
+var _tech_btns: Array[Button] = []
+var _lab_fill: ColorRect
+var _lab_progress: Label
+var _workshop_box: VBoxContainer
+var _workshop_lock: Label
 var _plain: StyleBoxFlat
 var _selected: StyleBoxFlat
 
@@ -76,6 +86,7 @@ func open_building(rec: Dictionary) -> void:
 	var id := int(rec.get("id", -1))
 	if not visible or inspected_id != id:
 		withdraw = false
+		pending_research_kind = -1
 	inspected_id = id
 	visible = true
 	apply_record(rec)
@@ -84,8 +95,15 @@ func open_building(rec: Dictionary) -> void:
 func close() -> void:
 	inspected_id = -1
 	withdraw = false
+	pending_research_kind = -1
 	_kind = -1
 	visible = false
+
+
+func take_research_kind() -> int:
+	var kind := pending_research_kind
+	pending_research_kind = -1
+	return kind
 
 
 func apply_snapshot(snap: SimSnapshot) -> void:
@@ -96,6 +114,10 @@ func apply_snapshot(snap: SimSnapshot) -> void:
 	if rec.is_empty() or int(rec.get("hp", 0)) <= 0:
 		close()
 		return
+	if snap != null:
+		_research_selected = int(snap.research_selected)
+		_research_progress = float(snap.research_progress)
+		_techs_done = int(snap.techs_done)
 	apply_record(rec)
 
 
@@ -120,6 +142,14 @@ func apply_record(rec: Dictionary) -> void:
 		for key in ["scrap", "ice", "ore", "parts"]:
 			var lab: Label = _depot_counts[key]
 			lab.text = "%d / %d" % [int(inv[key]), int(inv["cap_%s" % key])]
+	if _lab_box != null:
+		_lab_box.visible = _kind == Types.BuildingKind.LAB
+		if _lab_box.visible:
+			_refresh_lab()
+	if _workshop_box != null:
+		_workshop_box.visible = _kind == Types.BuildingKind.WORKSHOP
+		if _workshop_box.visible:
+			_workshop_lock.visible = (_techs_done & (1 << Types.TechKind.METALLURGY)) == 0
 	_refresh_toggle()
 
 
@@ -239,6 +269,10 @@ func _ensure_ui() -> void:
 	stats.add_child(_make_hp_row())
 	_depot_box = _make_depot_box()
 	stats.add_child(_depot_box)
+	_lab_box = _make_lab_box()
+	stats.add_child(_lab_box)
+	_workshop_box = _make_workshop_box()
+	stats.add_child(_workshop_box)
 	main.add_child(stats)
 	panel.add_child(main)
 	add_child(panel)
@@ -311,6 +345,122 @@ func _make_depot_box() -> VBoxContainer:
 	toggle.add_child(_withdraw_btn)
 	box.add_child(toggle)
 	return box
+
+
+func _make_lab_box() -> VBoxContainer:
+	var box := VBoxContainer.new()
+	box.name = "LabBox"
+	box.mouse_filter = MOUSE_FILTER_IGNORE
+	box.add_theme_constant_override("separation", 4)
+	box.visible = false
+	var row := HBoxContainer.new()
+	row.name = "Techs"
+	row.mouse_filter = MOUSE_FILTER_IGNORE
+	row.add_theme_constant_override("separation", 4)
+	var icons := [_ICE, _ORE, _SCRAP, _TURRET]
+	for i in 4:
+		var btn := _toggle_button(str(i + 1))
+		btn.name = "Tech%d" % (i + 1)
+		btn.custom_minimum_size = Vector2(36, 36)
+		var icon := TextureRect.new()
+		icon.custom_minimum_size = Vector2(RES_ICON_PX, RES_ICON_PX)
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.texture_filter = TEXTURE_FILTER_NEAREST
+		icon.mouse_filter = MOUSE_FILTER_IGNORE
+		var tex := WorldView.load_png(icons[i])
+		if tex != null:
+			icon.texture = tex
+		btn.add_child(icon)
+		var kind := i
+		btn.pressed.connect(func() -> void:
+			_on_tech_pressed(kind)
+		)
+		row.add_child(btn)
+		_tech_btns.append(btn)
+	box.add_child(row)
+	var track := ColorRect.new()
+	track.name = "LabTrack"
+	track.color = Color(0, 0, 0, 0.65)
+	track.custom_minimum_size = Vector2(160, 10)
+	track.mouse_filter = MOUSE_FILTER_IGNORE
+	_lab_fill = ColorRect.new()
+	_lab_fill.name = "LabFill"
+	_lab_fill.color = SELECTED
+	_lab_fill.mouse_filter = MOUSE_FILTER_IGNORE
+	_lab_fill.set_anchors_preset(PRESET_FULL_RECT)
+	track.add_child(_lab_fill)
+	box.add_child(track)
+	_lab_progress = _label("0 / 0")
+	_lab_progress.name = "LabProgress"
+	box.add_child(_lab_progress)
+	return box
+
+
+func _make_workshop_box() -> VBoxContainer:
+	var box := VBoxContainer.new()
+	box.name = "WorkshopBox"
+	box.mouse_filter = MOUSE_FILTER_IGNORE
+	box.visible = false
+	var recipe := HBoxContainer.new()
+	recipe.mouse_filter = MOUSE_FILTER_IGNORE
+	recipe.add_theme_constant_override("separation", 4)
+	for spec in [[_SCRAP, "3"], [_ORE, "2"]]:
+		var icon := TextureRect.new()
+		icon.custom_minimum_size = Vector2(RES_ICON_PX, RES_ICON_PX)
+		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		icon.texture_filter = TEXTURE_FILTER_NEAREST
+		icon.mouse_filter = MOUSE_FILTER_IGNORE
+		var tex := WorldView.load_png(spec[0])
+		if tex != null:
+			icon.texture = tex
+		recipe.add_child(icon)
+		recipe.add_child(_label(spec[1]))
+	recipe.add_child(_label("->"))
+	var parts_icon := TextureRect.new()
+	parts_icon.custom_minimum_size = Vector2(RES_ICON_PX, RES_ICON_PX)
+	parts_icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	parts_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	parts_icon.texture_filter = TEXTURE_FILTER_NEAREST
+	parts_icon.mouse_filter = MOUSE_FILTER_IGNORE
+	var parts_tex := WorldView.load_png(_PARTS)
+	if parts_tex != null:
+		parts_icon.texture = parts_tex
+	recipe.add_child(parts_icon)
+	recipe.add_child(_label("1"))
+	box.add_child(recipe)
+	_workshop_lock = _label("locked")
+	_workshop_lock.name = "WorkshopLock"
+	box.add_child(_workshop_lock)
+	return box
+
+
+func _on_tech_pressed(kind: int) -> void:
+	if kind == Types.TechKind.BALLISTICS and (_techs_done & (1 << Types.TechKind.METALLURGY)) == 0:
+		return
+	pending_research_kind = kind
+
+
+func _refresh_lab() -> void:
+	var metal_done := (_techs_done & (1 << Types.TechKind.METALLURGY)) != 0
+	for i in _tech_btns.size():
+		var btn := _tech_btns[i]
+		var done := (_techs_done & (1 << i)) != 0
+		var selected := _research_selected == i
+		btn.disabled = i == Types.TechKind.BALLISTICS and not metal_done
+		btn.modulate = Color(1, 1, 1, 0.4) if btn.disabled or done else Color.WHITE
+		btn.add_theme_stylebox_override("normal", _selected if selected else _plain)
+		btn.add_theme_stylebox_override("hover", _selected if selected else _plain)
+	var dur := Research.duration(_research_selected) if _research_selected >= 0 else 0.0
+	var ratio := 0.0
+	if dur > 0.0:
+		ratio = clampf(_research_progress / dur, 0.0, 1.0)
+	_lab_fill.anchor_right = ratio
+	if _research_selected < 0:
+		_lab_progress.text = "0 / 0"
+	else:
+		_lab_progress.text = "%.1f / %.1f" % [_research_progress, dur]
 
 
 func _toggle_button(title: String) -> Button:

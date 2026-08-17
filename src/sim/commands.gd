@@ -10,6 +10,7 @@ var interact: bool = false
 var withdraw: bool = false
 var build_kind: int = -1
 var build_tile: Vector2i = Vector2i.ZERO
+var research_kind: int = -1
 
 
 func clone() -> InputCommand:
@@ -23,4 +24,5 @@ func clone() -> InputCommand:
 	copy.withdraw = withdraw
 	copy.build_kind = build_kind
 	copy.build_tile = build_tile
+	copy.research_kind = research_kind
 	return copy

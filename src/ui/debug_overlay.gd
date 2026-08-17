@@ -91,6 +91,7 @@ func _refresh() -> void:
 		["player depot  %s" % _depot_line(snap, Types.Faction.PLAYER), TEXT],
 		["enemy depot  %s" % _depot_line(snap, Types.Faction.ENEMY), TEXT],
 		["o2  %.2f" % _float_field(snap, "player_o2", Constants.PLAYER_O2_MAX), TEXT],
+		["research  %s" % _research_line(snap), TEXT],
 		["next wave  %.2f" % _float_field(snap, "next_wave_at", 0.0), TEXT],
 	]
 	var plain := PackedStringArray()
@@ -139,7 +140,9 @@ func _depot_line(snap: SimSnapshot, faction: int) -> String:
 	if rec.is_empty():
 		return MISSING
 	var inv := _inventory_from(rec.get("inventory", {}))
-	return "scrap %d  ice %d" % [inv["scrap"], inv["ice"]]
+	return "scrap %d  ice %d  ore %d  parts %d" % [
+		inv["scrap"], inv["ice"], inv["ore"], inv["parts"]
+	]
 
 
 func _living_depot(snap: SimSnapshot, faction: int) -> Dictionary:
@@ -157,16 +160,37 @@ func _living_depot(snap: SimSnapshot, faction: int) -> Dictionary:
 
 
 func _inventory_from(inv: Variant) -> Dictionary:
-	var out := {"scrap": 0, "ice": 0}
+	var out := {"scrap": 0, "ice": 0, "ore": 0, "parts": 0}
 	if inv is Dictionary:
 		out["scrap"] = int(inv.get("scrap", 0))
 		out["ice"] = int(inv.get("ice", 0))
+		out["ore"] = int(inv.get("ore", 0))
+		out["parts"] = int(inv.get("parts", 0))
 	elif inv is Object:
 		if "scrap" in inv:
 			out["scrap"] = int(inv.scrap)
 		if "ice" in inv:
 			out["ice"] = int(inv.ice)
+		if "ore" in inv:
+			out["ore"] = int(inv.ore)
+		if "parts" in inv:
+			out["parts"] = int(inv.parts)
 	return out
+
+
+func _research_line(snap: SimSnapshot) -> String:
+	var selected := -1
+	if "research_selected" in snap:
+		selected = int(snap.research_selected)
+	var progress := _float_field(snap, "research_progress", 0.0)
+	var done := 0
+	if "techs_done" in snap:
+		done = int(snap.techs_done)
+	var names := Types.TechKind.keys()
+	var name := "none"
+	if selected >= 0 and selected < names.size():
+		name = str(names[selected])
+	return "%s  %.2f  done %d" % [name, progress, done]
 
 
 func _float_field(snap: SimSnapshot, key: String, fallback: float) -> float:
