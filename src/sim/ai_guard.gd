@@ -44,6 +44,8 @@ static func _path_home(unit: Unit, sim: Sim, home: Vector2) -> void:
 		if not world.is_walkable(nxt.x, nxt.y):
 			need_recalc = true
 	if need_recalc:
+		if world.is_unit_asleep(unit):
+			return
 		var goals: Array[Vector2i] = [goal]
 		if sim.path_queue != null:
 			sim.path_queue.request(unit, start, goals)

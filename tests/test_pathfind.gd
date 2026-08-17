@@ -9,6 +9,7 @@ func run() -> PackedStringArray:
 	_test_any_picks_nearer_goal(fails)
 	_test_any_empty_when_all_boxed(fails)
 	_test_gate_blocks_astar(fails)
+	_test_expand_cap_partial_and_inside(fails)
 	return fails
 
 
@@ -117,6 +118,31 @@ func _test_gate_blocks_astar(fails: PackedStringArray) -> void:
 	var boxed := Pathfind.find_path(world, Vector2i(5, 5), Vector2i(10, 10))
 	if not boxed.is_empty():
 		fails.append("A* should return empty when start is boxed in by Gates")
+
+
+func _test_expand_cap_partial_and_inside(fails: PackedStringArray) -> void:
+	var short_world := World.new()
+	var short_goal := Vector2i(40, 0)
+	var short := Pathfind.find_path(short_world, Vector2i(0, 0), short_goal)
+	if short.is_empty() or short[short.size() - 1] != short_goal:
+		fails.append("hallway shorter than PATH_MAX_EXPAND should reach the goal")
+	var world := World.new()
+	var start := Vector2i(0, 0)
+	var goal := Vector2i(Constants.MAP_W - 1, Constants.MAP_H - 1)
+	for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+		var n: Vector2i = goal + d
+		if world.in_bounds(n.x, n.y):
+			world.set_terrain(n.x, n.y, Types.TileTerrain.ROCK)
+	var path := Pathfind.find_path(world, start, goal)
+	if path.is_empty():
+		fails.append("expand-cap search should return a non-empty prefix")
+		return
+	if path[0] != start:
+		fails.append("partial path should start at the start tile")
+	if path[path.size() - 1] == goal:
+		fails.append("goal beyond PATH_MAX_EXPAND should not be reached")
+	if path.size() < 2:
+		fails.append("partial path should advance past the start")
 
 
 func _place_gate(world: World, tile: Vector2i) -> void:

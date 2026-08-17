@@ -36,6 +36,9 @@ func service(world: World) -> void:
 	var i := 0
 	while i < _unit_ids.size() and completed_this_tick < Constants.MAX_PATHS_PER_TICK:
 		var unit: Unit = _units[i]
+		if unit != null and unit.path_pending and world.is_unit_asleep(unit):
+			i += 1
+			continue
 		var start: Vector2i = _starts[i]
 		var goals: Array[Vector2i] = []
 		for goal in _goals[i]:

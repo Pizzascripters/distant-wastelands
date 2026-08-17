@@ -10,6 +10,7 @@ func run() -> PackedStringArray:
 	_test_habitat_aabb_in_range(fails)
 	_test_melee_fallback_inside_18(fails)
 	_test_friendly_fire_off(fails)
+	_test_asleep_guard_does_not_fire(fails)
 	return fails
 
 
@@ -125,7 +126,7 @@ func _test_melee_fallback_inside_18(fails: PackedStringArray) -> void:
 	var sim := _ready_sim()
 	_banish_player(sim)
 	_banish_guard(sim)
-	var tile := Vector2i(20, 20)
+	var tile := Vector2i(22, 176)
 	var walls := _box_with_walls(sim, tile)
 	if walls.is_empty():
 		fails.append("melee fallback could not box raider")
@@ -157,6 +158,25 @@ func _test_friendly_fire_off(fails: PackedStringArray) -> void:
 		fails.append("enemy projectile damaged a same-faction raider")
 	if player.hp != Constants.PLAYER_HP - Constants.RAIDER_PROJ_DAMAGE:
 		fails.append("enemy projectile player hp is %d" % player.hp)
+
+
+func _test_asleep_guard_does_not_fire(fails: PackedStringArray) -> void:
+	var sim := _ready_sim()
+	var guard := _find_guard(sim)
+	if guard == null:
+		fails.append("asleep guard test missing guard")
+		return
+	var far := Vector2i(20, 20)
+	sim.world.set_terrain(far.x, far.y, Types.TileTerrain.EMPTY)
+	guard.pos = sim.world.tile_center(far.x, far.y)
+	guard.weapon_cooldown = 0.0
+	_place_wall(sim, far + Vector2i(3, 0))
+	var before := _enemy_proj_count(sim)
+	sim.tick()
+	if _enemy_proj_count(sim) > before:
+		fails.append("asleep guard should not fire")
+	if guard.vel != Vector2.ZERO:
+		fails.append("asleep guard should not move")
 
 
 func _ready_sim() -> Sim:

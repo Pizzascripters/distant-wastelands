@@ -3,29 +3,12 @@ extends RefCounted
 
 ## Damage, hit order, melee, and death helpers.
 
-static var _unit_buckets: Dictionary = {}
-static var _bucket_world: World = null
-static var _max_unit_radius: float = 0.0
-
-
 static func bucket_units(world: World) -> void:
-	_unit_buckets.clear()
-	_bucket_world = world
-	_max_unit_radius = 0.0
 	if world == null:
 		return
-	var tile := float(Constants.TILE)
-	for unit in world.units.values():
-		if unit == null or not unit.alive:
-			continue
-		var tx := int(floor(unit.pos.x / tile))
-		var ty := int(floor(unit.pos.y / tile))
-		var key := ty * Constants.MAP_W + tx
-		if not _unit_buckets.has(key):
-			_unit_buckets[key] = []
-		_unit_buckets[key].append(unit)
-		if unit.radius > _max_unit_radius:
-			_max_unit_radius = unit.radius
+	if world.spatial == null:
+		world.spatial = SpatialIndex.new()
+	world.spatial.rebuild_units(world)
 
 
 static func apply_damage(target: Object, amount: int) -> void:
@@ -242,6 +225,8 @@ static func process_deaths(world: World) -> void:
 static func process_unit_death(world: World, unit: Unit) -> void:
 	unit.hp = 0
 	unit.alive = false
+	if world != null and world.spatial != null:
+		world.spatial.remove_unit(unit)
 	if unit.kind != Types.UnitKind.PLAYER:
 		world.units.erase(unit.id)
 
@@ -258,27 +243,21 @@ static func process_building_death(world: World, building: Building) -> void:
 
 
 static func _lowest_id_opposing_unit(world: World, proj: Projectile) -> Unit:
-	if _bucket_world != world:
-		bucket_units(world)
-	var tile := float(Constants.TILE)
-	var tx := int(floor(proj.pos.x / tile))
-	var ty := int(floor(proj.pos.y / tile))
-	var reach := Constants.PROJ_RADIUS + _max_unit_radius
+	if world == null:
+		return null
+	if world.spatial == null:
+		world.spatial = SpatialIndex.new()
+	if world.spatial.indexed_unit_ids() == 0 and not world.units.is_empty():
+		world.spatial.rebuild_units(world)
+	var index: SpatialIndex = world.spatial
+	var home := index.chunk_of_pos(proj.pos)
 	var best: Unit = null
-	# One-tile halo: PROJ_RADIUS + max unit radius is 13 < TILE 32.
+	# One-chunk halo: PROJ_RADIUS + max unit radius is 13 < 8 * 32.
 	for dy in range(-1, 2):
 		for dx in range(-1, 2):
-			var x: int = tx + dx
-			var y: int = ty + dy
-			if not world.in_bounds(x, y):
-				continue
-			if world.point_aabb_distance(proj.pos, world.tile_aabb(x, y)) > reach:
-				continue
-			var bucket: Variant = _unit_buckets.get(y * Constants.MAP_W + x)
-			if bucket == null:
-				continue
-			for unit in bucket:
-				if not unit.alive or unit.faction == proj.faction:
+			for raw in index.units_in_chunk(Vector2i(home.x + dx, home.y + dy)):
+				var unit := raw as Unit
+				if unit == null or not unit.alive or unit.faction == proj.faction:
 					continue
 				if not _circles_overlap(proj.pos, Constants.PROJ_RADIUS, unit.pos, unit.radius):
 					continue
@@ -404,6 +383,8 @@ static func _spill_habitat(world: World, habitat: Building) -> void:
 	var piles = world.get("loot")
 	if piles is Dictionary:
 		piles[pile.id] = pile
+		if world.spatial != null:
+			world.spatial.insert_loot(pile)
 
 
 static func _vacate_footprint(world: World, building: Building) -> void:

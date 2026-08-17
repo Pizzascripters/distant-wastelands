@@ -12,6 +12,8 @@ var loot: Dictionary = {}
 var units: Dictionary = {}
 var projectiles: Dictionary = {}
 var next_id: int = 1
+var spatial: SpatialIndex = SpatialIndex.new()
+var _active_anchors: Array[Vector2i] = []
 
 
 func _init() -> void:
@@ -22,6 +24,7 @@ func _init() -> void:
 	occupancy.fill(0)
 	chunk_generation.resize(terrain_chunk_count())
 	chunk_generation.fill(0)
+	spatial = SpatialIndex.new()
 
 
 func index_of(x: int, y: int) -> int:
@@ -202,3 +205,56 @@ func alloc_id() -> int:
 	var id := next_id
 	next_id += 1
 	return id
+
+
+func rebuild_spatial() -> void:
+	if spatial == null:
+		spatial = SpatialIndex.new()
+	spatial.rebuild(self)
+
+
+func move_unit(unit: Unit, old_tile: Vector2i, new_tile: Vector2i) -> void:
+	if spatial == null:
+		return
+	spatial.move_unit(unit, old_tile, new_tile)
+
+
+func refresh_active_window(player: Unit) -> void:
+	_active_anchors.clear()
+	if player != null:
+		_active_anchors.append(world_to_tile(player.pos))
+	for raw in buildings.values():
+		var building := raw as Building
+		if building == null or building.hp <= 0:
+			continue
+		if building.kind != Types.BuildingKind.HABITAT:
+			continue
+		if building.faction != Types.Faction.PLAYER:
+			continue
+		_active_anchors.append(building.origin_tile)
+
+
+func is_tile_active(tile: Vector2i) -> bool:
+	if _active_anchors.is_empty():
+		return true
+	var limit := Constants.ACTIVE_WINDOW_TILES
+	for origin in _active_anchors:
+		if maxi(absi(tile.x - origin.x), absi(tile.y - origin.y)) <= limit:
+			return true
+	return false
+
+
+func is_unit_asleep(unit: Unit) -> bool:
+	if unit == null or not unit.alive:
+		return false
+	if unit.kind != Types.UnitKind.RAIDER and unit.kind != Types.UnitKind.GUARD:
+		return false
+	return not is_tile_active(world_to_tile(unit.pos))
+
+
+func is_building_asleep(building: Building) -> bool:
+	if building == null or building.hp <= 0:
+		return false
+	if building.kind != Types.BuildingKind.TURRET:
+		return false
+	return not is_tile_active(building.origin_tile)

@@ -90,3 +90,5 @@ func _spawn_raider(world: World, tile: Vector2i, index: int) -> void:
 	raider.stuck_last_pos = raider.pos
 	raider.path_recalc_in = float(index) * Constants.PATH_STAGGER
 	world.units[raider.id] = raider
+	if world.spatial != null:
+		world.spatial.insert_unit(raider)

@@ -31,3 +31,5 @@ var hunger_starving: bool = false
 var sim_ms: float = 0.0
 var view_ms: float = 0.0
 var completed_this_tick: int = 0
+var active_unit_count: int = 0
+var sleeping_unit_count: int = 0
