@@ -20,14 +20,17 @@ var _gather_bar: GatherBar
 var _camera: CameraCtrl
 var _hud: Hud
 var _build_bar: BuildBar
+var _building_panel: BuildingPanel
 var _pause_menu: PauseMenu
 var _end_screen: EndScreen
 var _debug: DebugOverlay
+var _ui_layer: CanvasLayer
 var _build_kind: int = -1
 var _player_world_pos: Vector2 = Vector2.ZERO
 var _last_aim: Vector2 = Vector2.RIGHT
 var _ended: bool = false
 var _ignore_gameplay_input: bool = false
+var _latest_snap: SimSnapshot
 
 
 func _ready() -> void:
@@ -56,6 +59,7 @@ func _ready() -> void:
 	add_child(_camera)
 	_mount_ui()
 	var snap := _session.get_snapshot()
+	_latest_snap = snap
 	_world_view.rebuild(snap)
 	_sync_views(snap)
 	if _gather_bar != null:
@@ -77,6 +81,7 @@ func _process(delta: float) -> void:
 	_session.tick(delta)
 	var view_started := Time.get_ticks_usec()
 	var snap := _session.get_snapshot()
+	_latest_snap = snap
 	_sync_views(snap)
 	if _gather_bar != null:
 		_gather_bar.apply_snapshot(snap)
@@ -84,6 +89,7 @@ func _process(delta: float) -> void:
 	if _hud != null:
 		_hud.apply_snapshot(snap)
 	_update_end_screen(snap)
+	_update_inspect(snap)
 	if _debug != null and _debug.visible:
 		snap.view_ms = float(Time.get_ticks_usec() - view_started) * 0.001
 		_debug.apply_snapshot(snap)
@@ -92,6 +98,7 @@ func _process(delta: float) -> void:
 
 func _mount_ui() -> void:
 	var layer := CanvasLayer.new()
+	_ui_layer = layer
 	add_child(layer)
 	_hud = _HUD_SCENE.instantiate() as Hud
 	_hud.theme = _THEME
@@ -104,6 +111,15 @@ func _mount_ui() -> void:
 	_build_bar.offset_right = 220.0
 	_build_bar.offset_bottom = -12.0
 	layer.add_child(_build_bar)
+	_building_panel = BuildingPanel.new()
+	_building_panel.theme = _THEME
+	_building_panel.visible = false
+	_building_panel.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	_building_panel.offset_left = -170.0
+	_building_panel.offset_right = 170.0
+	_building_panel.offset_top = -200.0
+	_building_panel.offset_bottom = -72.0
+	layer.add_child(_building_panel)
 	_pause_menu = _PAUSE_SCENE.instantiate() as PauseMenu
 	_pause_menu.theme = _THEME
 	_pause_menu.visible = false
@@ -143,6 +159,7 @@ func _set_paused(paused: bool) -> void:
 	_session.set_paused(paused)
 	if paused:
 		_set_build_kind(-1)
+		_close_inspect()
 
 
 func _is_paused() -> bool:
@@ -156,6 +173,7 @@ func _update_end_screen(snap: SimSnapshot) -> void:
 		_ended = true
 		_set_paused(false)
 		_set_build_kind(-1)
+		_close_inspect()
 		_end_screen.set_outcome(snap.outcome, snap.outcome_reason)
 	_end_screen.visible = true
 
@@ -201,18 +219,28 @@ func _read_command() -> InputCommand:
 		_set_build_kind(Types.BuildingKind.WALL)
 	elif Input.is_action_just_pressed("build_turret"):
 		_set_build_kind(Types.BuildingKind.TURRET)
+	var snap := _latest_snap
+	if snap == null and _session != null:
+		snap = _session.get_snapshot()
+		_latest_snap = snap
+	if Input.is_action_just_pressed("inspect"):
+		_on_inspect_pressed(snap)
 	if Input.is_action_just_pressed("cancel"):
-		_set_build_kind(-1)
+		_on_cancel_pressed(
+			snap,
+			Input.is_mouse_button_pressed(MOUSE_BUTTON_RIGHT),
+			get_global_mouse_position(),
+			_hud_blocks_pointer()
+		)
 	cmd.interact = Input.is_action_pressed("interact")
-	cmd.withdraw = Input.is_action_pressed("withdraw")
+	cmd.withdraw = _command_withdraw(Input.is_action_pressed("withdraw"))
 	cmd.build_kind = -1
-	if _build_kind >= 0:
-		cmd.fire = false
-		if Input.is_action_just_pressed("fire"):
-			cmd.build_kind = _build_kind
-			cmd.build_tile = _cursor_tile()
-	else:
-		cmd.fire = Input.is_action_pressed("fire")
+	_apply_world_click(
+		cmd,
+		Input.is_action_pressed("fire"),
+		Input.is_action_just_pressed("fire"),
+		_hud_blocks_pointer()
+	)
 	return cmd
 
 
@@ -224,8 +252,133 @@ func _set_build_kind(kind: int) -> void:
 		_ghost.visible = kind >= 0
 
 
+func _open_inspect(rec: Dictionary) -> void:
+	_set_build_kind(-1)
+	if _building_panel == null or rec.is_empty():
+		return
+	_building_panel.open_building(rec)
+
+
+func _close_inspect() -> void:
+	if _building_panel != null:
+		_building_panel.close()
+
+
+func _on_inspect_pressed(snap: SimSnapshot) -> void:
+	_set_build_kind(-1)
+	if snap == null or not _player_alive(snap):
+		_close_inspect()
+		return
+	var rec := BuildingPanel.nearest_in_range(snap, _player_pos(snap))
+	if rec.is_empty():
+		_close_inspect()
+		return
+	if (
+		_building_panel != null
+		and _building_panel.is_open()
+		and _building_panel.inspected_id == int(rec.get("id", -2))
+	):
+		_close_inspect()
+		return
+	_open_inspect(rec)
+
+
+func _on_cancel_pressed(snap: SimSnapshot, is_rmb: bool, world_pos: Vector2, over_hud: bool) -> void:
+	if _build_kind >= 0:
+		_set_build_kind(-1)
+		return
+	if is_rmb and over_hud:
+		return
+	if is_rmb:
+		var rec := BuildingPanel.at_world_point(snap, world_pos)
+		if rec.is_empty():
+			_close_inspect()
+		else:
+			_open_inspect(rec)
+		return
+	_close_inspect()
+
+
+func _update_inspect(snap: SimSnapshot) -> void:
+	if _building_panel == null:
+		return
+	if _ended or _is_paused() or not _player_alive(snap):
+		_close_inspect()
+		return
+	_building_panel.apply_snapshot(snap)
+
+
+func _command_withdraw(shift_held: bool) -> bool:
+	return shift_held or (_building_panel != null and _building_panel.withdraw_active())
+
+
+func _apply_world_click(cmd: InputCommand, fire_held: bool, fire_just: bool, blocked: bool) -> void:
+	if blocked:
+		cmd.fire = false
+		return
+	if _build_kind >= 0:
+		cmd.fire = false
+		if fire_just:
+			cmd.build_kind = _build_kind
+			cmd.build_tile = _cursor_tile()
+	else:
+		cmd.fire = fire_held
+
+
+func _hud_blocks_pointer(screen_pos: Vector2 = Vector2.INF) -> bool:
+	var pos := screen_pos
+	if is_inf(pos.x) or is_inf(pos.y):
+		var viewport := get_viewport()
+		if viewport == null:
+			return false
+		pos = viewport.get_mouse_position()
+	if _ui_layer != null:
+		return _node_consumes_pointer(_ui_layer, pos)
+	if _building_panel != null:
+		return _building_panel.consumes_pointer(pos)
+	return false
+
+
+func _node_consumes_pointer(node: Node, pos: Vector2) -> bool:
+	if node == null or not node is CanvasItem:
+		return false
+	var item := node as CanvasItem
+	if not item.visible:
+		return false
+	if node is Control:
+		var ctrl := node as Control
+		if ctrl.mouse_filter == Control.MOUSE_FILTER_STOP and ctrl.get_global_rect().has_point(pos):
+			return true
+	for child in node.get_children():
+		if _node_consumes_pointer(child, pos):
+			return true
+	return false
+
+
+func _player_alive(snap: SimSnapshot) -> bool:
+	if snap == null:
+		return false
+	for rec in snap.units:
+		if int(rec.get("kind", -1)) != Types.UnitKind.PLAYER:
+			continue
+		if rec.has("alive"):
+			return bool(rec["alive"])
+		return int(rec.get("hp", 0)) > 0
+	return false
+
+
+func _player_pos(snap: SimSnapshot) -> Vector2:
+	if snap != null:
+		for rec in snap.units:
+			if int(rec.get("kind", -1)) == Types.UnitKind.PLAYER:
+				return rec.get("pos", _player_world_pos)
+	return _player_world_pos
+
+
 func _cursor_tile() -> Vector2i:
-	var pos := get_global_mouse_position()
+	var pos := Vector2.ZERO
+	if get_viewport() != null:
+		pos = get_global_mouse_position()
 	return Vector2i(
 		int(floor(pos.x / float(Constants.TILE))),
 		int(floor(pos.y / float(Constants.TILE)))
@@ -295,6 +448,7 @@ func _ensure_actions() -> void:
 	_bind_keys("withdraw", [KEY_SHIFT])
 	_bind_keys("build_wall", [KEY_1])
 	_bind_keys("build_turret", [KEY_2])
+	_bind_keys("inspect", [KEY_F])
 	_bind_keys("cancel", [KEY_Q])
 	_bind_mouse("cancel", MOUSE_BUTTON_RIGHT)
 	_bind_keys("pause", [KEY_ESCAPE])
