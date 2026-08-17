@@ -15,6 +15,10 @@ var director: Director
 var path_queue: PathQueue = PathQueue.new()
 var life: Dictionary = {}
 var last_tick_usec: int = 0
+var research_selected: int = -1
+var research_progress: float = 0.0
+var research_paid: bool = false
+var techs_done: int = 0
 var _interact_target_id: int = 0
 var _interact_withdraw: bool = false
 
@@ -29,6 +33,10 @@ func setup(p_seed: int) -> void:
 	time = 0.0
 	outcome = Types.Outcome.NONE
 	outcome_reason = Types.OutcomeReason.NONE
+	research_selected = -1
+	research_progress = 0.0
+	research_paid = false
+	techs_done = 0
 	_queue.clear()
 	player_id = 0
 	last_tick_usec = 0
@@ -88,7 +96,7 @@ func tick() -> void:
 	_integrate_projectiles()
 	_resolve_melee()
 	_interact_target_id = Rules.resolve_interact(
-		world, get_player(), cmd, _interact_target_id, _interact_withdraw
+		world, get_player(), cmd, _interact_target_id, _interact_withdraw, self
 	)
 	_interact_withdraw = _own_depot_withdrawing(cmd, _interact_target_id)
 	_process_deaths_and_respawn()
@@ -132,6 +140,10 @@ func snapshot() -> SimSnapshot:
 	snap.player_living_depot_ice_empty = _living_depot_ice_empty(Types.Faction.PLAYER)
 	snap.enemy_living_depot_ice_empty = _living_depot_ice_empty(Types.Faction.ENEMY)
 	_copy_gather_channel(snap, player)
+	snap.research_selected = research_selected
+	snap.research_progress = research_progress
+	snap.research_paid = research_paid
+	snap.techs_done = techs_done
 	return snap
 
 
@@ -139,6 +151,12 @@ func get_player() -> Unit:
 	if world == null:
 		return null
 	return world.units.get(player_id) as Unit
+
+
+func tech_complete(kind: int) -> bool:
+	if kind < 0:
+		return false
+	return (techs_done & (1 << kind)) != 0
 
 
 func _unit_record(unit: Unit) -> Dictionary:
@@ -281,8 +299,10 @@ func _apply_player_command(cmd: InputCommand) -> void:
 		player.aim = cmd.aim
 	player.vel = cmd.move * Constants.PLAYER_SPEED
 	if cmd.build_kind >= 0:
-		Rules.try_place(world, cmd.build_kind, cmd.build_tile)
-	elif cmd.fire and player.weapon_cooldown <= 0.0:
+		Rules.try_place(world, self, cmd.build_kind, cmd.build_tile)
+	if cmd.research_kind >= 0:
+		Research.select(self, cmd.research_kind)
+	if cmd.build_kind < 0 and cmd.fire and player.weapon_cooldown <= 0.0:
 		_spawn_projectile(
 			Types.Faction.PLAYER,
 			player.pos,
@@ -435,7 +455,8 @@ func _fire_turrets() -> void:
 		if building.hp <= 0:
 			continue
 		var center := world.footprint_aabb(building).get_center()
-		var target := _nearest_opposing_unit(center, building.faction, Constants.TURRET_RANGE)
+		var max_range := Research.turret_range(self, building.faction)
+		var target := _nearest_opposing_unit(center, building.faction, max_range)
 		if target == null:
 			continue
 		var delta := target.pos - center

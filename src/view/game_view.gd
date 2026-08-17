@@ -88,6 +88,8 @@ func _process(delta: float) -> void:
 	_update_build_ghost()
 	if _hud != null:
 		_hud.apply_snapshot(snap)
+	if _build_bar != null:
+		_build_bar.techs_done = snap.techs_done
 	_update_end_screen(snap)
 	_update_inspect(snap)
 	if _debug != null and _debug.visible:
@@ -107,8 +109,8 @@ func _mount_ui() -> void:
 	_build_bar.theme = _THEME
 	_build_bar.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
 	_build_bar.offset_left = 12.0
-	_build_bar.offset_top = -140.0
-	_build_bar.offset_right = 240.0
+	_build_bar.offset_top = -240.0
+	_build_bar.offset_right = 280.0
 	_build_bar.offset_bottom = -12.0
 	layer.add_child(_build_bar)
 	_building_panel = BuildingPanel.new()
@@ -215,7 +217,7 @@ func _read_command() -> InputCommand:
 	else:
 		cmd.aim = to_mouse.normalized()
 		_last_aim = cmd.aim
-	_apply_build_hotkeys()
+	_apply_build_hotkeys(cmd)
 	var snap := _latest_snap
 	if snap == null and _session != null:
 		snap = _session.get_snapshot()
@@ -241,21 +243,53 @@ func _read_command() -> InputCommand:
 	return cmd
 
 
-func _apply_build_hotkeys() -> void:
-	if _lab_panel_open() and (
-		Input.is_action_just_pressed("build_greenhouse")
-		or Input.is_action_just_pressed("build_gate")
-		or Input.is_action_just_pressed("build_medbay")
-	):
+func _apply_build_hotkeys(cmd: InputCommand) -> void:
+	if _lab_panel_open():
+		if _building_panel != null:
+			var picked := _building_panel.take_research_kind()
+			if picked >= 0:
+				cmd.research_kind = picked
+		if Input.is_action_just_pressed("build_wall"):
+			cmd.research_kind = Types.TechKind.HYDROPONICS
+		elif Input.is_action_just_pressed("build_turret"):
+			cmd.research_kind = Types.TechKind.METALLURGY
+		elif Input.is_action_just_pressed("build_workshop"):
+			cmd.research_kind = Types.TechKind.FIELD_MEDICINE
+		elif Input.is_action_just_pressed("build_lab"):
+			cmd.research_kind = Types.TechKind.BALLISTICS
 		return
+	if _building_panel != null:
+		var leftover := _building_panel.take_research_kind()
+		if leftover >= 0:
+			cmd.research_kind = leftover
 	if Input.is_action_just_pressed("build_wall"):
-		_set_build_kind(Types.BuildingKind.WALL)
+		_try_build_kind(Types.BuildingKind.WALL)
 	elif Input.is_action_just_pressed("build_turret"):
-		_set_build_kind(Types.BuildingKind.TURRET)
+		_try_build_kind(Types.BuildingKind.TURRET)
 	elif Input.is_action_just_pressed("build_workshop"):
-		_set_build_kind(Types.BuildingKind.WORKSHOP)
+		_try_build_kind(Types.BuildingKind.WORKSHOP)
 	elif Input.is_action_just_pressed("build_lab"):
-		_set_build_kind(Types.BuildingKind.LAB)
+		_try_build_kind(Types.BuildingKind.LAB)
+	elif Input.is_action_just_pressed("build_greenhouse"):
+		_try_build_kind(Types.BuildingKind.GREENHOUSE)
+	elif Input.is_action_just_pressed("build_gate"):
+		_try_build_kind(Types.BuildingKind.GATE)
+	elif Input.is_action_just_pressed("build_medbay"):
+		_try_build_kind(Types.BuildingKind.MEDBAY)
+
+
+func _try_build_kind(kind: int) -> void:
+	if _build_unlocked(kind):
+		_set_build_kind(kind)
+	elif _build_bar != null:
+		_build_bar.flash_locked(kind)
+
+
+func _build_unlocked(kind: int) -> bool:
+	var techs := 0
+	if _latest_snap != null:
+		techs = _latest_snap.techs_done
+	return Research.building_unlocked_bits(techs, kind)
 
 
 func _lab_panel_open() -> bool:
@@ -414,7 +448,8 @@ func _update_build_ghost() -> void:
 		return
 	var tile := _cursor_tile()
 	var world := _session_world()
-	var valid := world != null and Rules.can_place(world, _build_kind, tile)
+	var sim := _session_sim()
+	var valid := world != null and sim != null and Rules.can_place(world, sim, _build_kind, tile)
 	var span := 1
 	if world != null:
 		span = world.footprint_span(_build_kind)
@@ -425,10 +460,15 @@ func _update_build_ghost() -> void:
 
 
 func _session_world() -> World:
+	var sim := _session_sim()
+	if sim != null:
+		return sim.world
+	return null
+
+
+func _session_sim() -> Sim:
 	if _session is LocalSession:
-		var local := _session as LocalSession
-		if local.sim != null:
-			return local.sim.world
+		return (_session as LocalSession).sim
 	return null
 
 

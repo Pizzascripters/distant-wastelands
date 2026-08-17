@@ -25,21 +25,23 @@ func run() -> PackedStringArray:
 	_test_place_workshop_and_lab(fails)
 	_test_lab_occupies_2x2(fails)
 	_test_workshop_closer_wins_when_craftable(fails)
+	_test_lab_closer_wins_when_research_selected(fails)
+	_test_locked_buildings_not_placeable(fails)
 	return fails
 
 
 func _test_reject_rock(fails: PackedStringArray) -> void:
 	var world := _world_with_depot(Constants.WALL_COST)
 	world.set_terrain(_TILE.x, _TILE.y, Types.TileTerrain.ROCK)
-	if Rules.can_place(world, Types.BuildingKind.WALL, _TILE):
+	if Rules.can_place(world, null, Types.BuildingKind.WALL, _TILE):
 		fails.append("can_place should reject a rock tile")
-	if Rules.try_place(world, Types.BuildingKind.WALL, _TILE):
+	if Rules.try_place(world, null, Types.BuildingKind.WALL, _TILE):
 		fails.append("try_place should reject a rock tile")
 
 
 func _test_reject_overlap(fails: PackedStringArray) -> void:
 	var world := _world_with_depot(Constants.WALL_COST)
-	if Rules.can_place(world, Types.BuildingKind.WALL, Vector2i(2, 2)):
+	if Rules.can_place(world, null, Types.BuildingKind.WALL, Vector2i(2, 2)):
 		fails.append("can_place should reject a building footprint")
 
 	var deposit := Deposit.new()
@@ -48,7 +50,7 @@ func _test_reject_overlap(fails: PackedStringArray) -> void:
 	deposit.tile = _TILE
 	deposit.remaining = Constants.SCRAP_DEPOSIT_AMOUNT
 	world.deposits[deposit.id] = deposit
-	if Rules.can_place(world, Types.BuildingKind.WALL, _TILE):
+	if Rules.can_place(world, null, Types.BuildingKind.WALL, _TILE):
 		fails.append("can_place should reject a deposit tile")
 	world.deposits.erase(deposit.id)
 
@@ -60,22 +62,22 @@ func _test_reject_overlap(fails: PackedStringArray) -> void:
 	unit.radius = Constants.PLAYER_RADIUS
 	unit.alive = true
 	world.units[unit.id] = unit
-	if Rules.can_place(world, Types.BuildingKind.WALL, _TILE):
+	if Rules.can_place(world, null, Types.BuildingKind.WALL, _TILE):
 		fails.append("can_place should reject a unit overlap")
 
 
 func _test_reject_enemy_rect(fails: PackedStringArray) -> void:
 	var world := _world_with_depot(Constants.WALL_COST)
 	var tile := Constants.ENEMY_CAMP_RECT.position
-	if Rules.can_place(world, Types.BuildingKind.WALL, tile):
+	if Rules.can_place(world, null, Types.BuildingKind.WALL, tile):
 		fails.append("can_place should reject ENEMY_CAMP_RECT")
 
 
 func _test_reject_unaffordable(fails: PackedStringArray) -> void:
 	var world := _world_with_depot(Constants.WALL_COST - 1)
-	if Rules.can_place(world, Types.BuildingKind.WALL, _TILE):
+	if Rules.can_place(world, null, Types.BuildingKind.WALL, _TILE):
 		fails.append("can_place should reject when the depot cannot afford the wall")
-	if Rules.try_place(world, Types.BuildingKind.WALL, _TILE):
+	if Rules.try_place(world, null, Types.BuildingKind.WALL, _TILE):
 		fails.append("try_place should reject when unaffordable")
 	var depot := world.building_at(2, 2)
 	if depot.inventory.scrap != Constants.WALL_COST - 1:
@@ -88,24 +90,24 @@ func _test_reject_max_buildings(fails: PackedStringArray) -> void:
 	if world.buildings.size() != Constants.MAX_BUILDINGS:
 		fails.append("setup left %d buildings, expected %d" % [world.buildings.size(), Constants.MAX_BUILDINGS])
 		return
-	if Rules.can_place(world, Types.BuildingKind.WALL, _TILE):
+	if Rules.can_place(world, null, Types.BuildingKind.WALL, _TILE):
 		fails.append("can_place should reject at MAX_BUILDINGS")
 
 
 func _test_reject_missing_depot(fails: PackedStringArray) -> void:
 	var world := World.new()
-	if Rules.can_place(world, Types.BuildingKind.WALL, _TILE):
+	if Rules.can_place(world, null, Types.BuildingKind.WALL, _TILE):
 		fails.append("can_place should reject when the player depot is missing")
 	var with_dead := _world_with_depot(Constants.WALL_COST)
 	var depot := with_dead.building_at(2, 2)
 	depot.hp = 0
-	if Rules.can_place(with_dead, Types.BuildingKind.WALL, _TILE):
+	if Rules.can_place(with_dead, null, Types.BuildingKind.WALL, _TILE):
 		fails.append("can_place should reject when the player depot is dead")
 
 
 func _test_build_deducts_scrap(fails: PackedStringArray) -> void:
 	var world := _world_with_depot(Constants.START_PLAYER_SCRAP)
-	if not Rules.try_place(world, Types.BuildingKind.WALL, _TILE):
+	if not Rules.try_place(world, null, Types.BuildingKind.WALL, _TILE):
 		fails.append("try_place wall should succeed on an empty tile")
 		return
 	var depot := world.building_at(2, 2)
@@ -417,7 +419,7 @@ func _test_same_tick_both_habitats_dead_player_loses(fails: PackedStringArray) -
 
 func _test_place_workshop_and_lab(fails: PackedStringArray) -> void:
 	var world := _world_with_depot(Constants.WORKSHOP_COST + Constants.LAB_COST)
-	if not Rules.try_place(world, Types.BuildingKind.WORKSHOP, _TILE):
+	if not Rules.try_place(world, null, Types.BuildingKind.WORKSHOP, _TILE):
 		fails.append("try_place workshop should succeed on an empty tile")
 		return
 	var depot := world.building_at(2, 2)
@@ -438,7 +440,7 @@ func _test_place_workshop_and_lab(fails: PackedStringArray) -> void:
 		fails.append("workshop tile should be solid")
 
 	var lab_tile := Vector2i(12, 10)
-	if not Rules.try_place(world, Types.BuildingKind.LAB, lab_tile):
+	if not Rules.try_place(world, null, Types.BuildingKind.LAB, lab_tile):
 		fails.append("try_place lab should succeed on an empty 2x2")
 		return
 	var after_lab := after_shop - Constants.LAB_COST
@@ -457,7 +459,7 @@ func _test_place_workshop_and_lab(fails: PackedStringArray) -> void:
 func _test_lab_occupies_2x2(fails: PackedStringArray) -> void:
 	var world := _world_with_depot(Constants.LAB_COST)
 	var tile := Vector2i(14, 14)
-	if not Rules.try_place(world, Types.BuildingKind.LAB, tile):
+	if not Rules.try_place(world, null, Types.BuildingKind.LAB, tile):
 		fails.append("lab 2x2 place should succeed")
 		return
 	var lab := world.building_at(tile.x, tile.y)
@@ -470,7 +472,7 @@ func _test_lab_occupies_2x2(fails: PackedStringArray) -> void:
 				fails.append("lab tile %s should not be walkable" % at)
 	var blocked := Vector2i(20, 20)
 	world.set_terrain(blocked.x + 1, blocked.y + 1, Types.TileTerrain.ROCK)
-	if Rules.can_place(world, Types.BuildingKind.LAB, blocked):
+	if Rules.can_place(world, null, Types.BuildingKind.LAB, blocked):
 		fails.append("lab should reject when one footprint tile is rock")
 
 
@@ -478,7 +480,7 @@ func _test_workshop_closer_wins_when_craftable(fails: PackedStringArray) -> void
 	var world := _world_with_depot(Constants.WORKSHOP_COST)
 	var depot := world.building_at(2, 2)
 	var shop_tile := Vector2i(0, 2)
-	if not Rules.try_place(world, Types.BuildingKind.WORKSHOP, shop_tile):
+	if not Rules.try_place(world, null, Types.BuildingKind.WORKSHOP, shop_tile):
 		fails.append("craftable test could not place a workshop")
 		return
 	var shop := world.building_at(shop_tile.x, shop_tile.y)
@@ -486,23 +488,79 @@ func _test_workshop_closer_wins_when_craftable(fails: PackedStringArray) -> void
 	player.inventory.add(Types.ResourceKind.SCRAP, Constants.WORKSHOP_SCRAP_COST)
 	player.inventory.add(Types.ResourceKind.ORE, Constants.WORKSHOP_ORE_COST)
 	var cmd := _interact_cmd()
-	var locked := Rules.resolve_interact(world, player, cmd, 0)
+	var sim := Sim.new()
+	sim.world = world
+	var locked := Rules.resolve_interact(world, player, cmd, 0, false, sim)
 	if locked != depot.id:
 		fails.append("locked recipe should keep the closer depot, got %d" % locked)
 	if not Rules.workshop_can_craft(player, true):
 		fails.append("full recipe + parts space should be craftable when unlocked")
-	var chosen := Rules.resolve_interact(world, player, cmd, 0, false, true)
+	Research.mark_complete(sim, Types.TechKind.METALLURGY)
+	var chosen := Rules.resolve_interact(world, player, cmd, 0, false, sim)
 	if chosen != shop.id:
 		fails.append("craftable closer workshop should win, got %d expected %d" % [chosen, shop.id])
 	player.inventory.remove(Types.ResourceKind.ORE, Constants.WORKSHOP_ORE_COST)
-	var missing := Rules.resolve_interact(world, player, cmd, 0, false, true)
+	var missing := Rules.resolve_interact(world, player, cmd, 0, false, sim)
 	if missing != depot.id:
 		fails.append("workshop without the recipe should lose to the depot, got %d" % missing)
 	player.inventory.add(Types.ResourceKind.ORE, Constants.WORKSHOP_ORE_COST)
 	player.pos = Vector2(56, 80)
-	var depot_closer := Rules.resolve_interact(world, player, cmd, 0, false, true)
+	var depot_closer := Rules.resolve_interact(world, player, cmd, 0, false, sim)
 	if depot_closer != depot.id:
 		fails.append("strictly closer depot should still win, got %d" % depot_closer)
+
+
+func _test_lab_closer_wins_when_research_selected(fails: PackedStringArray) -> void:
+	var world := _world_with_depot(Constants.LAB_COST)
+	var depot := world.building_at(2, 2)
+	if not Rules.try_place(world, null, Types.BuildingKind.LAB, Vector2i(0, 0)):
+		fails.append("lab closer test could not place a lab")
+		return
+	var lab := world.building_at(0, 0)
+	var player := _player_at(world, Vector2(40, 80))
+	var cmd := _interact_cmd()
+	var sim := Sim.new()
+	sim.world = world
+	var no_sel := Rules.resolve_interact(world, player, cmd, 0, false, sim)
+	if no_sel != depot.id:
+		fails.append("lab without a selected tech should lose to the depot, got %d" % no_sel)
+	Research.select(sim, Types.TechKind.HYDROPONICS)
+	var chosen := Rules.resolve_interact(world, player, cmd, 0, false, sim)
+	if chosen != lab.id:
+		fails.append("selected research should let a closer lab win, got %d expected %d" % [chosen, lab.id])
+	player.pos = Vector2(80, 136)
+	var depot_closer := Rules.resolve_interact(world, player, cmd, 0, false, sim)
+	if depot_closer != depot.id:
+		fails.append("strictly closer depot should still beat the lab, got %d" % depot_closer)
+
+
+func _test_locked_buildings_not_placeable(fails: PackedStringArray) -> void:
+	var world := _world_with_depot(50)
+	var sim := Sim.new()
+	sim.world = world
+	if Research.building_unlocked(sim, Types.BuildingKind.GREENHOUSE):
+		fails.append("Greenhouse should start locked")
+	if Research.building_unlocked(sim, Types.BuildingKind.GATE):
+		fails.append("Gate should start locked")
+	if Research.building_unlocked(sim, Types.BuildingKind.MEDBAY):
+		fails.append("Medbay should start locked")
+	if Rules.can_place(world, sim, Types.BuildingKind.GREENHOUSE, _TILE):
+		fails.append("locked Greenhouse should not be placeable")
+	if not Research.building_unlocked(sim, Types.BuildingKind.WALL):
+		fails.append("Wall should start unlocked")
+	if not Research.building_unlocked(sim, Types.BuildingKind.LAB):
+		fails.append("Lab should start unlocked")
+	Research.mark_complete(sim, Types.TechKind.HYDROPONICS)
+	if not Research.building_unlocked(sim, Types.BuildingKind.GREENHOUSE):
+		fails.append("Hydroponics should unlock Greenhouse")
+	Research.mark_complete(sim, Types.TechKind.METALLURGY)
+	if not Research.building_unlocked(sim, Types.BuildingKind.GATE):
+		fails.append("Metallurgy should unlock Gate")
+	if not Research.workshop_unlocked(sim):
+		fails.append("Metallurgy should unlock the workshop recipe flag")
+	Research.mark_complete(sim, Types.TechKind.FIELD_MEDICINE)
+	if not Research.building_unlocked(sim, Types.BuildingKind.MEDBAY):
+		fails.append("Field Medicine should unlock Medbay")
 
 
 func _tick_idle(sim: Sim, ticks: int) -> void:
@@ -614,6 +672,6 @@ func _first_placeable(world: World, kind: int) -> Vector2i:
 	for y in Constants.MAP_H:
 		for x in Constants.MAP_W:
 			var tile := Vector2i(x, y)
-			if Rules.can_place(world, kind, tile):
+			if Rules.can_place(world, null, kind, tile):
 				return tile
 	return Vector2i(-1, -1)

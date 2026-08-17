@@ -2,23 +2,42 @@ class_name Rules
 extends RefCounted
 
 
-static func cost_scrap(kind: int) -> int:
+static func cost(kind: int) -> Dictionary:
 	match kind:
 		Types.BuildingKind.WALL:
-			return Constants.WALL_COST
+			return {Types.ResourceKind.SCRAP: Constants.WALL_COST}
 		Types.BuildingKind.TURRET:
-			return Constants.TURRET_COST
+			return {Types.ResourceKind.SCRAP: Constants.TURRET_COST}
 		Types.BuildingKind.WORKSHOP:
-			return Constants.WORKSHOP_COST
+			return {Types.ResourceKind.SCRAP: Constants.WORKSHOP_COST}
 		Types.BuildingKind.LAB:
-			return Constants.LAB_COST
+			return {Types.ResourceKind.SCRAP: Constants.LAB_COST}
+		Types.BuildingKind.GREENHOUSE:
+			return {Types.ResourceKind.SCRAP: 12, Types.ResourceKind.ICE: 4}
+		Types.BuildingKind.MEDBAY:
+			return {Types.ResourceKind.SCRAP: 10, Types.ResourceKind.ICE: 4}
+		Types.BuildingKind.GATE:
+			return {Types.ResourceKind.SCRAP: 4, Types.ResourceKind.PARTS: 2}
 		_:
-			return -1
+			return {}
 
 
-static func can_place(world: World, kind: int, tile: Vector2i) -> bool:
-	var cost := cost_scrap(kind)
-	if cost < 0:
+static func cost_scrap(kind: int) -> int:
+	var price := cost(kind)
+	if price.has(Types.ResourceKind.SCRAP) and price.size() == 1:
+		return int(price[Types.ResourceKind.SCRAP])
+	if price.is_empty():
+		return -1
+	return int(price.get(Types.ResourceKind.SCRAP, 0))
+
+
+static func can_place(world: World, sim: Sim, kind: int, tile: Vector2i) -> bool:
+	if not Research.building_unlocked(sim, kind):
+		return false
+	var price := cost(kind)
+	if price.is_empty():
+		return false
+	if _hp_for(kind) <= 0:
 		return false
 	var span := world.footprint_span(kind)
 	for dy in span:
@@ -40,18 +59,18 @@ static func can_place(world: World, kind: int, tile: Vector2i) -> bool:
 	var depot := _living_player_depot(world)
 	if depot == null or depot.inventory == null:
 		return false
-	if depot.inventory.scrap < cost:
+	if not _can_afford(depot.inventory, price):
 		return false
 	if world.buildings.size() >= Constants.MAX_BUILDINGS:
 		return false
 	return true
 
 
-static func try_place(world: World, kind: int, tile: Vector2i) -> bool:
-	if not can_place(world, kind, tile):
+static func try_place(world: World, sim: Sim, kind: int, tile: Vector2i) -> bool:
+	if not can_place(world, sim, kind, tile):
 		return false
 	var depot := _living_player_depot(world)
-	depot.inventory.remove(Types.ResourceKind.SCRAP, cost_scrap(kind))
+	_pay(depot.inventory, cost(kind))
 	var building := Building.new()
 	building.id = world.alloc_id()
 	building.kind = kind
@@ -111,6 +130,7 @@ const _PRI_DEPOT := 0
 const _PRI_LOOT := 1
 const _PRI_DEPOSIT := 2
 const _PRI_WORKSHOP := 3
+const _PRI_LAB := 4
 
 
 static func resolve_interact(
@@ -119,7 +139,7 @@ static func resolve_interact(
 	cmd: InputCommand,
 	last_target_id: int,
 	last_withdraw: bool = false,
-	workshop_unlocked: bool = false
+	sim: Sim = null
 ) -> int:
 	if unit == null:
 		return 0
@@ -158,7 +178,7 @@ static func resolve_interact(
 			best_dist = dep_dist
 			best_pri = _PRI_DEPOSIT
 			best_obj = deposit
-	var workshop := _interact_workshop(world, unit, workshop_unlocked)
+	var workshop := _interact_workshop(world, unit, Research.workshop_unlocked(sim))
 	if workshop != null:
 		var shop_dist := world.point_aabb_distance(unit.pos, world.footprint_aabb(workshop))
 		if _better_interact(workshop.id, shop_dist, _PRI_WORKSHOP, best_id, best_dist, best_pri):
@@ -166,6 +186,14 @@ static func resolve_interact(
 			best_dist = shop_dist
 			best_pri = _PRI_WORKSHOP
 			best_obj = workshop
+	var lab := _interact_lab(world, unit, sim)
+	if lab != null:
+		var lab_dist := world.point_aabb_distance(unit.pos, world.footprint_aabb(lab))
+		if _better_interact(lab.id, lab_dist, _PRI_LAB, best_id, best_dist, best_pri):
+			best_id = lab.id
+			best_dist = lab_dist
+			best_pri = _PRI_LAB
+			best_obj = lab
 	if best_id == 0 or best_obj == null:
 		unit.interact_progress = 0.0
 		return 0
@@ -186,6 +214,10 @@ static func resolve_interact(
 		return best_id
 	if best_obj is Building and (best_obj as Building).kind == Types.BuildingKind.WORKSHOP:
 		_begin_channel(unit, last_target_id, best_id)
+		return best_id
+	if best_obj is Building and (best_obj as Building).kind == Types.BuildingKind.LAB:
+		_begin_channel(unit, last_target_id, best_id)
+		_tick_lab(sim)
 		return best_id
 	unit.interact_progress = 0.0
 	return 0
@@ -213,6 +245,84 @@ static func _better_interact(
 	if pri != best_pri:
 		return pri < best_pri
 	return id < best_id
+
+
+static func _interact_lab(world: World, unit: Unit, sim: Sim) -> Building:
+	if sim == null or sim.research_selected < 0:
+		return null
+	if sim.tech_complete(sim.research_selected):
+		return null
+	var need := Research.prereq(sim.research_selected)
+	if need >= 0 and not sim.tech_complete(need):
+		return null
+	var best: Building = null
+	var best_dist := INF
+	for raw in world.buildings.values():
+		var building := raw as Building
+		if building == null or building.hp <= 0:
+			continue
+		if building.kind != Types.BuildingKind.LAB:
+			continue
+		if building.faction != Types.Faction.PLAYER:
+			continue
+		var dist := world.point_aabb_distance(unit.pos, world.footprint_aabb(building))
+		if dist > Constants.INTERACT_BUILDING_RANGE:
+			continue
+		if best != null and (dist > best_dist or (is_equal_approx(dist, best_dist) and building.id >= best.id)):
+			continue
+		best = building
+		best_dist = dist
+	return best
+
+
+static func _tick_lab(sim: Sim) -> void:
+	if sim == null:
+		return
+	var kind := sim.research_selected
+	if kind < 0 or sim.tech_complete(kind):
+		return
+	var need := Research.prereq(kind)
+	if need >= 0 and not sim.tech_complete(need):
+		return
+	if not sim.research_paid:
+		if not _pay_research(sim, kind):
+			return
+		sim.research_paid = true
+	sim.research_progress += Constants.SIM_DT
+	if sim.research_progress >= Research.duration(kind):
+		Research.mark_complete(sim, kind)
+		sim.research_selected = -1
+		sim.research_progress = 0.0
+		sim.research_paid = false
+
+
+static func _pay_research(sim: Sim, kind: int) -> bool:
+	if sim == null or sim.world == null:
+		return false
+	var depot := _living_player_depot(sim.world)
+	if depot == null or depot.inventory == null:
+		return false
+	var price := Research.cost(kind)
+	if price.is_empty() or not _can_afford(depot.inventory, price):
+		return false
+	_pay(depot.inventory, price)
+	return true
+
+
+static func _can_afford(inv: Inventory, price: Dictionary) -> bool:
+	if inv == null:
+		return false
+	for resource_kind in price.keys():
+		if _kind_amount(inv, int(resource_kind)) < int(price[resource_kind]):
+			return false
+	return true
+
+
+static func _pay(inv: Inventory, price: Dictionary) -> void:
+	if inv == null:
+		return
+	for resource_kind in price.keys():
+		inv.remove(int(resource_kind), int(price[resource_kind]))
 
 
 static func _interact_workshop(world: World, unit: Unit, recipe_unlocked: bool) -> Building:
