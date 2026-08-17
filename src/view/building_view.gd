@@ -19,6 +19,8 @@ const WALL_PLAYER := "res://assets/sprites/placeholder/wall_player.png"
 const WALL_ENEMY := "res://assets/sprites/placeholder/wall_enemy.png"
 const TURRET_PLAYER := "res://assets/sprites/placeholder/turret_player.png"
 const TURRET_ENEMY := "res://assets/sprites/placeholder/turret_enemy.png"
+const WORKSHOP_PLAYER := "res://assets/sprites/placeholder/workshop_player.png"
+const LAB_PLAYER := "res://assets/sprites/placeholder/lab_player.png"
 
 var _kind: int = Types.BuildingKind.WALL
 var _faction: int = Types.Faction.PLAYER
@@ -107,6 +109,10 @@ func _draw() -> void:
 			_draw_depot(fill, stripe)
 		Types.BuildingKind.TURRET:
 			_draw_turret(fill, stripe)
+		Types.BuildingKind.LAB:
+			_draw_lab(fill, stripe)
+		Types.BuildingKind.WORKSHOP:
+			_draw_workshop(fill, stripe)
 		_:
 			_draw_wall(fill, stripe)
 
@@ -124,6 +130,10 @@ func _ensure_texture() -> void:
 			path = DEPOT_PLAYER if player else DEPOT_ENEMY
 		Types.BuildingKind.TURRET:
 			path = TURRET_PLAYER if player else TURRET_ENEMY
+		Types.BuildingKind.WORKSHOP:
+			path = WORKSHOP_PLAYER
+		Types.BuildingKind.LAB:
+			path = LAB_PLAYER
 		_:
 			path = WALL_PLAYER if player else WALL_ENEMY
 	_tex = WorldView.load_png(path)
@@ -151,6 +161,14 @@ func _draw_depot(fill: Color, stripe: Color) -> void:
 	draw_rect(Rect2(0.0, 0.0, size, STRIPE_H), stripe, true)
 	draw_rect(box, OUTLINE, false, 1.0)
 	draw_rect(inner, OUTLINE, false, 1.0)
+
+
+func _draw_lab(fill: Color, stripe: Color) -> void:
+	_draw_depot(fill, stripe)
+
+
+func _draw_workshop(fill: Color, stripe: Color) -> void:
+	_draw_wall(fill, stripe)
 
 
 func _draw_wall(fill: Color, stripe: Color) -> void:

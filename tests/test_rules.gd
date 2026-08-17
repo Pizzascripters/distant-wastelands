@@ -22,6 +22,9 @@ func run() -> PackedStringArray:
 	_test_missing_depot_never_starts_timer(fails)
 	_test_enemy_habitat_zero_wins(fails)
 	_test_same_tick_both_habitats_dead_player_loses(fails)
+	_test_place_workshop_and_lab(fails)
+	_test_lab_occupies_2x2(fails)
+	_test_workshop_closer_wins_when_craftable(fails)
 	return fails
 
 
@@ -410,6 +413,96 @@ func _test_same_tick_both_habitats_dead_player_loses(fails: PackedStringArray) -
 			"same-tick both habitats dead gave %d/%d, expected PLAYER_LOSE/HABITAT_DESTROYED"
 			% [sim.outcome, sim.outcome_reason]
 		)
+
+
+func _test_place_workshop_and_lab(fails: PackedStringArray) -> void:
+	var world := _world_with_depot(Constants.WORKSHOP_COST + Constants.LAB_COST)
+	if not Rules.try_place(world, Types.BuildingKind.WORKSHOP, _TILE):
+		fails.append("try_place workshop should succeed on an empty tile")
+		return
+	var depot := world.building_at(2, 2)
+	var after_shop := Constants.LAB_COST
+	if depot.inventory.scrap != after_shop:
+		fails.append("workshop left scrap %d, expected %d" % [depot.inventory.scrap, after_shop])
+	var shop := world.building_at(_TILE.x, _TILE.y)
+	if shop == null or shop.kind != Types.BuildingKind.WORKSHOP:
+		fails.append("placed workshop missing from occupancy")
+		return
+	if shop.hp != Constants.WORKSHOP_HP or shop.hp_max != Constants.WORKSHOP_HP:
+		fails.append("workshop hp is %d/%d" % [shop.hp, shop.hp_max])
+	if shop.faction != Types.Faction.PLAYER:
+		fails.append("workshop faction is %d" % shop.faction)
+	if world.footprint_span(Types.BuildingKind.WORKSHOP) != 1:
+		fails.append("workshop footprint should be 1x1")
+	if not world.is_solid(_TILE.x, _TILE.y):
+		fails.append("workshop tile should be solid")
+
+	var lab_tile := Vector2i(12, 10)
+	if not Rules.try_place(world, Types.BuildingKind.LAB, lab_tile):
+		fails.append("try_place lab should succeed on an empty 2x2")
+		return
+	var after_lab := after_shop - Constants.LAB_COST
+	if depot.inventory.scrap != after_lab:
+		fails.append("lab left scrap %d, expected %d" % [depot.inventory.scrap, after_lab])
+	var lab := world.building_at(lab_tile.x, lab_tile.y)
+	if lab == null or lab.kind != Types.BuildingKind.LAB:
+		fails.append("placed lab missing from occupancy")
+		return
+	if lab.hp != Constants.LAB_HP or lab.hp_max != Constants.LAB_HP:
+		fails.append("lab hp is %d/%d" % [lab.hp, lab.hp_max])
+	if World.footprint_span(Types.BuildingKind.LAB) != 2:
+		fails.append("lab footprint should be 2x2")
+
+
+func _test_lab_occupies_2x2(fails: PackedStringArray) -> void:
+	var world := _world_with_depot(Constants.LAB_COST)
+	var tile := Vector2i(14, 14)
+	if not Rules.try_place(world, Types.BuildingKind.LAB, tile):
+		fails.append("lab 2x2 place should succeed")
+		return
+	var lab := world.building_at(tile.x, tile.y)
+	for dy in 2:
+		for dx in 2:
+			var at := Vector2i(tile.x + dx, tile.y + dy)
+			if world.building_at(at.x, at.y) != lab:
+				fails.append("lab does not occupy %s" % at)
+			if world.is_walkable(at.x, at.y):
+				fails.append("lab tile %s should not be walkable" % at)
+	var blocked := Vector2i(20, 20)
+	world.set_terrain(blocked.x + 1, blocked.y + 1, Types.TileTerrain.ROCK)
+	if Rules.can_place(world, Types.BuildingKind.LAB, blocked):
+		fails.append("lab should reject when one footprint tile is rock")
+
+
+func _test_workshop_closer_wins_when_craftable(fails: PackedStringArray) -> void:
+	var world := _world_with_depot(Constants.WORKSHOP_COST)
+	var depot := world.building_at(2, 2)
+	var shop_tile := Vector2i(0, 2)
+	if not Rules.try_place(world, Types.BuildingKind.WORKSHOP, shop_tile):
+		fails.append("craftable test could not place a workshop")
+		return
+	var shop := world.building_at(shop_tile.x, shop_tile.y)
+	var player := _player_at(world, Vector2(42, 80))
+	player.inventory.add(Types.ResourceKind.SCRAP, Constants.WORKSHOP_SCRAP_COST)
+	player.inventory.add(Types.ResourceKind.ORE, Constants.WORKSHOP_ORE_COST)
+	var cmd := _interact_cmd()
+	var locked := Rules.resolve_interact(world, player, cmd, 0)
+	if locked != depot.id:
+		fails.append("locked recipe should keep the closer depot, got %d" % locked)
+	if not Rules.workshop_can_craft(player, true):
+		fails.append("full recipe + parts space should be craftable when unlocked")
+	var chosen := Rules.resolve_interact(world, player, cmd, 0, false, true)
+	if chosen != shop.id:
+		fails.append("craftable closer workshop should win, got %d expected %d" % [chosen, shop.id])
+	player.inventory.remove(Types.ResourceKind.ORE, Constants.WORKSHOP_ORE_COST)
+	var missing := Rules.resolve_interact(world, player, cmd, 0, false, true)
+	if missing != depot.id:
+		fails.append("workshop without the recipe should lose to the depot, got %d" % missing)
+	player.inventory.add(Types.ResourceKind.ORE, Constants.WORKSHOP_ORE_COST)
+	player.pos = Vector2(56, 80)
+	var depot_closer := Rules.resolve_interact(world, player, cmd, 0, false, true)
+	if depot_closer != depot.id:
+		fails.append("strictly closer depot should still win, got %d" % depot_closer)
 
 
 func _tick_idle(sim: Sim, ticks: int) -> void:

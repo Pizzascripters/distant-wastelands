@@ -8,6 +8,10 @@ static func cost_scrap(kind: int) -> int:
 			return Constants.WALL_COST
 		Types.BuildingKind.TURRET:
 			return Constants.TURRET_COST
+		Types.BuildingKind.WORKSHOP:
+			return Constants.WORKSHOP_COST
+		Types.BuildingKind.LAB:
+			return Constants.LAB_COST
 		_:
 			return -1
 
@@ -103,9 +107,19 @@ const _HAULABLES: Array[int] = [
 	Types.ResourceKind.PARTS,
 ]
 
+const _PRI_DEPOT := 0
+const _PRI_LOOT := 1
+const _PRI_DEPOSIT := 2
+const _PRI_WORKSHOP := 3
+
 
 static func resolve_interact(
-	world: World, unit: Unit, cmd: InputCommand, last_target_id: int, last_withdraw: bool = false
+	world: World,
+	unit: Unit,
+	cmd: InputCommand,
+	last_target_id: int,
+	last_withdraw: bool = false,
+	workshop_unlocked: bool = false
 ) -> int:
 	if unit == null:
 		return 0
@@ -116,25 +130,112 @@ static func resolve_interact(
 		unit.interact_progress = 0.0
 		return 0
 
+	var best_id := 0
+	var best_dist := INF
+	var best_pri := 99
+	var best_obj: Object = null
 	var depot := _interact_depot(world, unit.pos)
 	if depot != null:
-		var withdrawing := cmd.withdraw and depot.faction == unit.faction
-		if depot.id != last_target_id or withdrawing != last_withdraw:
-			unit.interact_progress = 0.0
-		_tick_depot_transfer(unit, depot, withdrawing)
-		return depot.id
+		var depot_dist := world.point_aabb_distance(unit.pos, world.footprint_aabb(depot))
+		if _better_interact(depot.id, depot_dist, _PRI_DEPOT, best_id, best_dist, best_pri):
+			best_id = depot.id
+			best_dist = depot_dist
+			best_pri = _PRI_DEPOT
+			best_obj = depot
 	var pile := _interact_loot(world, unit.pos)
 	if pile != null:
-		_begin_channel(unit, last_target_id, pile.id)
-		_tick_loot(world, unit, pile)
-		return pile.id
+		var loot_dist := unit.pos.distance_to(pile.pos)
+		if _better_interact(pile.id, loot_dist, _PRI_LOOT, best_id, best_dist, best_pri):
+			best_id = pile.id
+			best_dist = loot_dist
+			best_pri = _PRI_LOOT
+			best_obj = pile
 	var deposit := _interact_deposit(world, unit)
 	if deposit != null:
-		_begin_channel(unit, last_target_id, deposit.id)
-		_tick_gather(world, unit, deposit)
-		return deposit.id
+		var dep_dist := unit.pos.distance_to(world.tile_center(deposit.tile.x, deposit.tile.y))
+		if _better_interact(deposit.id, dep_dist, _PRI_DEPOSIT, best_id, best_dist, best_pri):
+			best_id = deposit.id
+			best_dist = dep_dist
+			best_pri = _PRI_DEPOSIT
+			best_obj = deposit
+	var workshop := _interact_workshop(world, unit, workshop_unlocked)
+	if workshop != null:
+		var shop_dist := world.point_aabb_distance(unit.pos, world.footprint_aabb(workshop))
+		if _better_interact(workshop.id, shop_dist, _PRI_WORKSHOP, best_id, best_dist, best_pri):
+			best_id = workshop.id
+			best_dist = shop_dist
+			best_pri = _PRI_WORKSHOP
+			best_obj = workshop
+	if best_id == 0 or best_obj == null:
+		unit.interact_progress = 0.0
+		return 0
+	if best_obj is Building and (best_obj as Building).kind == Types.BuildingKind.DEPOT:
+		var chosen := best_obj as Building
+		var withdrawing := cmd.withdraw and chosen.faction == unit.faction
+		if chosen.id != last_target_id or withdrawing != last_withdraw:
+			unit.interact_progress = 0.0
+		_tick_depot_transfer(unit, chosen, withdrawing)
+		return chosen.id
+	if best_obj is Loot:
+		_begin_channel(unit, last_target_id, best_id)
+		_tick_loot(world, unit, best_obj as Loot)
+		return best_id
+	if best_obj is Deposit:
+		_begin_channel(unit, last_target_id, best_id)
+		_tick_gather(world, unit, best_obj as Deposit)
+		return best_id
+	if best_obj is Building and (best_obj as Building).kind == Types.BuildingKind.WORKSHOP:
+		_begin_channel(unit, last_target_id, best_id)
+		return best_id
 	unit.interact_progress = 0.0
 	return 0
+
+
+static func workshop_can_craft(unit: Unit, recipe_unlocked: bool = false) -> bool:
+	if not recipe_unlocked or unit == null or unit.inventory == null:
+		return false
+	if unit.inventory.scrap < Constants.WORKSHOP_SCRAP_COST:
+		return false
+	if unit.inventory.ore < Constants.WORKSHOP_ORE_COST:
+		return false
+	return unit.inventory.free_space(Types.ResourceKind.PARTS) >= Constants.WORKSHOP_PARTS_OUT
+
+
+static func _better_interact(
+	id: int, dist: float, pri: int, best_id: int, best_dist: float, best_pri: int
+) -> bool:
+	if best_id == 0:
+		return true
+	if dist < best_dist and not is_equal_approx(dist, best_dist):
+		return true
+	if not is_equal_approx(dist, best_dist):
+		return false
+	if pri != best_pri:
+		return pri < best_pri
+	return id < best_id
+
+
+static func _interact_workshop(world: World, unit: Unit, recipe_unlocked: bool) -> Building:
+	if not workshop_can_craft(unit, recipe_unlocked):
+		return null
+	var best: Building = null
+	var best_dist := INF
+	for raw in world.buildings.values():
+		var building := raw as Building
+		if building == null or building.hp <= 0:
+			continue
+		if building.kind != Types.BuildingKind.WORKSHOP:
+			continue
+		if building.faction != Types.Faction.PLAYER:
+			continue
+		var dist := world.point_aabb_distance(unit.pos, world.footprint_aabb(building))
+		if dist > Constants.INTERACT_BUILDING_RANGE:
+			continue
+		if best != null and (dist > best_dist or (is_equal_approx(dist, best_dist) and building.id >= best.id)):
+			continue
+		best = building
+		best_dist = dist
+	return best
 
 
 static func _begin_channel(unit: Unit, last_target_id: int, target_id: int) -> void:
@@ -259,6 +360,10 @@ static func _hp_for(kind: int) -> int:
 			return Constants.WALL_HP
 		Types.BuildingKind.TURRET:
 			return Constants.TURRET_HP
+		Types.BuildingKind.WORKSHOP:
+			return Constants.WORKSHOP_HP
+		Types.BuildingKind.LAB:
+			return Constants.LAB_HP
 		_:
 			return 0
 

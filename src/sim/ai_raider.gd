@@ -457,7 +457,10 @@ static func _nearest_player_wall_or_turret(world: World, unit: Unit) -> Building
 			continue
 		if building.faction != Types.Faction.PLAYER:
 			continue
-		if building.kind != Types.BuildingKind.WALL and building.kind != Types.BuildingKind.TURRET:
+		if (
+			building.kind == Types.BuildingKind.HABITAT
+			or building.kind == Types.BuildingKind.DEPOT
+		):
 			continue
 		var dist := _dist_to_building(world, unit, building)
 		if dist < best_d or (is_equal_approx(dist, best_d) and (best == null or building.id < best.id)):
