@@ -25,11 +25,9 @@ const _PARTS := "res://assets/sprites/placeholder/parts.png"
 const _FOOD := "res://assets/sprites/placeholder/food.png"
 
 var inspected_id: int = -1
-var withdraw: bool = false
 var pending_research_kind: int = -1
 
 var _kind: int = -1
-var _faction: int = Types.Faction.PLAYER
 var _research_selected: int = -1
 var _research_progress: float = 0.0
 var _techs_done: int = 0
@@ -38,8 +36,6 @@ var _hp_fill: ColorRect
 var _hp_value: Label
 var _depot_box: VBoxContainer
 var _depot_counts: Dictionary = {}
-var _deposit_btn: Button
-var _withdraw_btn: Button
 var _lab_box: VBoxContainer
 var _tech_btns: Array[Button] = []
 var _lab_fill: ColorRect
@@ -75,12 +71,7 @@ func inspected_kind() -> int:
 
 
 func withdraw_active() -> bool:
-	return (
-		is_open()
-		and _kind == Types.BuildingKind.DEPOT
-		and _faction == Types.Faction.PLAYER
-		and withdraw
-	)
+	return false
 
 
 func consumes_pointer(screen_pos: Vector2) -> bool:
@@ -92,7 +83,6 @@ func consumes_pointer(screen_pos: Vector2) -> bool:
 func open_building(rec: Dictionary) -> void:
 	var id := int(rec.get("id", -1))
 	if not visible or inspected_id != id:
-		withdraw = false
 		pending_research_kind = -1
 	inspected_id = id
 	visible = true
@@ -101,7 +91,6 @@ func open_building(rec: Dictionary) -> void:
 
 func close() -> void:
 	inspected_id = -1
-	withdraw = false
 	pending_research_kind = -1
 	_kind = -1
 	visible = false
@@ -131,7 +120,6 @@ func apply_snapshot(snap: SimSnapshot) -> void:
 func apply_record(rec: Dictionary) -> void:
 	_ensure_ui()
 	_kind = int(rec.get("kind", -1))
-	_faction = int(rec.get("faction", Types.Faction.PLAYER))
 	var tex := WorldView.load_png(_icon_path(_kind))
 	if tex != null:
 		_icon.texture = tex
@@ -166,7 +154,6 @@ func apply_record(rec: Dictionary) -> void:
 			_workshop_lock.visible = (_techs_done & (1 << Types.TechKind.METALLURGY)) == 0
 	if _heal_hint != null:
 		_heal_hint.visible = _kind == Types.BuildingKind.MEDBAY
-	_refresh_toggle()
 
 
 static func find_building(snap: SimSnapshot, id: int) -> Dictionary:
@@ -355,17 +342,6 @@ func _make_depot_box() -> VBoxContainer:
 		row.add_child(count)
 		_depot_counts[spec[0]] = count
 	box.add_child(row)
-	var toggle := HBoxContainer.new()
-	toggle.name = "Toggle"
-	toggle.mouse_filter = MOUSE_FILTER_IGNORE
-	toggle.add_theme_constant_override("separation", 6)
-	_deposit_btn = _toggle_button("Deposit")
-	_withdraw_btn = _toggle_button("Withdraw")
-	_deposit_btn.pressed.connect(_on_deposit_pressed)
-	_withdraw_btn.pressed.connect(_on_withdraw_pressed)
-	toggle.add_child(_deposit_btn)
-	toggle.add_child(_withdraw_btn)
-	box.add_child(toggle)
 	return box
 
 
@@ -526,23 +502,6 @@ func _toggle_button(title: String) -> Button:
 	btn.add_theme_stylebox_override("hover", _plain)
 	btn.add_theme_stylebox_override("pressed", _selected)
 	return btn
-
-
-func _on_deposit_pressed() -> void:
-	withdraw = false
-	_refresh_toggle()
-
-
-func _on_withdraw_pressed() -> void:
-	withdraw = true
-	_refresh_toggle()
-
-
-func _refresh_toggle() -> void:
-	if _deposit_btn == null:
-		return
-	_deposit_btn.add_theme_stylebox_override("normal", _selected if not withdraw else _plain)
-	_withdraw_btn.add_theme_stylebox_override("normal", _selected if withdraw else _plain)
 
 
 func _label(text: String) -> Label:

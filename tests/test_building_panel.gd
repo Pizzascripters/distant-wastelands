@@ -4,11 +4,11 @@ extends RefCounted
 func run() -> PackedStringArray:
 	var fails := PackedStringArray()
 	_test_panel_icon_hp_and_depot(fails)
-	_test_depot_toggle_defaults_and_withdraw(fails)
+	_test_depot_stocks_and_no_transfer_buttons(fails)
 	_test_close_on_dead_or_missing_building(fails)
 	_test_nearest_and_rmb_targets(fails)
 	_test_inspect_cancels_build_and_close_rules(fails)
-	_test_withdraw_or_and_hud_blocks_fire(fails)
+	_test_withdraw_shift_only_and_hud_blocks_fire(fails)
 	_test_lab_panel_ignores_late_build_keys(fails)
 	_test_medbay_heal_hint(fails)
 	_test_farm_workshop_gate_fields(fails)
@@ -44,7 +44,7 @@ func _test_panel_icon_hp_and_depot(fails: PackedStringArray) -> void:
 	panel.free()
 
 
-func _test_depot_toggle_defaults_and_withdraw(fails: PackedStringArray) -> void:
+func _test_depot_stocks_and_no_transfer_buttons(fails: PackedStringArray) -> void:
 	var panel := BuildingPanel.new()
 	var depot := _depot_rec(7, 15, 4, 2, 1)
 	panel.open_building(depot)
@@ -60,24 +60,26 @@ func _test_depot_toggle_defaults_and_withdraw(fails: PackedStringArray) -> void:
 		"Ore": "2 / %d" % Constants.DEPOT_CAP_ORE,
 		"Parts": "1 / %d" % Constants.DEPOT_CAP_PARTS,
 	}
-	if panel.find_child("FoodCount", true, false) != null:
-		fails.append("depot inspect must not show Food")
 	for key in want.keys():
 		var lab: Label = stocks[key]
 		if lab == null or lab.text != want[key]:
 			fails.append("%s stock is %s, expected %s" % [key, lab.text if lab != null else "missing", want[key]])
-	if panel.withdraw or panel.withdraw_active():
-		fails.append("depot toggle should default to Deposit")
-	panel.withdraw = true
-	if not panel.withdraw_active():
-		fails.append("Withdraw toggle should arm withdraw_active")
-	panel.open_building(depot)
-	if not panel.withdraw:
-		fails.append("re-opening the same open depot should keep the toggle")
+	if panel.find_child("FoodCount", true, false) != null:
+		fails.append("depot inspect must not show Food")
+	if panel.find_child("FoodIcon", true, false) != null:
+		fails.append("depot inspect should not show a Food icon")
+	if panel.find_child("DepositButton", true, false) != null:
+		fails.append("depot inspect should not have a Deposit button")
+	if panel.find_child("WithdrawButton", true, false) != null:
+		fails.append("depot inspect should not have a Withdraw button")
+	if panel.find_child("Toggle", true, false) != null:
+		fails.append("depot inspect should not have a Deposit/Withdraw toggle")
+	if panel.withdraw_active():
+		fails.append("depot inspect withdraw_active should stay false")
 	panel.close()
 	panel.open_building(depot)
-	if panel.withdraw or panel.withdraw_active():
-		fails.append("opening a closed depot panel should reset to Deposit")
+	if panel.withdraw_active():
+		fails.append("re-opening a depot should not arm withdraw")
 	var habitat := {
 		"id": 1,
 		"kind": Types.BuildingKind.HABITAT,
@@ -85,10 +87,7 @@ func _test_depot_toggle_defaults_and_withdraw(fails: PackedStringArray) -> void:
 		"hp": 10,
 		"hp_max": Constants.HABITAT_HP,
 	}
-	panel.withdraw = true
 	panel.open_building(habitat)
-	if panel.withdraw:
-		fails.append("opening a different building should reset the toggle")
 	if panel.withdraw_active():
 		fails.append("non-depot panel should not arm withdraw")
 	panel.free()
@@ -259,7 +258,7 @@ func _test_inspect_cancels_build_and_close_rules(fails: PackedStringArray) -> vo
 	view.free()
 
 
-func _test_withdraw_or_and_hud_blocks_fire(fails: PackedStringArray) -> void:
+func _test_withdraw_shift_only_and_hud_blocks_fire(fails: PackedStringArray) -> void:
 	var view := _make_game_view(fails)
 	if view == null:
 		return
@@ -272,12 +271,11 @@ func _test_withdraw_or_and_hud_blocks_fire(fails: PackedStringArray) -> void:
 		fails.append("Shift should set withdraw with the panel closed")
 	panel.open_building(depot)
 	if view._command_withdraw(false):
-		fails.append("Deposit toggle should not set withdraw")
+		fails.append("open depot inspect should not set withdraw")
 	if not view._command_withdraw(true):
-		fails.append("Shift OR Deposit should still withdraw")
-	panel.withdraw = true
-	if not view._command_withdraw(false) or not view._command_withdraw(true):
-		fails.append("Withdraw toggle should OR into cmd.withdraw")
+		fails.append("Shift should still withdraw with the depot inspect open")
+	if panel.withdraw_active():
+		fails.append("depot inspect withdraw_active should stay false")
 	panel.position = Vector2(100, 80)
 	panel.size = Vector2(220, 100)
 	if not view._hud_blocks_pointer(Vector2(150, 120)):
