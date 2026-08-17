@@ -6,6 +6,7 @@ func run() -> PackedStringArray:
 	_test_apply_deposits_drops_removed(fails)
 	_test_placeholder_pngs_load(fails)
 	_test_rebuild_caches_terrain(fails)
+	_test_chunk_mutation_isolated(fails)
 	_test_apply_deposits_redraws_only_on_change(fails)
 	_test_unit_view_redraws_on_visual_change(fails)
 	_test_building_view_aim_only_for_turret(fails)
@@ -59,23 +60,68 @@ func _test_placeholder_pngs_load(fails: PackedStringArray) -> void:
 			)
 
 
-func _test_rebuild_caches_terrain(fails: PackedStringArray) -> void:
-	var view := WorldView.new()
+func _blank_snap() -> SimSnapshot:
 	var snap := SimSnapshot.new()
 	snap.tiles.resize(Constants.MAP_W * Constants.MAP_H)
 	snap.tiles.fill(Types.TileTerrain.EMPTY)
+	var n := int(Constants.MAP_W / Constants.TERRAIN_CHUNK_TILES)
+	snap.chunk_generation.resize(n * n)
+	snap.chunk_generation.fill(0)
+	snap.tiles_generation = 0
+	return snap
+
+
+func _test_rebuild_caches_terrain(fails: PackedStringArray) -> void:
+	var view := WorldView.new()
+	var snap := _blank_snap()
 	snap.tiles[0] = Types.TileTerrain.ROCK
+	snap.chunk_generation[0] = 1
+	snap.tiles_generation = 1
 	view.rebuild(snap)
-	if view._terrain_tex == null:
-		fails.append("rebuild did not create a terrain cache texture")
+	if view.get("_terrain_tex") != null:
+		fails.append("chunked WorldView must not keep a full-map terrain texture")
+	if view._chunk_tex.is_empty() or view._chunk_tex[0] == null:
+		fails.append("rebuild did not create a terrain chunk texture")
 	else:
-		var want_w := Constants.MAP_W * Constants.TILE
-		var want_h := Constants.MAP_H * Constants.TILE
-		if view._terrain_tex.get_width() != want_w or view._terrain_tex.get_height() != want_h:
+		var want := Constants.TERRAIN_CHUNK_TILES * Constants.TILE
+		var tex: ImageTexture = view._chunk_tex[0]
+		if tex.get_width() != want or tex.get_height() != want:
 			fails.append(
-				"terrain cache is %dx%d, expected %dx%d"
-				% [view._terrain_tex.get_width(), view._terrain_tex.get_height(), want_w, want_h]
+				"terrain chunk is %dx%d, expected %dx%d"
+				% [tex.get_width(), tex.get_height(), want, want]
 			)
+		if tex.get_width() == Constants.MAP_W * Constants.TILE:
+			fails.append("terrain cache is a full 8192 blit")
+	view.free()
+
+
+func _test_chunk_mutation_isolated(fails: PackedStringArray) -> void:
+	var view := WorldView.new()
+	var snap := _blank_snap()
+	var other := Constants.TERRAIN_CHUNK_TILES
+	snap.tiles[0] = Types.TileTerrain.ROCK
+	snap.tiles[other] = Types.TileTerrain.ROCK
+	snap.chunk_generation[0] = 1
+	snap.chunk_generation[1] = 1
+	snap.tiles_generation = 2
+	view.rebuild(snap)
+	if view._chunk_tex.size() < 2 or view._chunk_tex[0] == null or view._chunk_tex[1] == null:
+		fails.append("rebuild did not cache both dirty chunks")
+		view.free()
+		return
+	var rebuilds_a: int = view._chunk_rebuilds[0]
+	var rebuilds_b: int = view._chunk_rebuilds[1]
+	snap.tiles[0] = Types.TileTerrain.EMPTY
+	snap.chunk_generation[0] = 2
+	snap.tiles_generation = 3
+	view.apply_tiles(snap)
+	if view._chunk_rebuilds[0] != rebuilds_a + 1:
+		fails.append(
+			"mutating chunk A rebuilds=%d, expected %d"
+			% [view._chunk_rebuilds[0], rebuilds_a + 1]
+		)
+	if view._chunk_rebuilds[1] != rebuilds_b:
+		fails.append("mutating chunk A rebuilt chunk B")
 	view.free()
 
 

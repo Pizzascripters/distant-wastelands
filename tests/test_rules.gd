@@ -902,9 +902,26 @@ func _interact_cmd() -> InputCommand:
 
 
 func _stand_beside(unit: Unit, world: World, building: Building) -> void:
-	var tile := Vector2i(building.origin_tile.x - 1, building.origin_tile.y)
+	var tile := _adjacent_walkable(world, building)
 	unit.pos = world.tile_center(tile.x, tile.y)
 	unit.vel = Vector2.ZERO
+
+
+func _adjacent_walkable(world: World, building: Building) -> Vector2i:
+	var span := world.footprint_span(building.kind)
+	var o := building.origin_tile
+	var candidates: Array[Vector2i] = [
+		Vector2i(o.x + span, o.y),
+		Vector2i(o.x + span, o.y + span - 1),
+		Vector2i(o.x, o.y + span),
+		Vector2i(o.x + span - 1, o.y + span),
+		Vector2i(o.x - 1, o.y),
+		Vector2i(o.x, o.y - 1),
+	]
+	for tile in candidates:
+		if world.is_walkable(tile.x, tile.y):
+			return tile
+	return Vector2i(o.x + span, o.y)
 
 
 func _player_at(world: World, pos: Vector2) -> Unit:

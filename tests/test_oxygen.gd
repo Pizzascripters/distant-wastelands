@@ -72,7 +72,9 @@ func _test_depot_does_not_refill(fails: PackedStringArray) -> void:
 		fails.append("missing player depot")
 		return
 	player.o2 = 8.0
-	player.pos = sim.world.tile_center(11, 52)
+	player.pos = sim.world.tile_center(
+		Constants.PLAYER_DEPOT_TILE.x + 2, Constants.PLAYER_DEPOT_TILE.y
+	)
 	sim.tick()
 	if not is_equal_approx(player.o2, 8.0 - Constants.SIM_DT):
 		fails.append("depot corridor tile refilled o2 to %s" % str(player.o2))

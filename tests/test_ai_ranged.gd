@@ -65,7 +65,7 @@ func _test_guard_fires_at_building(fails: PackedStringArray) -> void:
 	if guard == null:
 		fails.append("guard building-fire test missing guard")
 		return
-	var wall := _place_wall(sim, Vector2i(50, 16))
+	var wall := _place_wall(sim, Constants.ENEMY_GUARD_TILE + Vector2i(3, 0))
 	sim.tick()
 	if _enemy_proj_count(sim) < 1:
 		fails.append("guard should fire at a player building with no player in range")

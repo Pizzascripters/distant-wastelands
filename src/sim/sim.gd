@@ -127,6 +127,7 @@ func snapshot() -> SimSnapshot:
 		_snap_tiles_generation = world.tiles_generation
 	snap.tiles = _snap_tiles
 	snap.tiles_generation = world.tiles_generation
+	snap.chunk_generation = world.chunk_generation.duplicate()
 	snap.sim_ms = float(last_tick_usec) * 0.001
 	for unit in world.units.values():
 		snap.units.append(_unit_record(unit))

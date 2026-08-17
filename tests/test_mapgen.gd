@@ -33,26 +33,28 @@ func _test_connectivity_seeds(fails: PackedStringArray) -> void:
 
 func _test_corridor_empty(fails: PackedStringArray) -> void:
 	var world := Mapgen.generate(Constants.DEFAULT_SEED)
-	for y in range(Constants.CORRIDOR_H_Y0, Constants.CORRIDOR_H_Y1 + 1):
-		for x in range(Constants.CORRIDOR_H_X0, Constants.CORRIDOR_H_X1 + 1):
-			if Mapgen.is_building_footprint(x, y):
-				continue
-			if world.get_terrain(x, y) != Types.TileTerrain.EMPTY:
-				fails.append("L-corridor H tile (%d,%d) is not EMPTY" % [x, y])
-				return
-	for y in range(Constants.CORRIDOR_V_Y0, Constants.CORRIDOR_V_Y1 + 1):
-		for x in range(Constants.CORRIDOR_V_X0, Constants.CORRIDOR_V_X1 + 1):
-			if Mapgen.is_building_footprint(x, y):
-				continue
-			if world.get_terrain(x, y) != Types.TileTerrain.EMPTY:
-				fails.append("L-corridor V tile (%d,%d) is not EMPTY" % [x, y])
-				return
+	if world.tiles.size() != Constants.MAP_W * Constants.MAP_H:
+		fails.append("world is %d tiles, expected %d" % [world.tiles.size(), Constants.MAP_W * Constants.MAP_H])
+	if not (world.occupancy is PackedInt32Array):
+		fails.append("occupancy should be PackedInt32Array")
+	elif world.occupancy.size() != Constants.MAP_W * Constants.MAP_H:
+		fails.append("occupancy size is %d, expected %d" % [world.occupancy.size(), Constants.MAP_W * Constants.MAP_H])
+	if world.chunk_generation.size() != 64:
+		fails.append("chunk_generation size is %d, expected 64" % world.chunk_generation.size())
+	for tile in _manhattan_corridor_tiles(Constants.PLAYER_SPAWN_TILE, Constants.ENEMY_DEPOT_TILE):
+		if Mapgen.is_building_footprint(tile.x, tile.y):
+			continue
+		if world.get_terrain(tile.x, tile.y) != Types.TileTerrain.EMPTY:
+			fails.append("Manhattan corridor tile (%d,%d) is not EMPTY" % [tile.x, tile.y])
+			return
 
 
 func _test_camps_reserved(fails: PackedStringArray) -> void:
 	var world := Mapgen.generate(Constants.DEFAULT_SEED)
 	_assert_rect_empty_of_rocks(fails, world, Constants.PLAYER_CAMP_RECT, "player camp")
 	_assert_rect_empty_of_rocks(fails, world, Constants.ENEMY_CAMP_RECT, "enemy camp")
+	if Constants.PLAYER_SPAWN_TILE != Vector2i(23, 218):
+		fails.append("PLAYER_SPAWN_TILE is %s, expected (23, 218)" % Constants.PLAYER_SPAWN_TILE)
 	if not Constants.PLAYER_CAMP_RECT.has_point(Constants.PLAYER_SPAWN_TILE):
 		fails.append("player spawn is outside PLAYER_CAMP_RECT")
 	if not Constants.ENEMY_CAMP_RECT.has_point(Constants.ENEMY_DEPOT_TILE):
@@ -63,6 +65,13 @@ func _test_camps_reserved(fails: PackedStringArray) -> void:
 		fails.append("player depot is outside PLAYER_CAMP_RECT")
 	if not Constants.ENEMY_CAMP_RECT.has_point(Constants.ENEMY_HABITAT_TILE):
 		fails.append("enemy habitat is outside ENEMY_CAMP_RECT")
+	var spawn := Constants.PLAYER_SPAWN_TILE
+	var depot := Constants.ENEMY_DEPOT_TILE
+	var cheb := maxi(absi(depot.x - spawn.x), absi(depot.y - spawn.y))
+	if cheb < 40 or cheb > 48:
+		fails.append("near-camp depot Chebyshev is %d, expected 40-48" % cheb)
+	if depot.x <= spawn.x or depot.y > spawn.y:
+		fails.append("near-camp depot %s is not east or north-east of spawn %s" % [depot, spawn])
 
 
 func _test_player_carry_caps(fails: PackedStringArray) -> void:
@@ -196,9 +205,6 @@ func _deposit_placement_ok(fails: PackedStringArray, world: World, deposit: Depo
 	if Constants.PLAYER_CAMP_RECT.has_point(tile) or Constants.ENEMY_CAMP_RECT.has_point(tile):
 		fails.append("seed %d deposit %d in reserved rect at %s" % [seed, deposit.id, tile])
 		return false
-	if tile.x == Constants.CORRIDOR_CENTER_X or tile.y == Constants.CORRIDOR_CENTER_Y:
-		fails.append("seed %d deposit %d on corridor center line at %s" % [seed, deposit.id, tile])
-		return false
 	for other_id in world.deposits:
 		if other_id == deposit.id:
 			continue
@@ -280,6 +286,42 @@ func _assert_rect_empty_of_rocks(fails: PackedStringArray, world: World, rect: R
 			if world.get_terrain(x, y) == Types.TileTerrain.ROCK:
 				fails.append("%s reserved rect has rock at (%d,%d)" % [label, x, y])
 				return
+
+
+func _manhattan_corridor_tiles(a: Vector2i, b: Vector2i) -> Array[Vector2i]:
+	var tiles: Array[Vector2i] = []
+	var seen := {}
+	var p := a
+	var dir_h := Vector2i(signi(b.x - a.x), 0)
+	var dir_v := Vector2i(0, signi(b.y - a.y))
+	var half := int(Constants.CORRIDOR_WIDTH / 2)
+	var steps: Array[Vector2i] = []
+	if dir_h != Vector2i.ZERO:
+		steps.append(p)
+		while p.x != b.x:
+			p.x += dir_h.x
+			steps.append(p)
+	if dir_v != Vector2i.ZERO:
+		if dir_h == Vector2i.ZERO:
+			steps.append(p)
+		while p.y != b.y:
+			p.y += dir_v.y
+			steps.append(p)
+	if steps.is_empty():
+		steps.append(p)
+	for i in steps.size():
+		var along := dir_h if i == 0 or (dir_h != Vector2i.ZERO and steps[i].y == a.y) else dir_v
+		if along == Vector2i.ZERO:
+			along = Vector2i(1, 0)
+		var perp := Vector2i(-along.y, along.x)
+		for k in range(-half, half + 1):
+			var t: Vector2i = steps[i] + perp * k
+			var key := t.y * Constants.MAP_W + t.x
+			if seen.has(key):
+				continue
+			seen[key] = true
+			tiles.append(t)
+	return tiles
 
 
 func _tile_hash(tiles: PackedByteArray) -> int:
