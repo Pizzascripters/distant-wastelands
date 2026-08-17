@@ -27,7 +27,7 @@ static func think(unit: Unit, sim: Sim) -> void:
 		var before := unit.ai_state
 		match unit.ai_state:
 			Types.RaiderState.SPAWNED:
-				_enter(unit, Types.RaiderState.PATH_TO_DEPOT)
+				_enter(unit, Types.RaiderState.PATH_TO_DEPOT, sim.world)
 			Types.RaiderState.PATH_TO_DEPOT:
 				_think_path_to_depot(unit, sim)
 			Types.RaiderState.LOOT:
@@ -68,35 +68,38 @@ static func _write_ranged_intent(unit: Unit, sim: Sim) -> void:
 
 
 static func _think_path_to_depot(unit: Unit, sim: Sim) -> void:
-	var depot := _living_building(sim.world, Types.Faction.PLAYER, Types.BuildingKind.DEPOT)
+	var depot := _resolve_task_depot(unit, sim.world)
 	if depot == null:
-		_enter(unit, Types.RaiderState.PATH_TO_HABITAT)
+		_enter(unit, Types.RaiderState.PATH_TO_HABITAT, sim.world)
 		return
 	if _adjacent(sim.world, unit, depot):
 		unit.vel = Vector2.ZERO
-		_enter(unit, Types.RaiderState.LOOT)
+		_enter(unit, Types.RaiderState.LOOT, sim.world)
 		return
 	if _is_stuck(unit) or _computed_empty(unit, sim, depot):
-		_enter(unit, Types.RaiderState.SIEGE)
+		_enter(unit, Types.RaiderState.SIEGE, sim.world)
 		return
 	if _player_in_chase_range(unit, sim):
-		_enter(unit, Types.RaiderState.CHASE)
+		_enter(unit, Types.RaiderState.CHASE, sim.world)
 		return
 	_steer_along_path(unit, sim.world)
 
 
 static func _think_loot(unit: Unit, sim: Sim) -> void:
 	unit.vel = Vector2.ZERO
-	var depot := _living_building(sim.world, Types.Faction.PLAYER, Types.BuildingKind.DEPOT)
+	# Mid-channel death of the tasked depot does not retarget another depot.
+	if unit.task_depot_id <= 0:
+		_assign_task_depot(unit, sim.world)
+	var depot := _player_building(sim.world, unit.task_depot_id, Types.BuildingKind.DEPOT)
 	if depot == null:
-		_enter(unit, Types.RaiderState.PATH_TO_HABITAT)
+		_enter(unit, Types.RaiderState.PATH_TO_HABITAT, sim.world)
 		return
 	if not _can_loot_more(unit, depot):
-		_enter(unit, Types.RaiderState.PATH_HOME)
+		_enter(unit, Types.RaiderState.PATH_HOME, sim.world)
 		return
 	if _player_in_chase_range(unit, sim):
 		unit.interact_progress = 0.0
-		_enter(unit, Types.RaiderState.CHASE)
+		_enter(unit, Types.RaiderState.CHASE, sim.world)
 		return
 	unit.interact_progress += Constants.SIM_DT
 	if not _timer_done(unit.interact_progress, Constants.RAIDER_LOOT_CHANNEL):
@@ -104,37 +107,37 @@ static func _think_loot(unit: Unit, sim: Sim) -> void:
 	_transfer_loot(unit, depot)
 	unit.interact_progress = 0.0
 	if not _can_loot_more(unit, depot):
-		_enter(unit, Types.RaiderState.PATH_HOME)
+		_enter(unit, Types.RaiderState.PATH_HOME, sim.world)
 
 
 static func _think_path_home(unit: Unit, sim: Sim) -> void:
-	var home := _living_building(sim.world, Types.Faction.ENEMY, Types.BuildingKind.DEPOT)
+	var home := _home_depot(unit, sim.world)
 	if home == null:
-		_enter(unit, Types.RaiderState.DEAD_DROP)
+		_enter(unit, Types.RaiderState.DEAD_DROP, sim.world)
 		return
 	if _adjacent(sim.world, unit, home):
 		_apply_home_despawn(unit, sim, home)
 		return
 	if _is_stuck(unit) or _computed_empty(unit, sim, home):
-		_enter(unit, Types.RaiderState.SIEGE)
+		_enter(unit, Types.RaiderState.SIEGE, sim.world)
 		return
 	if _player_in_chase_range(unit, sim):
-		_enter(unit, Types.RaiderState.CHASE)
+		_enter(unit, Types.RaiderState.CHASE, sim.world)
 		return
 	_steer_along_path(unit, sim.world)
 
 
 static func _think_path_to_habitat(unit: Unit, sim: Sim) -> void:
-	var habitat := _living_building(sim.world, Types.Faction.PLAYER, Types.BuildingKind.HABITAT)
+	var habitat := _resolve_task_habitat(unit, sim.world)
 	if habitat != null and _adjacent(sim.world, unit, habitat):
 		unit.vel = Vector2.ZERO
-		_enter(unit, Types.RaiderState.ATTACK_HABITAT)
+		_enter(unit, Types.RaiderState.ATTACK_HABITAT, sim.world)
 		return
 	if habitat == null or _is_stuck(unit) or _computed_empty(unit, sim, habitat):
-		_enter(unit, Types.RaiderState.SIEGE)
+		_enter(unit, Types.RaiderState.SIEGE, sim.world)
 		return
 	if _player_in_chase_range(unit, sim):
-		_enter(unit, Types.RaiderState.CHASE)
+		_enter(unit, Types.RaiderState.CHASE, sim.world)
 		return
 	_steer_along_path(unit, sim.world)
 
@@ -142,9 +145,9 @@ static func _think_path_to_habitat(unit: Unit, sim: Sim) -> void:
 static func _think_siege(unit: Unit, sim: Sim) -> void:
 	# Chase never preempts SIEGE.
 	if is_hauling(unit):
-		var home := _living_building(sim.world, Types.Faction.ENEMY, Types.BuildingKind.DEPOT)
+		var home := _home_depot(unit, sim.world)
 		if home == null:
-			_enter(unit, Types.RaiderState.DEAD_DROP)
+			_enter(unit, Types.RaiderState.DEAD_DROP, sim.world)
 			return
 		_tick_home_check(unit)
 		if not _is_stuck(unit):
@@ -158,7 +161,7 @@ static func _think_siege(unit: Unit, sim: Sim) -> void:
 					return
 				unit.remove_meta(_HOME_WAIT_META)
 				if not unit.path.is_empty():
-					_enter(unit, Types.RaiderState.PATH_HOME)
+					_enter(unit, Types.RaiderState.PATH_HOME, sim.world)
 					return
 		var wall := _nearest_player_wall_or_turret(sim.world, unit)
 		if wall == null:
@@ -183,7 +186,7 @@ static func _think_siege(unit: Unit, sim: Sim) -> void:
 		unit.path_recalc_in = 0.0
 	unit.siege_target_id = target.id
 	if target.kind == Types.BuildingKind.HABITAT and _adjacent(sim.world, unit, target):
-		_enter(unit, Types.RaiderState.ATTACK_HABITAT)
+		_enter(unit, Types.RaiderState.ATTACK_HABITAT, sim.world)
 		return
 	_approach_and_melee_building(unit, sim, target)
 
@@ -211,11 +214,14 @@ static func _think_chase(unit: Unit, sim: Sim) -> void:
 
 static func _think_attack_habitat(unit: Unit, sim: Sim) -> void:
 	if _player_in_chase_range(unit, sim):
-		_enter(unit, Types.RaiderState.CHASE)
+		_enter(unit, Types.RaiderState.CHASE, sim.world)
 		return
-	var habitat := _living_building(sim.world, Types.Faction.PLAYER, Types.BuildingKind.HABITAT)
+	var habitat := _player_building(sim.world, unit.task_habitat_id, Types.BuildingKind.HABITAT)
 	if habitat == null:
-		unit.vel = Vector2.ZERO
+		if _nearest_player_kind(sim.world, unit, Types.BuildingKind.DEPOT) != null:
+			_enter(unit, Types.RaiderState.PATH_TO_DEPOT, sim.world)
+		else:
+			_enter(unit, Types.RaiderState.PATH_TO_HABITAT, sim.world)
 		return
 	unit.siege_target_id = habitat.id
 	_approach_and_melee_building(unit, sim, habitat)
@@ -224,15 +230,15 @@ static func _think_attack_habitat(unit: Unit, sim: Sim) -> void:
 static func _give_up_chase(unit: Unit, sim: Sim) -> void:
 	unit.chase_timer = 0.0
 	if is_hauling(unit):
-		_enter(unit, Types.RaiderState.PATH_HOME)
+		_enter(unit, Types.RaiderState.PATH_HOME, sim.world)
 		return
-	if _living_building(sim.world, Types.Faction.PLAYER, Types.BuildingKind.DEPOT) != null:
-		_enter(unit, Types.RaiderState.PATH_TO_DEPOT)
+	if _nearest_player_kind(sim.world, unit, Types.BuildingKind.DEPOT) != null:
+		_enter(unit, Types.RaiderState.PATH_TO_DEPOT, sim.world)
 		return
-	_enter(unit, Types.RaiderState.PATH_TO_HABITAT)
+	_enter(unit, Types.RaiderState.PATH_TO_HABITAT, sim.world)
 
 
-static func _enter(unit: Unit, state: int) -> void:
+static func _enter(unit: Unit, state: int, world: World) -> void:
 	if unit.ai_state == state:
 		return
 	var from := unit.ai_state
@@ -251,6 +257,12 @@ static func _enter(unit: Unit, state: int) -> void:
 		unit.chase_timer = 0.0
 	if state != Types.RaiderState.SIEGE and state != Types.RaiderState.ATTACK_HABITAT:
 		unit.siege_target_id = 0
+	if world != null:
+		match state:
+			Types.RaiderState.PATH_TO_DEPOT, Types.RaiderState.LOOT:
+				_assign_task_depot(unit, world)
+			Types.RaiderState.PATH_TO_HABITAT, Types.RaiderState.ATTACK_HABITAT:
+				_assign_task_habitat(unit, world)
 
 
 static func _approach_and_melee_building(unit: Unit, sim: Sim, building: Building) -> void:
@@ -274,10 +286,10 @@ static func _ensure_smash_target(_unit: Unit, world: World) -> Building:
 	var wall := _nearest_player_wall_or_turret(world, _unit)
 	if wall != null:
 		return wall
-	var depot := _living_building(world, Types.Faction.PLAYER, Types.BuildingKind.DEPOT)
+	var depot := _nearest_player_kind(world, _unit, Types.BuildingKind.DEPOT)
 	if depot != null:
 		return depot
-	return _living_building(world, Types.Faction.PLAYER, Types.BuildingKind.HABITAT)
+	return _nearest_player_kind(world, _unit, Types.BuildingKind.HABITAT)
 
 
 static func _computed_empty(unit: Unit, sim: Sim, building: Building) -> bool:
@@ -499,15 +511,66 @@ static func _nearest_player_wall_or_turret(world: World, unit: Unit) -> Building
 	return best
 
 
-static func _living_building(world: World, faction: int, kind: int) -> Building:
+static func _home_depot(unit: Unit, world: World) -> Building:
+	if unit == null or world == null or unit.home_depot_id <= 0:
+		return null
+	var building := world.buildings.get(unit.home_depot_id) as Building
+	if building == null or building.hp <= 0:
+		return null
+	if building.kind != Types.BuildingKind.DEPOT or building.faction != Types.Faction.ENEMY:
+		return null
+	return building
+
+
+static func _player_building(world: World, building_id: int, kind: int) -> Building:
+	if world == null or building_id <= 0:
+		return null
+	var building := world.buildings.get(building_id) as Building
+	if building == null or building.hp <= 0:
+		return null
+	if building.faction != Types.Faction.PLAYER or building.kind != kind:
+		return null
+	return building
+
+
+static func _assign_task_depot(unit: Unit, world: World) -> void:
+	var nearest := _nearest_player_kind(world, unit, Types.BuildingKind.DEPOT)
+	unit.task_depot_id = nearest.id if nearest != null else 0
+
+
+static func _assign_task_habitat(unit: Unit, world: World) -> void:
+	var nearest := _nearest_player_kind(world, unit, Types.BuildingKind.HABITAT)
+	unit.task_habitat_id = nearest.id if nearest != null else 0
+
+
+static func _resolve_task_depot(unit: Unit, world: World) -> Building:
+	var tasked := _player_building(world, unit.task_depot_id, Types.BuildingKind.DEPOT)
+	if tasked != null:
+		return tasked
+	_assign_task_depot(unit, world)
+	return _player_building(world, unit.task_depot_id, Types.BuildingKind.DEPOT)
+
+
+static func _resolve_task_habitat(unit: Unit, world: World) -> Building:
+	var tasked := _player_building(world, unit.task_habitat_id, Types.BuildingKind.HABITAT)
+	if tasked != null:
+		return tasked
+	_assign_task_habitat(unit, world)
+	return _player_building(world, unit.task_habitat_id, Types.BuildingKind.HABITAT)
+
+
+static func _nearest_player_kind(world: World, unit: Unit, kind: int) -> Building:
 	var best: Building = null
+	var best_d := INF
 	for raw in world.buildings.values():
 		var building := raw as Building
 		if building == null or building.hp <= 0:
 			continue
-		if building.faction != faction or building.kind != kind:
+		if building.faction != Types.Faction.PLAYER or building.kind != kind:
 			continue
-		if best == null or building.id < best.id:
+		var dist := _dist_to_building(world, unit, building)
+		if dist < best_d or (is_equal_approx(dist, best_d) and (best == null or building.id < best.id)):
+			best_d = dist
 			best = building
 	return best
 

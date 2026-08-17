@@ -22,6 +22,10 @@ func run() -> PackedStringArray:
 	_test_loot_depot_died(fails)
 	_test_stuck_enters_siege(fails)
 	_test_stagger_does_not_siege(fails)
+	_test_loots_nearest_player_depot(fails)
+	_test_walks_home_to_home_depot_id(fails)
+	_test_smash_retargets_after_pad_dies(fails)
+	_test_attack_habitat_retargets_depot(fails)
 	return fails
 
 
@@ -327,6 +331,115 @@ func _test_stagger_does_not_siege(fails: PackedStringArray) -> void:
 		fails.append("staggered raider should stay PATH_TO_DEPOT, got %d" % raider.ai_state)
 
 
+func _test_loots_nearest_player_depot(fails: PackedStringArray) -> void:
+	var ctx := _context()
+	var raider := _raider(ctx)
+	var far := _place_depot(ctx, Types.Faction.PLAYER, Vector2i(4, 4), 10, 0)
+	var near := _place_depot(ctx, Types.Faction.PLAYER, Constants.PLAYER_DEPOT_TILE, 10, 0)
+	raider.task_depot_id = 0
+	raider.pos = _world(ctx).tile_center(
+		Constants.PLAYER_DEPOT_TILE.x + 2, Constants.PLAYER_DEPOT_TILE.y
+	)
+	AiRaider.think(raider, _sim(ctx))
+	if raider.ai_state != Types.RaiderState.LOOT:
+		fails.append("nearest living player depot should enter LOOT, got %d" % raider.ai_state)
+	if raider.task_depot_id != near.id:
+		fails.append(
+			"task_depot_id is %d, expected nearest depot %d (not far %d)"
+			% [raider.task_depot_id, near.id, far.id]
+		)
+
+
+func _test_walks_home_to_home_depot_id(fails: PackedStringArray) -> void:
+	var ctx := _context()
+	var world := _world(ctx)
+	var raider := _raider(ctx)
+	var decoy := _place_depot(ctx, Types.Faction.ENEMY, Vector2i(8, 8), 20, 20)
+	var home := _place_depot(ctx, Types.Faction.ENEMY, _ENEMY_DEPOT, 48, 50)
+	raider.home_depot_id = home.id
+	raider.ai_state = Types.RaiderState.PATH_HOME
+	raider.inventory.scrap = 5
+	raider.pos = world.tile_center(decoy.origin_tile.x - 1, decoy.origin_tile.y)
+	var rid: int = raider.id
+	AiRaider.think(raider, _sim(ctx))
+	if not world.units.has(rid):
+		fails.append("raider despawned at a decoy depot instead of home_depot_id")
+		return
+	if raider.ai_state != Types.RaiderState.PATH_HOME:
+		fails.append("PATH_HOME should stay on the road to home_depot_id, got %d" % raider.ai_state)
+	raider.pos = world.tile_center(home.origin_tile.x - 1, home.origin_tile.y)
+	AiRaider.think(raider, _sim(ctx))
+	if world.units.has(rid):
+		fails.append("home despawn should delete the raider at home_depot_id")
+	if home.inventory.scrap != 50:
+		fails.append("home_depot_id scrap is %d, expected 50" % home.inventory.scrap)
+	if decoy.inventory.scrap != 20:
+		fails.append("decoy depot scrap is %d, expected untouched 20" % decoy.inventory.scrap)
+
+
+func _test_smash_retargets_after_pad_dies(fails: PackedStringArray) -> void:
+	var ctx := _context()
+	var raider := _raider(ctx)
+	var far_depot := _place_depot(ctx, Types.Faction.PLAYER, Vector2i(4, 4), 10, 0)
+	var near_depot := _place_depot(ctx, Types.Faction.PLAYER, Vector2i(14, 52), 10, 0)
+	var habitat := _place_habitat(ctx, Types.Faction.PLAYER, Vector2i(20, 52))
+	var wall := _place_wall(ctx, Vector2i(12, 52))
+	raider.ai_state = Types.RaiderState.SIEGE
+	raider.pos = _world(ctx).tile_center(12, 51)
+	AiRaider.think(raider, _sim(ctx))
+	if raider.siege_target_id != wall.id:
+		fails.append("SIEGE should start on the wall, got %d" % raider.siege_target_id)
+	wall.hp = 0
+	AiRaider.think(raider, _sim(ctx))
+	if raider.siege_target_id != near_depot.id:
+		fails.append(
+			"after blockers die, SIEGE should target nearest depot %d, got %d"
+			% [near_depot.id, raider.siege_target_id]
+		)
+	near_depot.hp = 0
+	AiRaider.think(raider, _sim(ctx))
+	if raider.siege_target_id != far_depot.id:
+		fails.append(
+			"after nearest depot dies, SIEGE should retarget remaining depot %d, got %d"
+			% [far_depot.id, raider.siege_target_id]
+		)
+	far_depot.hp = 0
+	AiRaider.think(raider, _sim(ctx))
+	if raider.siege_target_id != habitat.id:
+		fails.append(
+			"after depots die, SIEGE should target nearest habitat %d, got %d"
+			% [habitat.id, raider.siege_target_id]
+		)
+	habitat.hp = 0
+	AiRaider.think(raider, _sim(ctx))
+	if not _world(ctx).units.has(raider.id):
+		fails.append("killing a habitat must not despawn the raider")
+	if raider.siege_target_id != 0:
+		fails.append("SIEGE with no pads left should idle, target %d" % raider.siege_target_id)
+	if raider.ai_state != Types.RaiderState.SIEGE:
+		fails.append("pad wipe should keep SIEGE idle, got %d" % raider.ai_state)
+
+
+func _test_attack_habitat_retargets_depot(fails: PackedStringArray) -> void:
+	var ctx := _context()
+	var raider := _raider(ctx)
+	var depot := _place_depot(ctx, Types.Faction.PLAYER, Constants.PLAYER_DEPOT_TILE, 10, 0)
+	var habitat := _place_habitat(ctx, Types.Faction.PLAYER, Constants.PLAYER_HABITAT_TILE)
+	raider.ai_state = Types.RaiderState.ATTACK_HABITAT
+	raider.task_habitat_id = habitat.id
+	raider.pos = _world(ctx).tile_center(
+		Constants.PLAYER_HABITAT_TILE.x, Constants.PLAYER_HABITAT_TILE.y - 1
+	)
+	habitat.hp = 0
+	AiRaider.think(raider, _sim(ctx))
+	if raider.ai_state != Types.RaiderState.PATH_TO_DEPOT:
+		fails.append(
+			"ATTACK_HABITAT after habitat death should PATH_TO_DEPOT, got %d" % raider.ai_state
+		)
+	if raider.task_depot_id != depot.id:
+		fails.append("retarget task_depot_id is %d, expected %d" % [raider.task_depot_id, depot.id])
+
+
 func _test_stuck_enters_siege(fails: PackedStringArray) -> void:
 	var ctx := _context()
 	var raider := _raider(ctx)
@@ -402,6 +515,10 @@ func _place_depot(ctx: Dictionary, faction: int, origin: Vector2i, scrap: int, i
 	building.inventory.add(Types.ResourceKind.ICE, ice)
 	world.occupy(building)
 	world.buildings[building.id] = building
+	if faction == Types.Faction.ENEMY:
+		var raider := _raider(ctx)
+		if raider.home_depot_id == 0:
+			raider.home_depot_id = building.id
 	return building
 
 

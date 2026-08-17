@@ -447,6 +447,7 @@ static func _spawn_unit(
 	unit.aim = Vector2.RIGHT
 	unit.alive = true
 	unit.inventory = Unit.inventory_for(kind)
+	unit.home_pos = unit.pos
 	world.units[unit.id] = unit
 	return unit
 
