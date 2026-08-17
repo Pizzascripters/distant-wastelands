@@ -25,6 +25,9 @@ var _interact_withdraw: bool = false
 var _queue: Array[InputCommand] = []
 var _snap_tiles: PackedByteArray = PackedByteArray()
 var _snap_tiles_generation: int = -1
+var _snap_discovered: PackedByteArray = PackedByteArray()
+var _snap_discovered_generation: int = -1
+var _last_discover_tile: Vector2i = Vector2i(-99999, -99999)
 
 
 func setup(p_seed: int) -> void:
@@ -47,6 +50,9 @@ func setup(p_seed: int) -> void:
 	_interact_withdraw = false
 	_snap_tiles = PackedByteArray()
 	_snap_tiles_generation = -1
+	_snap_discovered = PackedByteArray()
+	_snap_discovered_generation = -1
+	_last_discover_tile = Vector2i(-99999, -99999)
 	director = Director.new()
 	path_queue = PathQueue.new()
 	for unit in world.units.values():
@@ -56,6 +62,7 @@ func setup(p_seed: int) -> void:
 			break
 	_refresh_active_window()
 	_recount_sleep()
+	_stamp_spawn_discovery()
 
 
 func enqueue(cmd: InputCommand) -> void:
@@ -105,6 +112,7 @@ func tick() -> void:
 	)
 	_interact_withdraw = _own_depot_withdrawing(cmd, _interact_target_id)
 	_process_deaths_and_respawn()
+	_stamp_player_discovery()
 	var result := Rules.evaluate_outcome(self)
 	if result.x != Types.Outcome.NONE:
 		outcome = result.x
@@ -125,6 +133,13 @@ func snapshot() -> SimSnapshot:
 		_snap_tiles_generation = world.tiles_generation
 	snap.tiles = _snap_tiles
 	snap.tiles_generation = world.tiles_generation
+	if world.discovered_generation != _snap_discovered_generation:
+		_snap_discovered = world.discovered.duplicate()
+		_snap_discovered_generation = world.discovered_generation
+	snap.discovered = _snap_discovered
+	snap.discovered_generation = world.discovered_generation
+	snap.map_w = Constants.MAP_W
+	snap.map_h = Constants.MAP_H
 	snap.chunk_generation = world.chunk_generation.duplicate()
 	snap.sim_ms = float(last_tick_usec) * 0.001
 	for unit in world.units.values():
@@ -156,6 +171,30 @@ func snapshot() -> SimSnapshot:
 	snap.active_unit_count = active_unit_count
 	snap.sleeping_unit_count = sleeping_unit_count
 	return snap
+
+
+func _stamp_spawn_discovery() -> void:
+	if world == null:
+		return
+	world.stamp_discovered(Constants.PLAYER_SPAWN_TILE)
+	var player := get_player()
+	if player != null:
+		_last_discover_tile = world.world_to_tile(player.pos)
+	else:
+		_last_discover_tile = Constants.PLAYER_SPAWN_TILE
+
+
+func _stamp_player_discovery() -> void:
+	if world == null:
+		return
+	var player := get_player()
+	if player == null:
+		return
+	var tile := world.world_to_tile(player.pos)
+	if tile == _last_discover_tile:
+		return
+	world.stamp_discovered(tile)
+	_last_discover_tile = tile
 
 
 func get_player() -> Unit:
