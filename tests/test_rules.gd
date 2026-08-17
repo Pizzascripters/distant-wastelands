@@ -13,6 +13,7 @@ func run() -> PackedStringArray:
 	_test_reject_missing_depot(fails)
 	_test_build_deducts_scrap(fails)
 	_test_first_depot_transfer(fails)
+	_test_own_depot_withdraw(fails)
 	_test_gather(fails)
 	_test_steal(fails)
 	_test_ice_pull_decrements_depot(fails)
@@ -156,11 +157,17 @@ func _test_first_depot_transfer(fails: PackedStringArray) -> void:
 	_stand_beside(player, sim.world, depot)
 	player.inventory.add(Types.ResourceKind.SCRAP, 8)
 	player.inventory.add(Types.ResourceKind.ICE, 8)
+	player.inventory.add(Types.ResourceKind.ORE, 6)
+	player.inventory.add(Types.ResourceKind.PARTS, 4)
 	var depot_scrap := depot.inventory.scrap
 	var depot_ice := depot.inventory.ice
+	var depot_ore := depot.inventory.ore
+	var depot_parts := depot.inventory.parts
 	_hold_interact(sim, 3)
 	if player.inventory.scrap != 8 or player.inventory.ice != 8:
 		fails.append("depot transfer ran before one TRANSFER_PERIOD")
+	if player.inventory.ore != 6 or player.inventory.parts != 4:
+		fails.append("depot ore/parts transferred before one TRANSFER_PERIOD")
 	if depot.inventory.scrap != depot_scrap or depot.inventory.ice != depot_ice:
 		fails.append("depot stock changed before one TRANSFER_PERIOD")
 	_hold_interact(sim, 1)
@@ -174,6 +181,10 @@ func _test_first_depot_transfer(fails: PackedStringArray) -> void:
 			"player ice after first transfer is %d, expected %d"
 			% [player.inventory.ice, 8 - Constants.TRANSFER_BATCH]
 		)
+	if player.inventory.ore != 1:
+		fails.append("player ore after first transfer is %d, expected 1" % player.inventory.ore)
+	if player.inventory.parts != 0:
+		fails.append("player parts after first transfer is %d, expected 0" % player.inventory.parts)
 	if depot.inventory.scrap != depot_scrap + Constants.TRANSFER_BATCH:
 		fails.append(
 			"depot scrap after first transfer is %d, expected %d"
@@ -183,6 +194,46 @@ func _test_first_depot_transfer(fails: PackedStringArray) -> void:
 		fails.append(
 			"depot ice after first transfer is %d, expected %d"
 			% [depot.inventory.ice, depot_ice + Constants.TRANSFER_BATCH]
+		)
+	if depot.inventory.ore != depot_ore + 5:
+		fails.append("depot ore after first transfer is %d, expected %d" % [depot.inventory.ore, depot_ore + 5])
+	if depot.inventory.parts != depot_parts + 4:
+		fails.append(
+			"depot parts after first transfer is %d, expected %d" % [depot.inventory.parts, depot_parts + 4]
+		)
+
+
+func _test_own_depot_withdraw(fails: PackedStringArray) -> void:
+	var sim := Sim.new()
+	sim.setup(Constants.DEFAULT_SEED)
+	var player := sim.get_player()
+	var depot := _player_depot(sim.world)
+	if player == null or depot == null:
+		fails.append("withdraw setup missing player or depot")
+		return
+	_stand_beside(player, sim.world, depot)
+	player.inventory.add(Types.ResourceKind.ORE, 6)
+	_hold_interact(sim, 4)
+	if player.inventory.ore != 1 or depot.inventory.ore != Constants.START_PLAYER_ORE + 5:
+		fails.append(
+			"deposit-before-withdraw left player/depot ore %d/%d"
+			% [player.inventory.ore, depot.inventory.ore]
+		)
+		return
+	var depot_ore := depot.inventory.ore
+	_hold_withdraw(sim, 3)
+	if player.inventory.ore != 1 or depot.inventory.ore != depot_ore:
+		fails.append("withdraw ran before one TRANSFER_PERIOD")
+	_hold_withdraw(sim, 1)
+	if player.inventory.ore != 1 + Constants.TRANSFER_BATCH:
+		fails.append(
+			"player ore after withdraw is %d, expected %d"
+			% [player.inventory.ore, 1 + Constants.TRANSFER_BATCH]
+		)
+	if depot.inventory.ore != depot_ore - Constants.TRANSFER_BATCH:
+		fails.append(
+			"depot ore after withdraw is %d, expected %d"
+			% [depot.inventory.ore, depot_ore - Constants.TRANSFER_BATCH]
 		)
 
 
@@ -385,6 +436,14 @@ func _faction_building(world: World, faction: int, kind: int) -> Building:
 func _hold_interact(sim: Sim, ticks: int) -> void:
 	for _i in ticks:
 		sim.enqueue(_interact_cmd())
+		sim.tick()
+
+
+func _hold_withdraw(sim: Sim, ticks: int) -> void:
+	for _i in ticks:
+		var cmd := _interact_cmd()
+		cmd.withdraw = true
+		sim.enqueue(cmd)
 		sim.tick()
 
 

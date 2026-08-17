@@ -14,6 +14,7 @@ var player_id: int = 0
 var director: Director
 var life: Dictionary = {}
 var _interact_target_id: int = 0
+var _interact_withdraw: bool = false
 
 var _queue: Array[InputCommand] = []
 
@@ -27,6 +28,7 @@ func setup(p_seed: int) -> void:
 	_queue.clear()
 	player_id = 0
 	_interact_target_id = 0
+	_interact_withdraw = false
 	director = Director.new()
 	life = {
 		Types.Faction.PLAYER: FactionLife.new(),
@@ -71,7 +73,10 @@ func tick() -> void:
 
 	_integrate_projectiles()
 	_resolve_melee()
-	_interact_target_id = Rules.resolve_interact(world, get_player(), cmd, _interact_target_id)
+	_interact_target_id = Rules.resolve_interact(
+		world, get_player(), cmd, _interact_target_id, _interact_withdraw
+	)
+	_interact_withdraw = _own_depot_withdrawing(cmd, _interact_target_id)
 	_process_deaths_and_respawn()
 	var result := Rules.evaluate_outcome(self)
 	if result.x != Types.Outcome.NONE:
@@ -171,12 +176,25 @@ func _projectile_record(proj: Projectile) -> Dictionary:
 
 func _inventory_record(inv: Inventory) -> Dictionary:
 	if inv == null:
-		return {"scrap": 0, "ice": 0, "cap_scrap": 0, "cap_ice": 0}
+		return {
+			"scrap": 0,
+			"ice": 0,
+			"ore": 0,
+			"parts": 0,
+			"cap_scrap": 0,
+			"cap_ice": 0,
+			"cap_ore": 0,
+			"cap_parts": 0,
+		}
 	return {
 		"scrap": inv.scrap,
 		"ice": inv.ice,
+		"ore": inv.ore,
+		"parts": inv.parts,
 		"cap_scrap": inv.cap_scrap,
 		"cap_ice": inv.cap_ice,
+		"cap_ore": inv.cap_ore,
+		"cap_parts": inv.cap_parts,
 	}
 
 
@@ -464,20 +482,14 @@ func _process_deaths_and_respawn() -> void:
 
 func _drop_unit_carry(unit: Unit) -> void:
 	var inv: Inventory = unit.inventory
-	if inv == null or (inv.scrap <= 0 and inv.ice <= 0):
+	if inv == null or not _inventory_has_stock(inv):
 		return
 	var pile := Loot.new()
 	pile.id = world.alloc_id()
 	pile.pos = unit.pos
-	if inv.scrap > 0:
-		pile.inventory.add(Types.ResourceKind.SCRAP, inv.scrap)
-	if inv.ice > 0:
-		pile.inventory.add(Types.ResourceKind.ICE, inv.ice)
+	_copy_stock(inv, pile.inventory)
 	world.loot[pile.id] = pile
-	if inv.scrap > 0:
-		inv.remove(Types.ResourceKind.SCRAP, inv.scrap)
-	if inv.ice > 0:
-		inv.remove(Types.ResourceKind.ICE, inv.ice)
+	_clear_stock(inv)
 
 
 func _maybe_respawn_player() -> void:
@@ -495,6 +507,44 @@ func _maybe_respawn_player() -> void:
 	player.interact_progress = 0.0
 	player.inventory = Unit.inventory_for(Types.UnitKind.PLAYER)
 	_interact_target_id = 0
+	_interact_withdraw = false
+
+
+func _own_depot_withdrawing(cmd: InputCommand, target_id: int) -> bool:
+	if cmd == null or not cmd.withdraw or target_id <= 0:
+		return false
+	var depot := world.buildings.get(target_id) as Building
+	return (
+		depot != null
+		and depot.kind == Types.BuildingKind.DEPOT
+		and depot.faction == Types.Faction.PLAYER
+	)
+
+
+func _inventory_has_stock(inv: Inventory) -> bool:
+	return inv.scrap > 0 or inv.ice > 0 or inv.ore > 0 or inv.parts > 0
+
+
+func _copy_stock(src: Inventory, dest: Inventory) -> void:
+	if src.scrap > 0:
+		dest.add(Types.ResourceKind.SCRAP, src.scrap)
+	if src.ice > 0:
+		dest.add(Types.ResourceKind.ICE, src.ice)
+	if src.ore > 0:
+		dest.add(Types.ResourceKind.ORE, src.ore)
+	if src.parts > 0:
+		dest.add(Types.ResourceKind.PARTS, src.parts)
+
+
+func _clear_stock(inv: Inventory) -> void:
+	if inv.scrap > 0:
+		inv.remove(Types.ResourceKind.SCRAP, inv.scrap)
+	if inv.ice > 0:
+		inv.remove(Types.ResourceKind.ICE, inv.ice)
+	if inv.ore > 0:
+		inv.remove(Types.ResourceKind.ORE, inv.ore)
+	if inv.parts > 0:
+		inv.remove(Types.ResourceKind.PARTS, inv.parts)
 
 
 func _player_habitat() -> Building:

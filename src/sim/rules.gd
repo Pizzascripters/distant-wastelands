@@ -96,7 +96,17 @@ static func evaluate_outcome(sim: Sim) -> Vector2i:
 	return Vector2i(Types.Outcome.NONE, Types.OutcomeReason.NONE)
 
 
-static func resolve_interact(world: World, unit: Unit, cmd: InputCommand, last_target_id: int) -> int:
+const _HAULABLES: Array[int] = [
+	Types.ResourceKind.SCRAP,
+	Types.ResourceKind.ICE,
+	Types.ResourceKind.ORE,
+	Types.ResourceKind.PARTS,
+]
+
+
+static func resolve_interact(
+	world: World, unit: Unit, cmd: InputCommand, last_target_id: int, last_withdraw: bool = false
+) -> int:
 	if unit == null:
 		return 0
 	if not unit.alive or unit.inventory == null or world == null:
@@ -108,8 +118,10 @@ static func resolve_interact(world: World, unit: Unit, cmd: InputCommand, last_t
 
 	var depot := _interact_depot(world, unit.pos)
 	if depot != null:
-		_begin_channel(unit, last_target_id, depot.id)
-		_tick_depot_transfer(unit, depot)
+		var withdrawing := cmd.withdraw and depot.faction == unit.faction
+		if depot.id != last_target_id or withdrawing != last_withdraw:
+			unit.interact_progress = 0.0
+		_tick_depot_transfer(unit, depot, withdrawing)
 		return depot.id
 	var pile := _interact_loot(world, unit.pos)
 	if pile != null:
@@ -130,19 +142,19 @@ static func _begin_channel(unit: Unit, last_target_id: int, target_id: int) -> v
 		unit.interact_progress = 0.0
 
 
-static func _tick_depot_transfer(unit: Unit, depot: Building) -> void:
+static func _tick_depot_transfer(unit: Unit, depot: Building, withdrawing: bool) -> void:
 	unit.interact_progress += Constants.SIM_DT
 	if depot.inventory == null:
 		return
 	var src: Inventory = unit.inventory
 	var dest: Inventory = depot.inventory
-	if depot.faction != unit.faction:
+	if depot.faction != unit.faction or withdrawing:
 		src = depot.inventory
 		dest = unit.inventory
 	while unit.interact_progress >= Constants.TRANSFER_PERIOD:
 		unit.interact_progress -= Constants.TRANSFER_PERIOD
-		_move_up_to(src, dest, Types.ResourceKind.SCRAP, Constants.TRANSFER_BATCH)
-		_move_up_to(src, dest, Types.ResourceKind.ICE, Constants.TRANSFER_BATCH)
+		for kind in _HAULABLES:
+			_move_up_to(src, dest, kind, Constants.TRANSFER_BATCH)
 
 
 static func _tick_loot(world: World, unit: Unit, pile: Loot) -> void:
@@ -151,9 +163,9 @@ static func _tick_loot(world: World, unit: Unit, pile: Loot) -> void:
 		return
 	unit.interact_progress = 0.0
 	if pile.inventory != null:
-		_move_up_to(pile.inventory, unit.inventory, Types.ResourceKind.SCRAP, pile.inventory.scrap)
-		_move_up_to(pile.inventory, unit.inventory, Types.ResourceKind.ICE, pile.inventory.ice)
-		if pile.inventory.scrap > 0 or pile.inventory.ice > 0:
+		for kind in _HAULABLES:
+			_move_up_to(pile.inventory, unit.inventory, kind, _kind_amount(pile.inventory, kind))
+		if _has_stock(pile.inventory):
 			return
 	world.loot.erase(pile.id)
 
@@ -174,12 +186,30 @@ static func _tick_gather(world: World, unit: Unit, deposit: Deposit) -> void:
 static func _move_up_to(src: Inventory, dest: Inventory, kind: int, n: int) -> void:
 	if src == null or dest == null or n <= 0:
 		return
-	var have := src.scrap if kind == Types.ResourceKind.SCRAP else src.ice
+	var have := _kind_amount(src, kind)
 	var amt := mini(n, mini(have, dest.free_space(kind)))
 	if amt <= 0:
 		return
 	src.remove(kind, amt)
 	dest.add(kind, amt)
+
+
+static func _kind_amount(inv: Inventory, kind: int) -> int:
+	match kind:
+		Types.ResourceKind.SCRAP:
+			return inv.scrap
+		Types.ResourceKind.ICE:
+			return inv.ice
+		Types.ResourceKind.ORE:
+			return inv.ore
+		Types.ResourceKind.PARTS:
+			return inv.parts
+		_:
+			return 0
+
+
+static func _has_stock(inv: Inventory) -> bool:
+	return inv.scrap > 0 or inv.ice > 0 or inv.ore > 0 or inv.parts > 0
 
 
 static func _interact_depot(world: World, pos: Vector2) -> Building:

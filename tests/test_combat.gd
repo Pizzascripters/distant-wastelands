@@ -9,6 +9,8 @@ func run() -> PackedStringArray:
 	_test_melee_respects_cooldown(fails)
 	_test_death_at_zero(fails)
 	_test_depot_death_spills_without_life_support(fails)
+	_test_two_arg_spill_rejects_ore(fails)
+	_test_four_arg_spill_holds_ore(fails)
 	return fails
 
 
@@ -128,6 +130,46 @@ func _test_depot_death_spills_without_life_support(fails: PackedStringArray) -> 
 		fails.append("depot death set outcome %d" % sim.outcome)
 	if sim.outcome_reason == Types.OutcomeReason.LIFE_SUPPORT:
 		fails.append("depot death set LIFE_SUPPORT")
+
+
+func _test_two_arg_spill_rejects_ore(fails: PackedStringArray) -> void:
+	var bag := Inventory.new(999, 999)
+	if bag.add(Types.ResourceKind.ORE, 4) != 4 or bag.ore != 0:
+		fails.append("two-arg Inventory.new(999, 999) accepted ore")
+	var pile := Loot.new()
+	if pile.inventory.add(Types.ResourceKind.ORE, 4) != 0 or pile.inventory.ore != 4:
+		fails.append("Loot four-arg pile rejected ore")
+
+
+func _test_four_arg_spill_holds_ore(fails: PackedStringArray) -> void:
+	var world := World.new()
+	var depot := Building.new()
+	depot.id = world.alloc_id()
+	depot.kind = Types.BuildingKind.DEPOT
+	depot.faction = Types.Faction.PLAYER
+	depot.origin_tile = Vector2i(10, 10)
+	depot.hp = Constants.DEPOT_HP
+	depot.hp_max = Constants.DEPOT_HP
+	depot.inventory = Inventory.new(
+		Constants.DEPOT_CAP_SCRAP,
+		Constants.DEPOT_CAP_ICE,
+		Constants.DEPOT_CAP_ORE,
+		Constants.DEPOT_CAP_PARTS
+	)
+	depot.inventory.add(Types.ResourceKind.ORE, 6)
+	depot.inventory.add(Types.ResourceKind.PARTS, 2)
+	world.buildings[depot.id] = depot
+	world.occupy(depot)
+	Combat.apply_damage(depot, Constants.DEPOT_HP)
+	Combat.process_deaths(world)
+	if world.loot.size() != 1:
+		fails.append("four-arg depot spill piles: %d, expected 1" % world.loot.size())
+		return
+	var pile: Loot = world.loot.values()[0]
+	if pile.inventory.ore != 6 or pile.inventory.parts != 2:
+		fails.append(
+			"four-arg spill ore/parts %d/%d, expected 6/2" % [pile.inventory.ore, pile.inventory.parts]
+		)
 
 
 func _make_unit(world: World, kind: int, faction: int, pos: Vector2, hp: int) -> Unit:

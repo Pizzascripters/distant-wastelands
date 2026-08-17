@@ -6,6 +6,9 @@ func run() -> PackedStringArray:
 	_test_leftover_on_overflow(fails)
 	_test_empty_remove(fails)
 	_test_unit_carry_caps(fails)
+	_test_four_kinds(fails)
+	_test_two_arg_rejects_ore(fails)
+	_test_four_arg_bags_accept_ore(fails)
 	return fails
 
 
@@ -94,3 +97,65 @@ func _test_unit_carry_caps(fails: PackedStringArray) -> void:
 	var guard := Unit.inventory_for(Types.UnitKind.GUARD)
 	if guard.cap_scrap != 0 or guard.cap_ice != 0:
 		fails.append("guard caps were %d/%d, expected 0/0" % [guard.cap_scrap, guard.cap_ice])
+	if player.cap_ore != Constants.PLAYER_CARRY_ORE or player.cap_parts != Constants.PLAYER_CARRY_PARTS:
+		fails.append(
+			"player ore/parts caps were %d/%d, expected %d/%d"
+			% [player.cap_ore, player.cap_parts, Constants.PLAYER_CARRY_ORE, Constants.PLAYER_CARRY_PARTS]
+		)
+	if raider.cap_ore != Constants.RAIDER_CARRY_ORE or raider.cap_parts != Constants.RAIDER_CARRY_PARTS:
+		fails.append(
+			"raider ore/parts caps were %d/%d, expected %d/%d"
+			% [raider.cap_ore, raider.cap_parts, Constants.RAIDER_CARRY_ORE, Constants.RAIDER_CARRY_PARTS]
+		)
+	if guard.cap_ore != 0 or guard.cap_parts != 0:
+		fails.append("guard ore/parts caps were %d/%d, expected 0/0" % [guard.cap_ore, guard.cap_parts])
+
+
+func _test_four_kinds(fails: PackedStringArray) -> void:
+	var inv := Inventory.new(4, 4, 4, 4)
+	var leftover := inv.add(Types.ResourceKind.ORE, 3)
+	if leftover != 0 or inv.ore != 3:
+		fails.append("add ore 3 leftover/ore %d/%d, expected 0/3" % [leftover, inv.ore])
+	leftover = inv.add(Types.ResourceKind.PARTS, 2)
+	if leftover != 0 or inv.parts != 2:
+		fails.append("add parts 2 leftover/parts %d/%d, expected 0/2" % [leftover, inv.parts])
+	leftover = inv.add(Types.ResourceKind.ORE, 5)
+	if leftover != 4 or inv.ore != 4:
+		fails.append("ore overflow leftover %d ore %d, expected 4/4" % [leftover, inv.ore])
+	var taken := inv.remove(Types.ResourceKind.PARTS, 1)
+	if taken != 1 or inv.parts != 1:
+		fails.append("remove parts 1 took %d leaving %d, expected 1/1" % [taken, inv.parts])
+
+
+func _test_two_arg_rejects_ore(fails: PackedStringArray) -> void:
+	var inv := Inventory.new(999, 999)
+	if inv.cap_ore != 0 or inv.cap_parts != 0:
+		fails.append("two-arg caps ore/parts %d/%d, expected 0/0" % [inv.cap_ore, inv.cap_parts])
+	var leftover := inv.add(Types.ResourceKind.ORE, 1)
+	if leftover != 1 or inv.ore != 0:
+		fails.append("two-arg add ore leftover/ore %d/%d, expected 1/0" % [leftover, inv.ore])
+	leftover = inv.add(Types.ResourceKind.PARTS, 1)
+	if leftover != 1 or inv.parts != 0:
+		fails.append("two-arg add parts leftover/parts %d/%d, expected 1/0" % [leftover, inv.parts])
+	if inv.can_add(Types.ResourceKind.ORE, 1):
+		fails.append("two-arg can_add ore 1 should be false")
+
+
+func _test_four_arg_bags_accept_ore(fails: PackedStringArray) -> void:
+	var pile := Loot.new()
+	if pile.inventory.add(Types.ResourceKind.ORE, 3) != 0 or pile.inventory.ore != 3:
+		fails.append("Loot four-arg bag rejected ore")
+	var player := Unit.inventory_for(Types.UnitKind.PLAYER)
+	if player.add(Types.ResourceKind.ORE, Constants.PLAYER_CARRY_ORE) != 0:
+		fails.append("player bag rejected a full ore pack")
+	var raider := Unit.inventory_for(Types.UnitKind.RAIDER)
+	if raider.add(Types.ResourceKind.PARTS, Constants.RAIDER_CARRY_PARTS) != 0:
+		fails.append("raider bag rejected parts")
+	var depot := Inventory.new(
+		Constants.DEPOT_CAP_SCRAP,
+		Constants.DEPOT_CAP_ICE,
+		Constants.DEPOT_CAP_ORE,
+		Constants.DEPOT_CAP_PARTS
+	)
+	if depot.add(Types.ResourceKind.ORE, 6) != 0 or depot.ore != 6:
+		fails.append("depot four-arg bag rejected ore")

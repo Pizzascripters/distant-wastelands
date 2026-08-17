@@ -3,7 +3,7 @@ class_name Types
 enum Faction { PLAYER, ENEMY }
 enum BuildingKind { HABITAT, DEPOT, WALL, TURRET }
 enum UnitKind { PLAYER, RAIDER, GUARD }
-enum ResourceKind { SCRAP, ICE }
+enum ResourceKind { SCRAP, ICE, ORE, PARTS }
 enum TileTerrain { EMPTY, ROCK }
 enum Outcome { NONE, PLAYER_WIN, PLAYER_LOSE }
 enum OutcomeReason { NONE, HABITAT_DESTROYED, LIFE_SUPPORT }

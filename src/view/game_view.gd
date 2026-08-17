@@ -202,6 +202,7 @@ func _read_command() -> InputCommand:
 	if Input.is_action_just_pressed("cancel"):
 		_set_build_kind(-1)
 	cmd.interact = Input.is_action_pressed("interact")
+	cmd.withdraw = Input.is_action_pressed("withdraw")
 	cmd.build_kind = -1
 	if _build_kind >= 0:
 		cmd.fire = false
@@ -289,6 +290,7 @@ func _ensure_actions() -> void:
 	_bind_mouse("zoom_out", MOUSE_BUTTON_WHEEL_DOWN)
 	_bind_mouse("fire", MOUSE_BUTTON_LEFT)
 	_bind_keys("interact", [KEY_E])
+	_bind_keys("withdraw", [KEY_SHIFT])
 	_bind_keys("build_wall", [KEY_1])
 	_bind_keys("build_turret", [KEY_2])
 	_bind_keys("cancel", [KEY_Q])

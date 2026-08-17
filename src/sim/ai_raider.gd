@@ -55,7 +55,7 @@ static func think(unit: Unit, sim: Sim) -> void:
 
 static func is_hauling(unit: Unit) -> bool:
 	var inv := unit.inventory
-	return inv != null and (inv.scrap > 0 or inv.ice > 0)
+	return inv != null and (inv.scrap > 0 or inv.ice > 0 or inv.ore > 0 or inv.parts > 0)
 
 
 static func _think_path_to_depot(unit: Unit, sim: Sim) -> void:
@@ -342,53 +342,73 @@ static func _transfer_loot(unit: Unit, depot: Building) -> void:
 	var stock: Inventory = depot.inventory
 	if carry == null or stock == null:
 		return
-	var scrap := stock.remove(Types.ResourceKind.SCRAP, carry.free_space(Types.ResourceKind.SCRAP))
-	carry.add(Types.ResourceKind.SCRAP, scrap)
-	var ice := stock.remove(Types.ResourceKind.ICE, carry.free_space(Types.ResourceKind.ICE))
-	carry.add(Types.ResourceKind.ICE, ice)
+	for kind in [
+		Types.ResourceKind.SCRAP,
+		Types.ResourceKind.ICE,
+		Types.ResourceKind.ORE,
+		Types.ResourceKind.PARTS,
+	]:
+		var taken := stock.remove(kind, carry.free_space(kind))
+		carry.add(kind, taken)
 
 
 static func _apply_home_despawn(unit: Unit, sim: Sim, home: Building) -> void:
 	var carry: Inventory = unit.inventory
-	var leftover_scrap := 0
-	var leftover_ice := 0
+	var leftover := Inventory.new(999, 999, 999, 999)
 	if carry != null and home.inventory != null:
-		leftover_scrap = home.inventory.add(Types.ResourceKind.SCRAP, carry.scrap)
-		leftover_ice = home.inventory.add(Types.ResourceKind.ICE, carry.ice)
+		leftover.add(Types.ResourceKind.SCRAP, home.inventory.add(Types.ResourceKind.SCRAP, carry.scrap))
+		leftover.add(Types.ResourceKind.ICE, home.inventory.add(Types.ResourceKind.ICE, carry.ice))
+		leftover.add(Types.ResourceKind.ORE, home.inventory.add(Types.ResourceKind.ORE, carry.ore))
+		leftover.add(Types.ResourceKind.PARTS, home.inventory.add(Types.ResourceKind.PARTS, carry.parts))
 		carry.scrap = 0
 		carry.ice = 0
+		carry.ore = 0
+		carry.parts = 0
 	elif carry != null:
-		leftover_scrap = carry.scrap
-		leftover_ice = carry.ice
+		leftover.add(Types.ResourceKind.SCRAP, carry.scrap)
+		leftover.add(Types.ResourceKind.ICE, carry.ice)
+		leftover.add(Types.ResourceKind.ORE, carry.ore)
+		leftover.add(Types.ResourceKind.PARTS, carry.parts)
 		carry.scrap = 0
 		carry.ice = 0
-	_drop_loot(sim.world, sim.world.footprint_aabb(home).get_center(), leftover_scrap, leftover_ice)
+		carry.ore = 0
+		carry.parts = 0
+	_drop_loot(sim.world, sim.world.footprint_aabb(home).get_center(), leftover)
 	_delete_raider(sim.world, unit)
 
 
 static func _apply_dead_drop(unit: Unit, sim: Sim) -> void:
 	var carry: Inventory = unit.inventory
-	var scrap := 0
-	var ice := 0
+	var leftover := Inventory.new(999, 999, 999, 999)
 	if carry != null:
-		scrap = carry.scrap
-		ice = carry.ice
+		leftover.add(Types.ResourceKind.SCRAP, carry.scrap)
+		leftover.add(Types.ResourceKind.ICE, carry.ice)
+		leftover.add(Types.ResourceKind.ORE, carry.ore)
+		leftover.add(Types.ResourceKind.PARTS, carry.parts)
 		carry.scrap = 0
 		carry.ice = 0
-	_drop_loot(sim.world, unit.pos, scrap, ice)
+		carry.ore = 0
+		carry.parts = 0
+	_drop_loot(sim.world, unit.pos, leftover)
 	_delete_raider(sim.world, unit)
 
 
-static func _drop_loot(world: World, pos: Vector2, scrap: int, ice: int) -> void:
-	if scrap <= 0 and ice <= 0:
+static func _drop_loot(world: World, pos: Vector2, leftover: Inventory) -> void:
+	if leftover == null or (
+		leftover.scrap <= 0 and leftover.ice <= 0 and leftover.ore <= 0 and leftover.parts <= 0
+	):
 		return
 	var pile := Loot.new()
 	pile.id = world.alloc_id()
 	pile.pos = pos
-	if scrap > 0:
-		pile.inventory.add(Types.ResourceKind.SCRAP, scrap)
-	if ice > 0:
-		pile.inventory.add(Types.ResourceKind.ICE, ice)
+	if leftover.scrap > 0:
+		pile.inventory.add(Types.ResourceKind.SCRAP, leftover.scrap)
+	if leftover.ice > 0:
+		pile.inventory.add(Types.ResourceKind.ICE, leftover.ice)
+	if leftover.ore > 0:
+		pile.inventory.add(Types.ResourceKind.ORE, leftover.ore)
+	if leftover.parts > 0:
+		pile.inventory.add(Types.ResourceKind.PARTS, leftover.parts)
 	world.loot[pile.id] = pile
 
 
@@ -451,11 +471,29 @@ static func _can_loot_more(unit: Unit, depot: Building) -> bool:
 	var stock: Inventory = depot.inventory
 	if carry == null or stock == null:
 		return false
-	if stock.scrap > 0 and carry.free_space(Types.ResourceKind.SCRAP) > 0:
-		return true
-	if stock.ice > 0 and carry.free_space(Types.ResourceKind.ICE) > 0:
-		return true
+	for kind in [
+		Types.ResourceKind.SCRAP,
+		Types.ResourceKind.ICE,
+		Types.ResourceKind.ORE,
+		Types.ResourceKind.PARTS,
+	]:
+		if _kind_amount(stock, kind) > 0 and carry.free_space(kind) > 0:
+			return true
 	return false
+
+
+static func _kind_amount(inv: Inventory, kind: int) -> int:
+	match kind:
+		Types.ResourceKind.SCRAP:
+			return inv.scrap
+		Types.ResourceKind.ICE:
+			return inv.ice
+		Types.ResourceKind.ORE:
+			return inv.ore
+		Types.ResourceKind.PARTS:
+			return inv.parts
+		_:
+			return 0
 
 
 static func _is_stuck(unit: Unit) -> bool:

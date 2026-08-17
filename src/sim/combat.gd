@@ -154,7 +154,7 @@ static func _melee_cooldown(unit: Unit) -> float:
 
 static func _spill_depot(world: World, depot: Building) -> void:
 	var inv: Inventory = depot.inventory
-	if inv == null or (inv.scrap <= 0 and inv.ice <= 0):
+	if inv == null or (inv.scrap <= 0 and inv.ice <= 0 and inv.ore <= 0 and inv.parts <= 0):
 		return
 	var pile := Loot.new()
 	pile.id = world.alloc_id()
@@ -163,6 +163,10 @@ static func _spill_depot(world: World, depot: Building) -> void:
 		pile.inventory.add(Types.ResourceKind.SCRAP, inv.scrap)
 	if inv.ice > 0:
 		pile.inventory.add(Types.ResourceKind.ICE, inv.ice)
+	if inv.ore > 0:
+		pile.inventory.add(Types.ResourceKind.ORE, inv.ore)
+	if inv.parts > 0:
+		pile.inventory.add(Types.ResourceKind.PARTS, inv.parts)
 	var piles = world.get("loot")
 	if piles is Dictionary:
 		piles[pile.id] = pile
