@@ -6,6 +6,12 @@ const GRID := Color("7A4024")
 const GROUND_FILL := Color("8A4B2A")
 const ROCK_FILL := Color("3A241C")
 const ROCK_OUTLINE := Color("1A100C")
+const CLIFF_FILL := Color("3A3A42")
+const CLIFF_HIGHLIGHT := Color("5A5A64")
+const CLIFF_OUTLINE := Color("16161C")
+const CRATER_FILL := Color("4A3020")
+const CRATER_BOWL := Color("2A1810")
+const CRATER_RIM := Color("1A100C")
 const SCRAP_FILL := Color("C45C26")
 const ICE_FILL := Color("A8D8EA")
 const ORE_FILL := Color("5A6A78")
@@ -16,6 +22,8 @@ const ORE_W := 18.0
 const ORE_H := 16.0
 const GROUND_PATH := "res://assets/sprites/tiles/ground.png"
 const ROCK_PATH := "res://assets/sprites/tiles/rock.png"
+const CLIFF_PATH := "res://assets/sprites/tiles/cliff.png"
+const CRATER_PATH := "res://assets/sprites/tiles/crater.png"
 const SCRAP_PATH := "res://assets/sprites/placeholder/scrap.png"
 const ICE_PATH := "res://assets/sprites/placeholder/ice.png"
 const ORE_PATH := "res://assets/sprites/placeholder/ore.png"
@@ -24,6 +32,8 @@ var _tiles: PackedByteArray = PackedByteArray()
 var _deposits: Array[Dictionary] = []
 var _ground_tex: Texture2D
 var _rock_tex: Texture2D
+var _cliff_tex: Texture2D
+var _crater_tex: Texture2D
 var _scrap_tex: Texture2D
 var _ice_tex: Texture2D
 var _ore_tex: Texture2D
@@ -127,6 +137,8 @@ func _ensure_textures() -> void:
 		return
 	_ground_tex = load_png(GROUND_PATH)
 	_rock_tex = load_png(ROCK_PATH)
+	_cliff_tex = load_png(CLIFF_PATH)
+	_crater_tex = load_png(CRATER_PATH)
 	_scrap_tex = load_png(SCRAP_PATH)
 	_ice_tex = load_png(ICE_PATH)
 	_ore_tex = load_png(ORE_PATH)
@@ -203,16 +215,32 @@ func _rebuild_chunk(ci: int) -> void:
 		img.fill_rect(Rect2i(0, mini(i * tile, px - 1), px, 1), GRID)
 	if not _tiles.is_empty():
 		var rock_src := _tile_image(_rock_tex, tile)
+		var cliff_src := _tile_image(_cliff_tex, tile)
+		var crater_src := _tile_image(_crater_tex, tile)
 		for y in range(y0, y0 + cts):
 			for x in range(x0, x0 + cts):
 				var ti := y * Constants.MAP_W + x
-				if ti >= _tiles.size() or _tiles[ti] != Types.TileTerrain.ROCK:
+				if ti >= _tiles.size():
+					continue
+				var kind: int = _tiles[ti]
+				if kind == Types.TileTerrain.EMPTY:
 					continue
 				var origin := Vector2i((x - x0) * tile, (y - y0) * tile)
-				if rock_src != null:
-					img.blit_rect(rock_src, Rect2i(0, 0, tile, tile), origin)
-				else:
-					_stamp_primitive_rock(img, origin, tile)
+				if kind == Types.TileTerrain.CLIFF:
+					if cliff_src != null:
+						img.blit_rect(cliff_src, Rect2i(0, 0, tile, tile), origin)
+					else:
+						_stamp_primitive_cliff(img, origin, tile)
+				elif kind == Types.TileTerrain.CRATER:
+					if crater_src != null:
+						img.blit_rect(crater_src, Rect2i(0, 0, tile, tile), origin)
+					else:
+						_stamp_primitive_crater(img, origin, tile)
+				elif kind == Types.TileTerrain.ROCK:
+					if rock_src != null:
+						img.blit_rect(rock_src, Rect2i(0, 0, tile, tile), origin)
+					else:
+						_stamp_primitive_rock(img, origin, tile)
 	_chunk_tex[ci] = ImageTexture.create_from_image(img)
 	_chunk_rebuilds[ci] += 1
 
@@ -294,6 +322,46 @@ func _stamp_primitive_rock(img: Image, origin: Vector2i, tile: int) -> void:
 	img.fill_rect(Rect2i(r.position.x, r.end.y - 1, r.size.x, 1), ROCK_OUTLINE)
 	img.fill_rect(Rect2i(r.position.x, r.position.y, 1, r.size.y), ROCK_OUTLINE)
 	img.fill_rect(Rect2i(r.end.x - 1, r.position.y, 1, r.size.y), ROCK_OUTLINE)
+
+
+func _stamp_primitive_cliff(img: Image, origin: Vector2i, tile: int) -> void:
+	var ledge := Rect2i(origin.x + 2, origin.y + 8, tile - 4, tile - 14)
+	img.fill_rect(ledge, CLIFF_FILL)
+	img.fill_rect(Rect2i(ledge.position.x, ledge.position.y, ledge.size.x, 4), CLIFF_HIGHLIGHT)
+	img.fill_rect(Rect2i(ledge.position.x, ledge.position.y, ledge.size.x, 1), CLIFF_OUTLINE)
+	img.fill_rect(Rect2i(ledge.position.x, ledge.end.y - 1, ledge.size.x, 1), CLIFF_OUTLINE)
+	img.fill_rect(Rect2i(ledge.position.x, ledge.position.y, 1, ledge.size.y), CLIFF_OUTLINE)
+	img.fill_rect(Rect2i(ledge.end.x - 1, ledge.position.y, 1, ledge.size.y), CLIFF_OUTLINE)
+
+
+func _stamp_primitive_crater(img: Image, origin: Vector2i, tile: int) -> void:
+	var cx := origin.x + tile / 2
+	var cy := origin.y + tile / 2
+	var outer := tile / 2 - 2
+	var inner := maxi(outer - 4, 3)
+	_fill_disk(img, cx, cy, outer, CRATER_FILL)
+	_fill_disk(img, cx, cy, inner, CRATER_BOWL)
+	_stroke_disk(img, cx, cy, outer, CRATER_RIM)
+
+
+func _fill_disk(img: Image, cx: int, cy: int, radius: int, color: Color) -> void:
+	var r2 := radius * radius
+	for y in range(cy - radius, cy + radius + 1):
+		for x in range(cx - radius, cx + radius + 1):
+			var dx := x - cx
+			var dy := y - cy
+			if dx * dx + dy * dy <= r2:
+				img.set_pixel(x, y, color)
+
+
+func _stroke_disk(img: Image, cx: int, cy: int, radius: int, color: Color) -> void:
+	var r2 := radius * radius
+	var inner2 := maxi(radius - 1, 0) * maxi(radius - 1, 0)
+	for y in range(cy - radius, cy + radius + 1):
+		for x in range(cx - radius, cx + radius + 1):
+			var d2 := (x - cx) * (x - cx) + (y - cy) * (y - cy)
+			if d2 <= r2 and d2 > inner2:
+				img.set_pixel(x, y, color)
 
 
 func _draw() -> void:

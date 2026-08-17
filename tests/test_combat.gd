@@ -17,6 +17,7 @@ func run() -> PackedStringArray:
 	_test_player_on_gate_shot_lives(fails)
 	_test_muzzle_in_friendly_wall_eaten(fails)
 	_test_five_kind_spill_holds_food(fails)
+	_test_solid_terrain_eats_shots(fails)
 	return fails
 
 
@@ -341,6 +342,25 @@ func _test_muzzle_in_friendly_wall_eaten(fails: PackedStringArray) -> void:
 		fails.append("friendly Wall should eat the shot with no damage")
 	if gate.hp != Constants.GATE_HP:
 		fails.append("friendly Gate should not take the muzzle-in-wall shot")
+
+
+func _test_solid_terrain_eats_shots(fails: PackedStringArray) -> void:
+	for kind in [Types.TileTerrain.CLIFF, Types.TileTerrain.CRATER]:
+		var world := World.new()
+		var tile := Vector2i(5, 5)
+		world.set_terrain(tile.x, tile.y, kind)
+		var unit := _make_unit(
+			world,
+			Types.UnitKind.RAIDER,
+			Types.Faction.ENEMY,
+			world.tile_center(8, 5),
+			Constants.RAIDER_HP
+		)
+		var proj := _make_proj(Types.Faction.PLAYER, world.tile_center(tile.x, tile.y), Constants.PLAYER_PROJ_DAMAGE)
+		if not Combat.resolve_projectile_hit(world, proj):
+			fails.append("projectile should be eaten by terrain kind %d" % kind)
+		if unit.hp != Constants.RAIDER_HP:
+			fails.append("terrain kind %d shot damaged a unit" % kind)
 
 
 func _place_building(world: World, kind: int, faction: int, tile: Vector2i, hp: int) -> Building:

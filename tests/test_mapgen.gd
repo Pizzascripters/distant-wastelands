@@ -10,6 +10,7 @@ func run() -> PackedStringArray:
 	_test_camp_buildings(fails)
 	_test_starting_stocks(fails)
 	_test_deposit_minima(fails)
+	_test_cliffs_and_craters(fails)
 	return fails
 
 
@@ -197,6 +198,35 @@ func _test_deposit_minima(fails: PackedStringArray) -> void:
 			fails.append("seed %d ore deposits %d > ORE_DEPOSIT_COUNT" % [s, ore_n])
 
 
+func _test_cliffs_and_craters(fails: PackedStringArray) -> void:
+	for s in [1, 2, 3, 4, 5]:
+		var world := Mapgen.generate(s)
+		var cliffs := 0
+		var craters := 0
+		for y in Constants.MAP_H:
+			for x in Constants.MAP_W:
+				var kind := world.get_terrain(x, y)
+				if kind != Types.TileTerrain.CLIFF and kind != Types.TileTerrain.CRATER:
+					continue
+				if not World.is_solid_terrain(kind):
+					fails.append("seed %d feature at (%d,%d) is not solid" % [s, x, y])
+					return
+				if world.is_walkable(x, y):
+					fails.append("seed %d feature at (%d,%d) is walkable" % [s, x, y])
+					return
+				if Constants.PLAYER_CAMP_RECT.has_point(Vector2i(x, y)) or Constants.ENEMY_CAMP_RECT.has_point(Vector2i(x, y)):
+					fails.append("seed %d feature overlaps reserved rect at (%d,%d)" % [s, x, y])
+					return
+				if kind == Types.TileTerrain.CLIFF:
+					cliffs += 1
+				else:
+					craters += 1
+		if cliffs <= 0:
+			fails.append("seed %d has no CLIFF tiles" % s)
+		if craters <= 0:
+			fails.append("seed %d has no CRATER tiles" % s)
+
+
 func _deposit_placement_ok(fails: PackedStringArray, world: World, deposit: Deposit, seed: int) -> bool:
 	var tile: Vector2i = deposit.tile
 	if not world.is_walkable(tile.x, tile.y):
@@ -283,8 +313,8 @@ func _deposit_tiles(world: World) -> Array:
 func _assert_rect_empty_of_rocks(fails: PackedStringArray, world: World, rect: Rect2i, label: String) -> void:
 	for y in range(rect.position.y, rect.position.y + rect.size.y):
 		for x in range(rect.position.x, rect.position.x + rect.size.x):
-			if world.get_terrain(x, y) == Types.TileTerrain.ROCK:
-				fails.append("%s reserved rect has rock at (%d,%d)" % [label, x, y])
+			if World.is_solid_terrain(world.get_terrain(x, y)):
+				fails.append("%s reserved rect has solid terrain at (%d,%d)" % [label, x, y])
 				return
 
 

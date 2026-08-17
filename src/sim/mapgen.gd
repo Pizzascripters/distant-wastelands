@@ -22,6 +22,8 @@ static func generate(p_seed: int) -> World:
 			if rng.randi_range(0, 99) < Constants.ROCK_PERCENT:
 				world.set_terrain(x, y, Types.TileTerrain.ROCK)
 
+	_stamp_cliffs(world, rng)
+	_stamp_craters(world, rng)
 	_place_player_camp(world)
 	_place_enemy_camp(world)
 	_carve_manhattan(world, Constants.PLAYER_SPAWN_TILE, Constants.ENEMY_DEPOT_TILE)
@@ -55,6 +57,31 @@ static func validate_connectivity(world: World) -> bool:
 			if not reached.has(key):
 				return false
 	return saw_adjacent
+
+
+static func stamp_cliff(world: World, start: Vector2i, direction: Vector2i, length: int) -> void:
+	if world == null or direction == Vector2i.ZERO or length <= 0:
+		return
+	var p := start
+	for _i in length:
+		if world.in_bounds(p.x, p.y) and not _in_reserved_rect(p.x, p.y):
+			world.set_terrain(p.x, p.y, Types.TileTerrain.CLIFF)
+		p += direction
+
+
+static func stamp_crater(world: World, center: Vector2i, radius: int) -> void:
+	if world == null or radius < 0:
+		return
+	var r2 := radius * radius
+	for y in range(center.y - radius, center.y + radius + 1):
+		for x in range(center.x - radius, center.x + radius + 1):
+			var dx := x - center.x
+			var dy := y - center.y
+			if dx * dx + dy * dy > r2:
+				continue
+			if not world.in_bounds(x, y) or _in_reserved_rect(x, y):
+				continue
+			world.set_terrain(x, y, Types.TileTerrain.CRATER)
 
 
 static func is_building_footprint(x: int, y: int) -> bool:
@@ -99,6 +126,34 @@ static func _paint_corridor_step(world: World, tile: Vector2i, along: Vector2i) 
 		if is_building_footprint(t.x, t.y):
 			continue
 		world.set_terrain(t.x, t.y, Types.TileTerrain.EMPTY)
+
+
+static func _stamp_cliffs(world: World, rng: RandomNumberGenerator) -> void:
+	for _i in Constants.CLIFF_COUNT:
+		var start := _pick_unreserved_tile(rng)
+		if start.x < 0:
+			continue
+		var direction: Vector2i = _CARDINALS[rng.randi_range(0, _CARDINALS.size() - 1)]
+		var length := rng.randi_range(Constants.CLIFF_MIN_LEN, Constants.CLIFF_MAX_LEN)
+		stamp_cliff(world, start, direction, length)
+
+
+static func _stamp_craters(world: World, rng: RandomNumberGenerator) -> void:
+	for _i in Constants.CRATER_COUNT:
+		var center := _pick_unreserved_tile(rng)
+		if center.x < 0:
+			continue
+		var radius := rng.randi_range(Constants.CRATER_MIN_R, Constants.CRATER_MAX_R)
+		stamp_crater(world, center, radius)
+
+
+static func _pick_unreserved_tile(rng: RandomNumberGenerator) -> Vector2i:
+	for _try in 256:
+		var x := rng.randi_range(0, Constants.MAP_W - 1)
+		var y := rng.randi_range(0, Constants.MAP_H - 1)
+		if not _in_reserved_rect(x, y):
+			return Vector2i(x, y)
+	return Vector2i(-1, -1)
 
 
 static func _in_reserved_rect(x: int, y: int) -> bool:

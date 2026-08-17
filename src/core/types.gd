@@ -5,7 +5,7 @@ enum BuildingKind { HABITAT, DEPOT, WALL, TURRET, WORKSHOP, FARM, LAB, MEDBAY, G
 enum UnitKind { PLAYER, RAIDER, GUARD }
 enum ResourceKind { SCRAP, ICE, ORE, PARTS, FOOD }
 enum TechKind { HYDROPONICS, METALLURGY, FIELD_MEDICINE, BALLISTICS }
-enum TileTerrain { EMPTY, ROCK }
+enum TileTerrain { EMPTY, ROCK, CLIFF, CRATER }
 enum Outcome { NONE, PLAYER_WIN, PLAYER_LOSE }
 enum OutcomeReason { NONE, SUFFOCATION }
 enum RaiderState {
