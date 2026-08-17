@@ -214,6 +214,7 @@ static func resolve_interact(
 		return best_id
 	if best_obj is Building and (best_obj as Building).kind == Types.BuildingKind.WORKSHOP:
 		_begin_channel(unit, last_target_id, best_id)
+		_tick_workshop(unit)
 		return best_id
 	if best_obj is Building and (best_obj as Building).kind == Types.BuildingKind.LAB:
 		_begin_channel(unit, last_target_id, best_id)
@@ -231,6 +232,21 @@ static func workshop_can_craft(unit: Unit, recipe_unlocked: bool = false) -> boo
 	if unit.inventory.ore < Constants.WORKSHOP_ORE_COST:
 		return false
 	return unit.inventory.free_space(Types.ResourceKind.PARTS) >= Constants.WORKSHOP_PARTS_OUT
+
+
+static func _tick_workshop(unit: Unit) -> void:
+	if not workshop_can_craft(unit, true):
+		unit.interact_progress = 0.0
+		return
+	unit.interact_progress += Constants.SIM_DT
+	if unit.interact_progress < Constants.WORKSHOP_CRAFT_CHANNEL:
+		return
+	unit.interact_progress = 0.0
+	if not workshop_can_craft(unit, true):
+		return
+	unit.inventory.remove(Types.ResourceKind.SCRAP, Constants.WORKSHOP_SCRAP_COST)
+	unit.inventory.remove(Types.ResourceKind.ORE, Constants.WORKSHOP_ORE_COST)
+	unit.inventory.add(Types.ResourceKind.PARTS, Constants.WORKSHOP_PARTS_OUT)
 
 
 static func _better_interact(

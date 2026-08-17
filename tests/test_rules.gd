@@ -25,6 +25,7 @@ func run() -> PackedStringArray:
 	_test_place_workshop_and_lab(fails)
 	_test_lab_occupies_2x2(fails)
 	_test_workshop_closer_wins_when_craftable(fails)
+	_test_workshop_overlap_crafts_not_deposit(fails)
 	_test_lab_closer_wins_when_research_selected(fails)
 	_test_locked_buildings_not_placeable(fails)
 	return fails
@@ -508,6 +509,51 @@ func _test_workshop_closer_wins_when_craftable(fails: PackedStringArray) -> void
 	var depot_closer := Rules.resolve_interact(world, player, cmd, 0, false, sim)
 	if depot_closer != depot.id:
 		fails.append("strictly closer depot should still win, got %d" % depot_closer)
+
+
+func _test_workshop_overlap_crafts_not_deposit(fails: PackedStringArray) -> void:
+	var world := _world_with_depot(Constants.WORKSHOP_COST)
+	var depot := world.building_at(2, 2)
+	var shop_tile := Vector2i(0, 2)
+	if not Rules.try_place(world, null, Types.BuildingKind.WORKSHOP, shop_tile):
+		fails.append("overlap craft test could not place a workshop")
+		return
+	var shop := world.building_at(shop_tile.x, shop_tile.y)
+	var player := _player_at(world, Vector2(42, 80))
+	player.inventory.add(Types.ResourceKind.SCRAP, Constants.WORKSHOP_SCRAP_COST)
+	player.inventory.add(Types.ResourceKind.ORE, Constants.WORKSHOP_ORE_COST)
+	var cmd := _interact_cmd()
+	var sim := Sim.new()
+	sim.world = world
+	Research.mark_complete(sim, Types.TechKind.METALLURGY)
+	var depot_scrap := depot.inventory.scrap
+	var depot_ore := depot.inventory.ore
+	var depot_parts := depot.inventory.parts
+	var last := 0
+	var ticks := int(Constants.WORKSHOP_CRAFT_CHANNEL / Constants.SIM_DT) - 1
+	for _i in ticks:
+		last = Rules.resolve_interact(world, player, cmd, last, false, sim)
+		if last != shop.id:
+			fails.append("overlap channel targeted %d, expected workshop %d" % [last, shop.id])
+			return
+	if player.inventory.scrap != Constants.WORKSHOP_SCRAP_COST or player.inventory.ore != Constants.WORKSHOP_ORE_COST:
+		fails.append("overlap deposited before the craft channel finished")
+	if player.inventory.parts != 0:
+		fails.append("overlap crafted before one WORKSHOP_CRAFT_CHANNEL")
+	if depot.inventory.scrap != depot_scrap or depot.inventory.ore != depot_ore or depot.inventory.parts != depot_parts:
+		fails.append("overlap changed depot stock during the craft channel")
+	last = Rules.resolve_interact(world, player, cmd, last, false, sim)
+	if last != shop.id:
+		fails.append("overlap complete tick targeted %d, expected workshop %d" % [last, shop.id])
+	if player.inventory.scrap != 0 or player.inventory.ore != 0:
+		fails.append(
+			"overlap craft left carry scrap/ore %d/%d, expected 0/0"
+			% [player.inventory.scrap, player.inventory.ore]
+		)
+	if player.inventory.parts != Constants.WORKSHOP_PARTS_OUT:
+		fails.append("overlap craft parts is %d, expected %d" % [player.inventory.parts, Constants.WORKSHOP_PARTS_OUT])
+	if depot.inventory.scrap != depot_scrap or depot.inventory.ore != depot_ore or depot.inventory.parts != depot_parts:
+		fails.append("overlap craft deposited into the depot")
 
 
 func _test_lab_closer_wins_when_research_selected(fails: PackedStringArray) -> void:
